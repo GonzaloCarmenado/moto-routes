@@ -1,0 +1,14 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities with minimal permissions for Moto Routes",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "log:default",
+    "core:window:default",
+    "core:window:allow-close",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position"
+  ]
+}
