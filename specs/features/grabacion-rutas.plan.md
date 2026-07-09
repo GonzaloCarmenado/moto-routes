@@ -4,17 +4,19 @@
 
 | # | Tarea | Archivos | AC Cubiertos | Complejidad |
 |---|-------|----------|--------------|-------------|
-| 1 | Estructura del dominio cockpit + types | `src/cockpit/cockpit.types.ts` | AC-001, AC-002, AC-005 | Small |
-| 2 | Transform de telemetría (cálculos y formateo) | `src/cockpit/cockpit.transform.ts`, `src/cockpit/cockpit.transform.spec.ts` | AC-001, AC-005 | Small |
-| 3 | Servicio GPS mockeable + estado de grabación | `src/cockpit/cockpit.service.ts`, `src/cockpit/cockpit.service.spec.ts` | AC-003, AC-006, AC-007, AC-010 | Medium |
-| 4 | Componente Cockpit: dial, botón START/STOP, grid telemetría | `src/cockpit/cockpit.element.ts`, `src/cockpit/cockpit.element.css`, `src/cockpit/cockpit.element.spec.ts` | AC-001, AC-002, AC-004, AC-005, AC-008, AC-009 | Large |
-| 5 | Long press en STOP + guardado de ruta | `src/cockpit/cockpit.element.ts`, `src/cockpit/cockpit.service.ts`, `src/cockpit/cockpit.element.spec.ts` | AC-006, AC-007 | Medium |
-| 6 | Manejo de permisos GPS + pérdida de señal | `src/cockpit/cockpit.service.ts`, `src/cockpit/cockpit.element.ts`, `src/cockpit/cockpit.service.spec.ts` | AC-010 | Small |
-| 7 | Botón Pausa/Reanudar manual | `src/cockpit/cockpit.element.ts`, `src/cockpit/cockpit.service.ts`, `src/cockpit/cockpit.element.spec.ts` | AC-016, AC-019 | Medium |
-| 8 | Algoritmo de detección automática de paradas | `src/cockpit/cockpit.transform.ts`, `src/cockpit/cockpit.transform.spec.ts` | AC-017, AC-018, AC-019 | Medium |
-| 9 | Modo Invisible (foreground service + notificación) | `src-tauri/gen/android/.../MainActivity.kt`, `src-tauri/AndroidManifest.xml`, `src/cockpit/cockpit.element.ts` | AC-011, AC-012, AC-013, AC-014, AC-015 | Large |
-| 10 | Integración Cockpit en app-root + main.ts | `src/app/app.element.ts`, `src/main.ts` | AC-001, AC-002 | Small |
-| 11 | Tests E2E con Cypress | `cypress/e2e/cockpit/`, `cypress/fixtures/gps-data.json` | Todos | Medium |
+| # | Tarea | Issue | Archivos | AC Cubiertos | Complejidad |
+|---|-------|-------|----------|--------------|-------------|
+| 1 | Estructura del dominio cockpit + types | [#1](https://github.com/GonzaloCarmenado/moto-routes/issues/1) | `src/cockpit/cockpit.types.ts` | AC-001, AC-002, AC-005 | Small |
+| 2 | Transform de telemetría (cálculos y formateo) | [#2](https://github.com/GonzaloCarmenado/moto-routes/issues/2) | `src/cockpit/cockpit.transform.ts`, `src/cockpit/cockpit.transform.spec.ts` | AC-001, AC-005 | Small |
+| 3 | Servicio GPS mockeable + estado de grabación | [#3](https://github.com/GonzaloCarmenado/moto-routes/issues/3) | `src/cockpit/cockpit.service.ts`, `src/cockpit/cockpit.service.spec.ts` | AC-003, AC-006, AC-007, AC-010 | Medium |
+| 4 | Componente Cockpit: dial, botón START/STOP, grid telemetría | [#4](https://github.com/GonzaloCarmenado/moto-routes/issues/4) | `src/cockpit/cockpit.element.ts`, `src/cockpit/cockpit.element.css`, `src/cockpit/cockpit.element.spec.ts` | AC-001, AC-002, AC-004, AC-005, AC-008, AC-009 | Large |
+| 5 | Long press en STOP + guardado de ruta | [#5](https://github.com/GonzaloCarmenado/moto-routes/issues/5) | `src/cockpit/cockpit.element.ts`, `src/cockpit/cockpit.service.ts`, `src/cockpit/cockpit.element.spec.ts` | AC-006, AC-007 | Medium |
+| 6 | Manejo de permisos GPS + pérdida de señal | [#6](https://github.com/GonzaloCarmenado/moto-routes/issues/6) | `src/cockpit/cockpit.service.ts`, `src/cockpit/cockpit.element.ts`, `src/cockpit/cockpit.service.spec.ts` | AC-010 | Small |
+| 7 | Botón Pausa/Reanudar manual | [#7](https://github.com/GonzaloCarmenado/moto-routes/issues/7) | `src/cockpit/cockpit.element.ts`, `src/cockpit/cockpit.service.ts`, `src/cockpit/cockpit.element.spec.ts` | AC-016, AC-019 | Medium |
+| 8 | Algoritmo de detección automática de paradas | [#8](https://github.com/GonzaloCarmenado/moto-routes/issues/8) | `src/cockpit/cockpit.transform.ts`, `src/cockpit/cockpit.transform.spec.ts` | AC-017, AC-018, AC-019 | Medium |
+| 9 | Modo Invisible (foreground service + notificación) | [#9](https://github.com/GonzaloCarmenado/moto-routes/issues/9) | `src-tauri/gen/android/.../MainActivity.kt`, `src-tauri/AndroidManifest.xml`, `src/cockpit/cockpit.element.ts` | AC-011, AC-012, AC-013, AC-014, AC-015 | Large |
+| 10 | Integración Cockpit en app-root + main.ts | [#10](https://github.com/GonzaloCarmenado/moto-routes/issues/10) | `src/app/app.element.ts`, `src/main.ts` | AC-001, AC-002 | Small |
+| 11 | Tests E2E con Cypress | [#11](https://github.com/GonzaloCarmenado/moto-routes/issues/11) | `cypress/e2e/cockpit/`, `cypress/fixtures/gps-data.json` | Todos | Medium |
 
 ---
 
