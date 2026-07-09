@@ -8,6 +8,24 @@ import { invoke } from '@tauri-apps/api/core';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type InvokeArgs = Record<string, any>;
 
+/** Inicia el foreground service de Android (notificación persistente) */
+export async function startForegroundService(): Promise<void> {
+  try {
+    await invoke('start_foreground_service');
+  } catch {
+    // Ignorar error si no está disponible (web/desktop)
+  }
+}
+
+/** Detiene el foreground service de Android */
+export async function stopForegroundService(): Promise<void> {
+  try {
+    await invoke('stop_foreground_service');
+  } catch {
+    // Ignorar error si no está disponible
+  }
+}
+
 // Ejemplo: comando greet en Rust
 export interface GreetArgs {
   name: string;

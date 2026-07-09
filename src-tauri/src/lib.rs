@@ -12,6 +12,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             commands::greet,
             commands::save_file,
             commands::app_info,
+            commands::start_foreground_service,
+            commands::stop_foreground_service,
         ])
         .setup(|app| {
             info!("🚀 Moto Routes app started: {}", app.package_info().name);
