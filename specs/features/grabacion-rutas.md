@@ -19,6 +19,10 @@ El Cockpit es la pantalla principal de la aplicación, visible al abrirla. Permi
 - [ ] AC-013: Con "Modo Invisible" activo, debe aparecer una notificación persistente en la barra de estado de Android indicando que la grabación continúa (foreground service).
 - [ ] AC-014: Al desactivar "Modo Invisible", la app vuelve al Cockpit en primer plano mostrando la telemetría en tiempo real.
 - [ ] AC-015: El toggle de "Modo Invisible" solo debe estar disponible durante una grabación activa (no en reposo).
+- [ ] AC-016: Durante la grabación debe existir un botón "Pausa" para detener/reanudar la grabación manualmente sin detener la ruta.
+- [ ] AC-017: La app debe detectar paradas automáticas cuando el vehículo está quieto durante un tiempo mínimo, distinguiendo un semáforo de una parada real.
+- [ ] AC-018: La detección de parada automática debe ser conservative: mejor tardar hasta 30 segundos en confirmar una parada que generar falsos positivos.
+- [ ] AC-019: Las paradas detectadas (automáticas o manuales) deben quedar registradas en la ruta con timestamp, duración y coordenadas.
 
 ## Comportamiento Esperado
 
@@ -72,6 +76,41 @@ El Cockpit es la pantalla principal de la aplicación, visible al abrirla. Permi
 - **Cuando** el usuario pulsa "Volver" en la notificación o reabre la app
 - **Entonces** el Cockpit se muestra con la telemetría actualizada y el toggle "Modo Invisible" se desmarca
 
+### Escenario: Pausar grabación manualmente
+- **Dado** que la grabación está activa mostrando telemetría
+- **Cuando** el usuario pulsa el botón "Pausa" (icono ⏸)
+- **Entonces** la grabación se pausa: se detiene el registro de puntos GPS, el botón cambia a "Reanudar" (icono ▶), el dial muestra el último valor congelado, y el indicador REC parpadea más lento para indicar pausa
+- **Y** se registra una parada manual en la ruta con el timestamp actual
+
+### Escenario: Reanudar grabación tras pausa manual
+- **Dado** que la grabación está en pausa
+- **Cuando** el usuario pulsa el botón "Reanudar" (icono ▶)
+- **Entonces** la grabación continúa: se reanuda el registro de puntos GPS, el botón vuelve a "Pausa" (icono ⏸), el dial muestra la velocidad actual en tiempo real
+- **Y** se registra el fin de la parada manual en la ruta
+
+### Escenario: Detección automática de parada real
+- **Dado** que la grabación está activa y el vehículo está en movimiento
+- **Cuando** la velocidad baja a < 3 km/h durante más de 30 segundos consecutivos
+- **Entonces** el sistema marca el punto donde la velocidad cayó por debajo de 3 km/h como "inicio de parada" y continúa monitorizando
+- **Y** si a los 30 segundos sigue por debajo de 3 km/h, confirma la parada y la registra en la ruta
+
+### Escenario: Falso positivo evitado (semáforo)
+- **Dado** que la grabación está activa
+- **Cuando** la velocidad baja a < 3 km/h (semáforo en rojo, stop, ceda el paso)
+- **Y** antes de que pasen 30 segundos la velocidad vuelve a > 3 km/h
+- **Entonces** NO se registra ninguna parada. El sistema interpreta que fue una detención momentánea (semáforo, stop).
+
+### Escenario: Parada larga confirmada automáticamente
+- **Dado** que el vehículo lleva más de 30 segundos a < 3 km/h (parada confirmada)
+- **Cuando** la velocidad vuelve a > 3 km/h
+- **Entonces** se registra el fin de la parada con timestamp, y la duración total de la parada se guarda en la metadata de la ruta
+- **Y** la parada queda disponible para asociar fotos multimedia en el futuro
+
+### Escenario: Pausa y detención combinadas
+- **Dado** que el usuario puso pausa manual (AC-016)
+- **Cuando** pasan más de 30 segundos en pausa
+- **Entonces** se registra automáticamente una parada manual-forzada con la duración acumulada
+
 ### Escenario: App minimizada durante grabación (sin modo invisible)
 - **Dado** que la grabación está activa
 - **Cuando** el usuario minimiza la app (fondo) sin activar modo invisible
@@ -83,6 +122,13 @@ El Cockpit es la pantalla principal de la aplicación, visible al abrirla. Permi
 - En iOS se usarían los **Background Modes** con la autorización adecuada.
 - La notificación persistente debe incluir: icono de la app, texto "Moto Routes ● Grabando ruta..." y un botón de acción "Volver".
 - El toggle "Modo Invisible" debe ser un icono de "ojo" o "incógnito" con label "Modo Invisible", hitbox 56×56px.
+- El botón de pausa manual debe estar siempre visible durante la grabación, con icono ⏸/▶ y label "Pausa"/"Reanudar", hitbox 56×56px.
+- La detección automática de paradas sigue este algoritmo conservativo:
+  1. Velocidad < 3 km/h → estado "posible parada", se inicia contador
+  2. Contador < 30 segundos y velocidad > 3 km/h → se resetea el contador (era semáforo)
+  3. Contador >= 30 segundos y velocidad < 3 km/h → se confirma "parada real", se registra inicio
+  4. Una vez confirmada, cuando velocidad > 3 km/h → se registra fin de parada con duración
+- No se generan paradas fantasma por pérdida momentánea de GPS (si no hay dato de velocidad, se ignora ese segundo y no se resetea ni confirma nada, solo se extiende el contador)
 - Los puntos GPS deben registrarse con precisión de ~10 metros
 - El almacenamiento local debe soportar rutas de hasta 8 horas continuas
 - El long press de STOP debe ser >= 1.5 segundos para evitar paradas accidentales por vibraciones o roce de chaqueta
