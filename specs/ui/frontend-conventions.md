@@ -6,6 +6,32 @@ Define las reglas vinculantes para todo desarrollo de frontend. El impl-agent le
 
 ---
 
+## 0. Límites de Código (Quality Gates)
+
+Todo el código debe cumplir estos límites, verificados automáticamente por ESLint (TypeScript) y Clippy (Rust):
+
+### TypeScript (ESLint) — configurado en `eslint.config.js`
+
+| Regla | Límite | Acción |
+|-------|--------|--------|
+| `max-lines` | 300 por archivo | Warning |
+| `max-lines-per-function` | 60 por función | Warning |
+| `max-depth` | 3 niveles de anidación | Warning |
+| `max-params` | 4 parámetros por función | Warning |
+| `max-statements` | 25 sentencias por función | Warning |
+
+### Rust (Clippy) — configurado en `clippy.toml`
+
+| Regla | Límite | Acción |
+|-------|--------|--------|
+| `too-many-lines` | 300 por archivo | Warning |
+| `cognitive-complexity` | 15 | Warning |
+| `too-many-arguments` | 4 parámetros | Warning |
+
+> Si algún límite se supera, el código debe refactorizarse. No se permite silenciar warnings de tamaño sin justificación documentada.
+
+---
+
 ## 1. Estructura de Carpetas
 
 ### Organización por dominio funcional

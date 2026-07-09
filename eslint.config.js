@@ -31,6 +31,13 @@ export default tseslint.config(
       'prefer-const': 'error',
       'no-var': 'error',
       'no-eval': 'error', // Tauri CSP: no eval permitido
+
+      // ─── Límites de tamaño ───────────────────────────────────────
+      'max-lines': ['warn', { max: 300, skipComments: true, skipBlankLines: true }],
+      'max-lines-per-function': ['warn', { max: 60, skipComments: true, skipBlankLines: true }],
+      'max-depth': ['warn', { max: 3 }],
+      'max-params': ['warn', { max: 4 }],
+      'max-statements': ['warn', { max: 25 }],
     },
   },
 );
