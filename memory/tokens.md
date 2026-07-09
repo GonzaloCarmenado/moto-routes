@@ -1,4 +1,60 @@
-# Token de Memoria - Sesión de Inicialización
+# Token de Memoria - Sesiones de Trabajo
+
+## Sesión 2 - 2026-07-09: Grabación de Rutas (Cockpit) + Build Android
+
+### Resumen
+Implementación completa de la feature Grabación de Rutas (Cockpit) con dial velocímetro, botón START/STOP con long press, pausa, detección automática de paradas, modo invisible, foreground service Android, tests unitarios y E2E. APK compilado e instalado en Realme RMX3301.
+
+### Archivos creados (carpeta cockpit/)
+- `src/cockpit/cockpit.types.ts` — Tipos del dominio
+- `src/cockpit/cockpit.transform.ts` — Haversine, formatDuration, detectStop
+- `src/cockpit/cockpit.transform.spec.ts` — 23 tests
+- `src/cockpit/cockpit.service.ts` — Servicio GPS mockeable con estado
+- `src/cockpit/cockpit.service.spec.ts` — 11 tests
+- `src/cockpit/cockpit.element.ts` — Web Component <cockpit-view>
+- `src/cockpit/cockpit.element.css` — Estilos con design tokens
+
+### Otros archivos
+- `src-tauri/gen/android/app/src/main/java/com/motoroutes/app/RecordingService.kt`
+- `scripts/build-apk.ps1` — Script automatizado de build
+- `ruta-corta.gpx` — Ruta de prueba para GPS
+- `cypress/e2e/cockpit/cockpit.cy.ts` — Tests E2E
+
+### Comando para compilar (con modo desarrollador activado)
+```powershell
+$env:ANDROID_HOME = "D:\Android\Sdk"
+$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+npx tauri android build --debug
+```
+
+### Comando para compilar (SIN modo desarrollador - workaround)
+```powershell
+$env:ANDROID_HOME = "D:\Android\Sdk"
+$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+pnpm build
+cd src-tauri
+cargo build --target aarch64-linux-android
+cd ..
+Copy-Item "src-tauri\target\aarch64-linux-android\debug\libapp_lib.so" "src-tauri\gen\android\app\src\main\jniLibs\arm64-v8a\libapp_lib.so" -Force
+cd src-tauri\gen\android
+.\gradlew :app:assembleArm64Debug --no-daemon -x :app:rustBuildArm64Debug -x :app:rustBuildArmDebug -x :app:rustBuildX86Debug -x :app:rustBuildX86_64Debug
+```
+
+### Para instalar
+```powershell
+adb -s 75fe536b install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+```
+
+### APK generado por Tauri
+- **Con modo desarrollador**: `apk/universal/debug/app-universal-debug.apk`
+- **Sin modo desarrollador**: `apk/arm64/debug/app-arm64-debug.apk`
+
+---
+
+## Sesión 1 - 2026-07-09: Inicialización
+
+### Fecha
+2026-07-09
 
 ## Fecha
 2026-07-09
