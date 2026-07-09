@@ -6,7 +6,8 @@ describe('AppCounter', () => {
     const counter = document.createElement('app-counter');
     document.body.appendChild(counter);
 
-    const span = counter.shadowRoot?.querySelector('span');
+    const shadowRoot = counter.shadowRoot!;
+    const span = shadowRoot.querySelector('span');
     expect(span?.textContent).toBe('0');
 
     document.body.removeChild(counter);
@@ -16,10 +17,11 @@ describe('AppCounter', () => {
     const counter = document.createElement('app-counter');
     document.body.appendChild(counter);
 
-    const incrementBtn = counter.shadowRoot?.getElementById('increment') as HTMLButtonElement;
-    incrementBtn?.click();
+    const shadowRoot = counter.shadowRoot!;
+    const incrementBtn = shadowRoot.getElementById('increment') as HTMLButtonElement;
+    incrementBtn.click();
 
-    const span = counter.shadowRoot?.querySelector('span');
+    const span = shadowRoot.querySelector('span');
     expect(span?.textContent).toBe('1');
 
     document.body.removeChild(counter);
@@ -29,10 +31,11 @@ describe('AppCounter', () => {
     const counter = document.createElement('app-counter');
     document.body.appendChild(counter);
 
-    const decrementBtn = counter.shadowRoot?.getElementById('decrement') as HTMLButtonElement;
-    decrementBtn?.click();
+    const shadowRoot = counter.shadowRoot!;
+    const decrementBtn = shadowRoot.getElementById('decrement') as HTMLButtonElement;
+    decrementBtn.click();
 
-    const span = counter.shadowRoot?.querySelector('span');
+    const span = shadowRoot.querySelector('span');
     expect(span?.textContent).toBe('-1');
 
     document.body.removeChild(counter);
@@ -47,8 +50,9 @@ describe('AppCounter', () => {
       emitted = true;
     });
 
-    const incrementBtn = counter.shadowRoot?.getElementById('increment') as HTMLButtonElement;
-    incrementBtn?.click();
+    const shadowRoot = counter.shadowRoot!;
+    const incrementBtn = shadowRoot.getElementById('increment') as HTMLButtonElement;
+    incrementBtn.click();
 
     expect(emitted).toBe(true);
 

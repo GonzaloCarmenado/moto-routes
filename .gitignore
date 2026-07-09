@@ -4,4 +4,27 @@ coverage/
 *.local
 *.log
 .DS_Store
+*.apk
+*.aab
+*.so
+rustup-init.exe
+
+# Rust
 src-tauri/target/
+
+# Android (Tauri generated)
+src-tauri/gen/android/build/
+src-tauri/gen/android/.gradle/
+src-tauri/gen/android/local.properties
+src-tauri/gen/android/app/build/
+src-tauri/gen/android/app/src/main/jniLibs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+Desktop.ini

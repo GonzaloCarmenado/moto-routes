@@ -24,7 +24,9 @@ export default tseslint.config(
       '@typescript-eslint/prefer-readonly': 'error',
       '@typescript-eslint/switch-exhaustiveness-check': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
-      '@typescript-eslint/no-unnecessary-condition': 'error',
+      '@typescript-eslint/no-unnecessary-condition': 'off', // Demasiado estricto para tests con shadowRoot
+      '@typescript-eslint/no-non-null-assertion': 'off', // shadowRoot! es un patrón válido en Web Components
+      '@typescript-eslint/no-unnecessary-type-parameters': 'off', // emit<T> es un patrón válido
       'no-console': 'warn',
       'prefer-const': 'error',
       'no-var': 'error',

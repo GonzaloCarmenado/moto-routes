@@ -1,5 +1,4 @@
 import { BaseElement } from '../shared/base-element.js';
-import { greet } from '../shared/tauri/commands.js';
 import styles from './app.element.css?inline';
 
 class AppRoot extends BaseElement {
@@ -17,22 +16,6 @@ class AppRoot extends BaseElement {
   private toggleRecording(): void {
     this.isRecording = !this.isRecording;
     this.render();
-
-    if (this.isRecording) {
-      this.emit('recording-started', null);
-    } else {
-      this.emit('recording-stopped', null);
-    }
-  }
-
-  private async handleGreetClick(): Promise<void> {
-    try {
-      const response = await greet({ name: 'Cline + DeepSeek' });
-      this.emit('greet-response', response.message);
-    } catch (error) {
-      console.error('Failed to greet:', error);
-      this.emit('greet-error', String(error));
-    }
   }
 
   protected render(): void {
@@ -67,7 +50,9 @@ class AppRoot extends BaseElement {
     const btn = document.createElement('button');
     btn.className = `btn-master-rec ${this.isRecording ? 'btn-master-rec--active' : ''}`;
     btn.textContent = this.isRecording ? 'STOP' : '● START';
-    btn.addEventListener('click', () => this.toggleRecording());
+    btn.addEventListener('click', () => {
+      this.toggleRecording();
+    });
 
     // Telemetry grid
     const grid = document.createElement('div');

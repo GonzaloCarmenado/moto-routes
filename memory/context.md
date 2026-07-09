@@ -94,10 +94,21 @@ memory/                       # Sistema de memoria persistente
 - **Build**: tsc sin errores + cargo build exitoso + vite build exitoso + tauri build exitoso
 
 ## Estado Actual del Proyecto
-- **Fase**: Inicial - Plantilla Tauri aplicada
+- **Fase**: Inicial - APK Android compilado
 - **Feature activo**: Ninguno (infraestructura base configurada)
-- **Último hito completado**: Inicialización del proyecto con plantilla tauri-vanilla-ts adaptada para mobile
+- **Último hito completado**: APK debug generado para arm64-v8a en `src-tauri/gen/android/app/build/outputs/apk/arm64/debug/app-arm64-debug.apk`
 - **Próximo hito**: Definir primera feature (grabación de rutas)
+
+## Build Android (Windows workaround)
+Tauri 2 tiene un bug conocido en Windows con el Kotlin incremental compiler cuando el proyecto está en una unidad diferente a C: (ej: D:). Además, los symlinks no funcionan sin permisos especiales.
+
+**Workaround documentado** en `memory/tokens.md` con el comando exacto para compilar.
+
+**Resumen**: 
+1. `pnpm build` (frontend)
+2. `cargo build --target aarch64-linux-android` (Rust)
+3. Copiar `libapp_lib.so` manualmente a `jniLibs/arm64-v8a/`
+4. `gradlew assembleDebug --no-daemon -x :app:rustBuild*` (APK)
 
 ## Convenciones
 - **Estilo de código**: TypeScript strict mode + ESLint strict + Prettier
