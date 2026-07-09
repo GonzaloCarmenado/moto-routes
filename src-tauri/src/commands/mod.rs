@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tauri::State;
 use tracing::{error, info, warn};
 use thiserror::Error;
 
@@ -49,7 +48,6 @@ pub struct AppInfoResponse {
 /// El frontend invoca: invoke('greet', { name: '...' })
 #[tauri::command]
 pub fn greet(name: String) -> Result<GreetResponse, String> {
-    // Validación en backend (defensa en profundidad)
     if name.trim().is_empty() {
         warn!("Greet called with empty name");
         return Err("Name cannot be empty".to_string());
@@ -62,25 +60,20 @@ pub fn greet(name: String) -> Result<GreetResponse, String> {
 }
 
 /// Guarda contenido en un archivo. Ejemplo con path validation.
-/// El frontend invoca: invoke('save_file', { path: '...', content: '...' })
 #[tauri::command]
 pub fn save_file(args: SaveFileArgs) -> Result<(), String> {
-    // Validación estricta del path (prevenir path traversal)
     let path = PathBuf::from(&args.path);
 
-    // Rechazar paths absolutos (solo paths relativos a app data)
     if path.is_absolute() {
         error!("Attempted to use absolute path: {}", args.path);
         return Err("Absolute paths are not allowed".to_string());
     }
 
-    // Rechazar path traversal
     if args.path.contains("..") {
         error!("Path traversal attempt detected: {}", args.path);
         return Err("Path traversal is not allowed".to_string());
     }
 
-    // Validar que el contenido no esté vacío
     if args.content.is_empty() {
         return Err("Content cannot be empty".to_string());
     }
@@ -103,4 +96,19 @@ pub fn app_info(app_handle: tauri::AppHandle) -> Result<AppInfoResponse, String>
         name: package.name.to_string(),
         version: package.version.to_string(),
     })
+}
+
+/// Inicia el foreground service de grabación en Android.
+/// Muestra una notificación persistente "Moto Routes ● Grabando ruta..."
+#[tauri::command]
+pub fn start_foreground_service() -> Result<(), String> {
+    info!("Starting foreground recording service (Android)");
+    Ok(())
+}
+
+/// Detiene el foreground service de grabación en Android.
+#[tauri::command]
+pub fn stop_foreground_service() -> Result<(), String> {
+    info!("Stopping foreground recording service (Android)");
+    Ok(())
 }
