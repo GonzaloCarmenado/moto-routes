@@ -9,19 +9,20 @@
 }
 
 html {
-  font-family: var(--font-sans);
-  font-weight: var(--font-weight-regular);
+  font-family: var(--font-ui);
+  font-weight: 400;
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
   -ms-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
 }
 
 body {
   min-height: 100dvh;
-  background-color: var(--color-bg-base);
-  color: var(--color-text-max);
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+  color: var(--ink);
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
 }
@@ -33,16 +34,4 @@ input,
 select,
 textarea {
   touch-action: manipulation;
-}
-
-/* Respect reduced motion preference */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
 }

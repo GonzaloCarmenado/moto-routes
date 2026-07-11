@@ -1,6 +1,6 @@
 # Moto Routes 🏍️
 
-**Ride Tracker Mobile App** — Grabación de rutas GPS para motociclistas. Combina la precisión de un cuadro de instrumentos de competición con la fluidez de una bitácora digital.
+**Ride Tracker Mobile App** — Grabación de rutas GPS para motociclistas. Un cuaderno de bitácora que registra el viaje mientras ocurre: asfalto de noche, cuero oscuro y el ámbar cálido de un cuadro de instrumentos de moto.
 
 ---
 
@@ -21,9 +21,10 @@
 
 ## Filosofía Visual
 
-- **Concepto**: "Telemetry & Freedom" — precisión técnica + bitácora digital.
+- **Concepto**: "Asfalto Nocturno" — cuero oscuro, negro asfalto y ámbar cálido. Dramático, no futurista: nada de HUDs, glassmorphism ni neón.
 - **Modo oscuro obligatorio**: Por seguridad vial (sin deslumbramiento nocturno).
-- **Paleta**: Fondo `#0b0c10`, neón verde `#00ff66`, rojo `#ff3131`, azul `#00d2ff`.
+- **Paleta**: Asfalto/cuero (`--bg-top`/`--bg-bottom`/`--panel`), ámbar como único acento que brilla (`--amber`), línea de óxido de apoyo (`--rust-line`).
+- **Tipografía**: Roboto Slab (titulares) + Barlow (interfaz) + Barlow Semi Condensed tabular (cifras, estilo cuentakilómetros).
 - **Accesibilidad**: Hitboxes mínimas de 56×56px para uso con guantes de moto.
 - **Design tokens**: Todos los valores CSS están en `src/shared/styles/tokens.css`.
 - **Documentación visual completa**: `specs/ui/design-system.md`.

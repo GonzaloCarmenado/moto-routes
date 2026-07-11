@@ -30,8 +30,14 @@
 ```
 src/                          # Frontend (TypeScript + Vite)
 ├── app/
-│   ├── app.element.ts        # Componente raíz <app-root> (Cockpit)
-│   └── app.element.css       # Estilos del cockpit
+│   └── app.element.ts        # Componente raíz <app-root>, monta <cockpit-view>
+├── cockpit/                  # Dominio "cockpit" (grabación de ruta)
+│   ├── cockpit.element.ts    # Web Component <cockpit-view>
+│   ├── cockpit.element.css   # Estilos del cockpit
+│   ├── cockpit.service.ts    # Estado de grabación (GPS, pausas, invisible)
+│   └── cockpit.transform.ts  # Formateo/cálculos (distancia, velocidad, duración)
+├── assets/
+│   └── fonts/                 # Subset .woff2 auto-alojado (Roboto Slab, Barlow, Barlow Semi Condensed)
 ├── components/
 │   └── counter/
 │       ├── counter.element.ts    # Ejemplo: <app-counter>
@@ -76,12 +82,16 @@ docs/                         # Documentación SDD
 memory/                       # Sistema de memoria persistente
 ```
 
-## Filosofía Visual
-- **Concepto**: "Telemetry & Freedom" — fusión de cuadro de instrumentos de competición con bitácora digital.
+## Filosofía Visual: "Asfalto Nocturno"
+- **Concepto**: Cuero oscuro, negro asfalto y ámbar cálido. Cuaderno de bitácora, no HUD de competición. **Prohibido**: neón, glassmorphism, azules fríos, diales circulares.
+- **Source of truth**: `specs/ui/design-system.md` y `src/shared/styles/tokens.css`.
+- **Tokens activos** (`--bg-top`, `--panel`, `--amber`, `--ink`, `--font-display/ui/data`). **No usar** `--color-*`, `--glow-*`, `--neon-*` (eliminados).
 - **Modo oscuro obligatorio**: Por seguridad vial, sin modo claro.
-- **Tokens CSS**: Definidos en `src/shared/styles/tokens.css` y documentados en `specs/ui/design-system.md`.
 - **Hitbox mínima**: 56×56px para uso con guantes de moto.
-- **Paleta**: Fondo #0b0c10, neón verde #00ff66, rojo #ff3131, azul #00d2ff.
+- **Paleta**: Asfalto/cuero oscuro (`--bg-top`/`--bg-bottom`), ámbar único acento (`--amber`), óxido de apoyo (`--rust-line`).
+- **Tipografía**: Roboto Slab (titulares) + Barlow (interfaz) + Barlow Semi Condensed tabular (cifras). Self-hosted en `src/assets/fonts/`.
+- **Shadow DOM**: Los estilos globales reales viven en `tokens.css` (importado en cada `*.element.css`). `index.css` solo alcanza DOM ligero.
+- **Historial**: Sustituye a "Telemetry & Freedom" (ADR-019). Archivos legacy eliminados (`estilos_base.scss`, `filosofia de diseño.md`).
 
 ## Quality Gates
 - **Test pass rate**: 100% (frontend + backend)
@@ -98,6 +108,24 @@ memory/                       # Sistema de memoria persistente
 - **Feature activo**: Ninguno (infraestructura base configurada)
 - **Último hito completado**: APK debug generado para arm64-v8a en `src-tauri/gen/android/app/build/outputs/apk/arm64/debug/app-arm64-debug.apk`
 - **Próximo hito**: Definir primera feature (grabación de rutas)
+
+## Desarrollo Web (Vite)
+Para lanzar el proyecto en modo web (sin Tauri), usar:
+
+```bash
+pnpm run dev
+```
+
+El script `pnpm run dev` ejecuta automáticamente `pnpm dev:kill` antes de arrancar Vite, el cual libera el puerto 1420 si está ocupado por una sesión anterior mal cerrada.
+
+**Puerto fijo**: `1420` (configurado en `vite.config.ts` con `strictPort: true`). Es fijo porque Tauri lo necesita en `tauri.conf.json` → `build.devUrl`. Si se cambia, hay que actualizar ambos archivos.
+
+**Problema conocido**: Si una sesión de Vite se cierra abruptamente, el proceso hijo puede quedar zombie ocupando el puerto. El script `dev:kill` lo mata antes de arrancar.
+
+**Comando manual alternativo** si el script no funciona:
+```bash
+pnpm dev:kill && pnpm run dev
+```
 
 ## Build Android (Windows workaround)
 Tauri 2 tiene un bug conocido en Windows con el Kotlin incremental compiler cuando el proyecto está en una unidad diferente a C: (ej: D:). Además, los symlinks no funcionan sin permisos especiales.

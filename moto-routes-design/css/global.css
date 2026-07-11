@@ -1,0 +1,506 @@
+/* =========================================================
+   MOTO-ROUTES — CSS GLOBAL
+   Sistema visual: "asfalto nocturno" — cuero oscuro, negro
+   asfalto y ámbar cálido. Dramático, no futurista.
+   ========================================================= */
+
+/* ---------- 1. FUENTES ---------- */
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;600;700&family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,500&family=Barlow+Semi+Condensed:wght@500;600;700;800&display=swap');
+
+/* ---------- 2. TOKENS ---------- */
+:root {
+  /* Superficies — asfalto y cuero oscuro */
+  --bg-top:       oklch(22% 0.018 50);
+  --bg-bottom:    oklch(14% 0.014 50);
+  --panel:        oklch(24% 0.018 50);    /* tarjetas / stat tiles */
+  --panel-sunken: oklch(20% 0.016 50);    /* hundido / thumbnails */
+  --bezel:        oklch(9% 0.01 50);
+  --nav-bg:       oklch(18% 0.016 50);
+
+  /* Tinta (sobre fondo oscuro) */
+  --ink:          oklch(92% 0.01 60);
+  --ink-soft:     oklch(70% 0.015 55);
+  --ink-faint:    oklch(55% 0.02 55);
+
+  /* Acento primario — ámbar cálido */
+  --amber:        oklch(74% 0.17 48);
+  --amber-strong: oklch(58% 0.17 45);
+  --amber-soft:   oklch(28% 0.03 45);     /* fondo tenue del acento */
+  --amber-border: oklch(45% 0.14 45 / 0.5);
+
+  /* Acento secundario — óxido apagado (detalles, bordes superiores) */
+  --rust-line:    oklch(60% 0.14 45);
+
+  /* Líneas / bordes */
+  --line:         oklch(30% 0.02 50);
+  --line-strong:  oklch(45% 0.02 55);
+
+  /* Estados */
+  --danger:       oklch(55% 0.18 30);
+  --success:      oklch(65% 0.13 140);
+  --warning:      oklch(75% 0.14 80);
+
+  /* Tipografía */
+  --font-display: "Roboto Slab", "Georgia", serif;      /* titulares, marca */
+  --font-ui:      "Barlow", "Segoe UI", sans-serif;      /* interfaz, cuerpo */
+  --font-data:    "Barlow Semi Condensed", "Barlow", sans-serif; /* números grandes */
+
+  /* Radios */
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-pill: 999px;
+
+  /* Sombra — sutil, cálida, nunca flotante-neón */
+  --shadow-card: 0 1px 2px oklch(20% 0.02 50 / 0.06), 0 6px 16px oklch(20% 0.02 50 / 0.08);
+  --shadow-btn:  0 2px 6px oklch(20% 0.02 50 / 0.18);
+
+  /* Espaciado base */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* Altura de la botonera inferior (safe area incluida) */
+  --nav-height: 84px;
+}
+
+/* ---------- 3. RESET BÁSICO ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+p { margin: 0; }
+a { color: var(--amber); text-decoration: none; }
+a:hover { color: oklch(80% 0.15 48); text-decoration: underline; }
+button { font-family: var(--font-ui); }
+img { max-width: 100%; display: block; }
+
+/* Números / datos de instrumentación (velocidad, km, tiempo) */
+.num, .stat-value, .speed-value {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* ---------- 4. FONDO BASE ---------- */
+/* Degradado sutil de asfalto oscuro, de cabecera a pie. Sin texturas
+   ni patrones — la superficie debe leerse limpia, no "ruidosa". */
+.bg-app {
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+}
+
+/* ---------- 5. BOTONES ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: none;
+  border-radius: var(--r-pill);
+  font-weight: 600;
+  font-size: 16px;
+  padding: 14px 24px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.btn:active { transform: scale(0.97); }
+
+.btn-primary {
+  background: var(--amber-strong);
+  color: var(--bezel);
+  box-shadow: 0 0 24px oklch(60% 0.17 45 / 0.4);
+}
+.btn-primary:hover { background: oklch(64% 0.17 46); }
+
+.btn-secondary {
+  background: transparent;
+  color: var(--ink);
+  border: 2px solid var(--line-strong);
+}
+.btn-secondary:hover { border-color: var(--ink-soft); }
+
+.btn-danger {
+  background: var(--danger);
+  color: var(--ink);
+}
+
+.btn-icon-round {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-btn);
+}
+
+/* ---------- 6. TARJETAS ---------- */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+}
+
+.stat-tile {
+  background: var(--panel);
+  border-top: 2px solid var(--rust-line);
+  border-radius: 4px 4px var(--r-md) var(--r-md);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat-tile .stat-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  font-weight: 600;
+}
+.stat-tile .stat-value {
+  font-size: 28px;
+  color: var(--ink);
+}
+.stat-tile .stat-unit {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+/* ---------- 7. CHIPS / ETIQUETAS DE ESTADO ---------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.chip-recording { background: var(--amber-soft); color: var(--amber); border: 1px solid var(--amber-border); }
+.chip-paused    { background: var(--panel-sunken); color: var(--ink-faint); border: 1px solid var(--line); }
+.chip-neutral   { background: var(--panel-sunken); color: var(--ink-soft); }
+
+/* ---------- 8. BOTONERA INFERIOR (común a toda la app) ---------- */
+.bottom-nav {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: var(--nav-height);
+  background: var(--nav-bg);
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.nav-item.active { color: var(--amber); }
+.nav-item .nav-icon { width: 24px; height: 24px; }
+
+/* Botón central de grabar destacado dentro de la botonera */
+.nav-item-record {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--amber-strong);
+  color: var(--bezel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: -28px;
+  border: 4px solid var(--nav-bg);
+  box-shadow: 0 0 24px oklch(60% 0.17 45 / 0.45);
+}
+
+/* ---------- 9. PLACEHOLDERS DE IMAGEN (mapa, fotos) ---------- */
+/* Usar mientras no hay contenido real: franjas sutiles + etiqueta
+   monoespaciada indicando qué debe ir ahí. */
+.media-placeholder {
+  position: relative;
+  overflow: hidden;
+  background: var(--panel-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-faint);
+}
+.media-placeholder .label {
+  font-family: "Space Mono", monospace;
+  font-size: 12px;
+  background: oklch(14% 0.014 50 / 0.85);
+  color: var(--ink-soft);
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+}
+
+/* ---------- 10. UTILIDADES DE SCROLL HORIZONTAL (galería) ---------- */
+.hscroll {
+  display: flex;
+  gap: var(--space-3);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+.hscroll > * { scroll-snap-align: start; flex-shrink: 0; }
+
+/* ---------- 11. ESTRUCTURA DE PANTALLA ---------- */
+/* Contenedor base de cualquier pantalla de la app. */
+.screen {
+  min-height: 100vh;
+  padding: 56px 22px calc(var(--nav-height) + 24px);
+}
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+}
+.page-title {
+  font-size: 26px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.page-subtitle {
+  font-size: 14px;
+  color: var(--ink-faint);
+  margin-bottom: var(--space-5);
+}
+
+/* ---------- 12. GRABACIÓN — VELOCIDAD PROTAGONISTA ---------- */
+.speed-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: var(--space-6);
+}
+.speed-display .speed-value {
+  font-size: 128px;
+  line-height: 1;
+  color: var(--amber);
+  text-shadow: 0 0 40px oklch(70% 0.17 45 / 0.35);
+}
+.speed-display .speed-unit {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: var(--space-5);
+}
+.stat-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+
+.avg-speed-banner {
+  background: var(--amber-soft);
+  border: 1px solid var(--amber-border);
+  border-radius: var(--r-md);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--amber);
+  text-align: center;
+  margin-bottom: var(--space-6);
+}
+
+.record-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+}
+.control-btn {
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: none;
+}
+.control-btn.pause {
+  width: 76px;
+  height: 76px;
+  background: transparent;
+  border: 2px solid var(--line-strong);
+}
+.control-btn.stop {
+  width: 88px;
+  height: 88px;
+  background: var(--amber-strong);
+  box-shadow: 0 0 30px oklch(60% 0.17 45 / 0.45);
+}
+.control-btn .icon-pause-bar { width: 7px; height: 26px; border-radius: 3px; background: var(--ink); }
+.control-btn .icon-play {
+  width: 0; height: 0;
+  border-top: 13px solid transparent;
+  border-bottom: 13px solid transparent;
+  border-left: 20px solid var(--ink);
+  margin-left: 4px;
+}
+.control-btn .icon-stop { width: 26px; height: 26px; border-radius: 6px; background: var(--bezel); }
+.control-labels {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-faint);
+}
+
+/* ---------- 13. MAPA Y GRÁFICAS DE RUTA ---------- */
+.route-map {
+  position: relative;
+  width: 100%;
+  height: 260px;
+  background: var(--panel-sunken);
+}
+.route-map .map-tag {
+  position: absolute;
+  bottom: 10px; right: 12px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  background: oklch(14% 0.014 50 / 0.85);
+  padding: 3px 9px;
+  border-radius: var(--r-sm);
+  color: var(--ink-soft);
+}
+.route-chart {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 14px;
+  margin-bottom: var(--space-5);
+}
+.route-chart .chart-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+}
+
+/* ---------- 14. GALERÍA DE FOTOS ---------- */
+.photo-gallery {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  margin-bottom: var(--space-6);
+}
+.photo-thumb {
+  flex-shrink: 0;
+  width: 92px;
+  height: 92px;
+  border-radius: var(--r-md);
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-faint);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+}
+.photo-thumb.add {
+  border: 2px dashed var(--line-strong);
+  color: var(--ink-faint);
+  font-size: 26px;
+  font-weight: 300;
+  background: transparent;
+}
+.section-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+}
+
+/* ---------- 15. LISTADO DE RUTAS ---------- */
+.route-card {
+  display: flex;
+  gap: 12px;
+  background: var(--panel);
+  border-top: 2px solid var(--rust-line);
+  border-radius: 4px 4px var(--r-lg) var(--r-lg);
+  padding: 10px;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+}
+.route-card .thumb {
+  width: 76px;
+  height: 76px;
+  border-radius: var(--r-md);
+  flex-shrink: 0;
+  background: var(--panel-sunken);
+}
+.route-card .info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+}
+.route-card .name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.route-card .date {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.route-card .badges {
+  display: flex;
+  gap: 8px;
+}
+.route-card .badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+}
+.route-card .badge.distance { color: var(--amber); background: var(--amber-soft); }
+.route-card .badge.duration { color: var(--ink-soft); background: var(--panel-sunken); }

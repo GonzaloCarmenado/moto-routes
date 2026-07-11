@@ -1,371 +1,337 @@
 @import '../shared/styles/tokens.css';
 
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 :host {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
-  background-color: var(--color-bg-base);
-  color: var(--color-text-max);
-  font-family: var(--font-sans);
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  overflow-x: hidden;
+}
+
+.cockpit-screen {
+  flex: 1;
+  padding: 24px 22px 40px;
 }
 
 /* ==========================================================================
-   Status Bar
+   Botones genéricos (catálogo del sistema de diseño)
    ========================================================================== */
 
-.status-bar {
-  display: flex;
-  justify-content: space-between;
+.btn {
+  display: inline-flex;
   align-items: center;
-  padding: var(--space-2) var(--padding-mobile);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-mid);
-}
-
-.status-bar__recording {
-  display: flex;
-  align-items: center;
+  justify-content: center;
   gap: var(--space-2);
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: var(--color-neon-go);
-  animation: pulse-dot 2s infinite ease-in-out;
-}
-
-.status-dot--paused {
-  background-color: var(--color-neon-go);
-  animation: pulse-dot 4s infinite ease-in-out;
-  opacity: 0.5;
-}
-
-.status-dot--stopped {
-  background-color: var(--color-neon-stop);
-  animation: none;
-}
-
-/* ==========================================================================
-   Cockpit Dial
-   ========================================================================== */
-
-.cockpit-dial {
-  position: relative;
-  width: 240px;
-  height: 240px;
-  margin: 20px auto;
-  border-radius: 50%;
-  border: 6px solid var(--color-bg-overlay);
-  background: radial-gradient(circle, var(--color-bg-surface) 0%, var(--color-bg-base) 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
-}
-
-.cockpit-dial__value {
-  font-size: 64px;
-  font-weight: var(--font-weight-black);
-  color: var(--color-text-max);
-  line-height: 1.1;
-  letter-spacing: -2px;
-}
-
-.cockpit-dial__unit {
-  font-size: 14px;
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-mid);
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  margin-top: 4px;
-}
-
-/* ==========================================================================
-   Master Record Button
-   ========================================================================== */
-
-.btn-master-rec {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: var(--hitbox-min);
   min-height: var(--hitbox-min);
-  width: 120px;
-  height: 120px;
-  margin: 12px auto;
-  border-radius: 50%;
-  border: 4px solid var(--color-bg-elevated);
-  background-color: color-mix(in srgb, var(--color-bg-base) 90%, var(--color-neon-stop));
-  color: var(--color-neon-stop);
-  font-size: 15px;
-  font-weight: var(--font-weight-bold);
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
+  border: none;
+  border-radius: var(--r-pill);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 16px;
+  padding: 14px 24px;
   cursor: pointer;
-  position: relative;
-  transition: var(--transition-elastic);
-  user-select: none;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
+.btn:active { transform: scale(0.97); }
 
-.btn-master-rec:focus-visible {
-  outline: 2px solid var(--color-neon-brand);
+.btn-primary {
+  background: var(--amber-strong);
+  color: var(--bezel);
+  box-shadow: 0 0 24px oklch(60% 0.17 45 / 0.4);
+}
+
+/* ==========================================================================
+   Header — estado de grabación
+   ========================================================================== */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.chip-recording { background: var(--amber-soft); color: var(--amber); border: 1px solid var(--amber-border); }
+.chip-paused    { background: var(--panel-sunken); color: var(--ink-faint); border: 1px solid var(--line); }
+.chip-neutral   { background: var(--panel-sunken); color: var(--ink-soft); }
+
+.chip__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.chip-recording .chip__dot {
+  box-shadow: 0 0 8px oklch(70% 0.17 45 / 0.8);
+  animation: pulse-dot 2s infinite ease-in-out;
+}
+.chip-paused .chip__dot {
+  animation: pulse-dot 4s infinite ease-in-out;
+  opacity: 0.6;
+}
+
+.app-header__time {
+  font-size: 18px;
+  color: var(--ink-soft);
+}
+
+/* ==========================================================================
+   Velocidad en vivo — el dato protagonista
+   ========================================================================== */
+
+.speed-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: var(--space-6);
+}
+.speed-display .speed-value {
+  font-size: 112px;
+  line-height: 1;
+  color: var(--amber);
+  text-shadow: 0 0 40px oklch(70% 0.17 45 / 0.35);
+}
+.speed-display .speed-unit {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+
+/* ==========================================================================
+   Stat tiles — distancia, tiempo, altitud
+   ========================================================================== */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: var(--space-5);
+}
+
+.stat-tile {
+  min-width: 0;
+  background: var(--panel);
+  border-top: 2px solid var(--rust-line);
+  border-radius: 4px 4px var(--r-md) var(--r-md);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat-tile .stat-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  font-weight: 600;
+}
+.stat-tile .stat-value {
+  font-size: 26px;
+  color: var(--ink);
+}
+.stat-tile .stat-unit {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.avg-speed-banner {
+  background: var(--amber-soft);
+  border: 1px solid var(--amber-border);
+  border-radius: var(--r-md);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--amber);
+  text-align: center;
+  margin-bottom: var(--space-6);
+}
+
+/* ==========================================================================
+   Controles de grabación (pausar / iniciar-finalizar)
+   ========================================================================== */
+
+.record-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  margin-bottom: var(--space-2);
+}
+
+.control-btn {
+  min-width: var(--hitbox-min);
+  min-height: var(--hitbox-min);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: none;
+  position: relative;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.control-btn:active { transform: scale(0.94); }
+.control-btn:focus-visible {
+  outline: 2px solid var(--amber);
   outline-offset: 4px;
 }
 
-.btn-master-rec:active {
-  transform: scale(0.92);
-  background-color: var(--color-neon-stop);
-  color: var(--color-text-dark);
-  box-shadow: var(--glow-stop);
+.control-btn.start {
+  width: 88px;
+  height: 88px;
+  background: var(--amber-strong);
+  box-shadow: 0 0 30px oklch(60% 0.17 45 / 0.45);
 }
 
-.btn-master-rec--active {
-  background-color: color-mix(in srgb, var(--color-bg-base) 90%, var(--color-neon-go));
-  color: var(--color-neon-go);
-  border-color: var(--color-neon-go);
-  animation: pulse-recording 2.5s infinite ease-in-out;
+.control-btn.pause {
+  width: 76px;
+  height: 76px;
+  background: transparent;
+  border: 2px solid var(--line-strong);
+}
+.control-btn.pause:disabled {
+  opacity: 0.3;
+  pointer-events: none;
 }
 
-.btn-master-rec--active:active {
-  background-color: var(--color-neon-go);
-  color: var(--color-text-dark);
-  box-shadow: var(--glow-go);
+.control-btn.stop {
+  width: 88px;
+  height: 88px;
+  background: var(--amber-strong);
+  box-shadow: 0 0 30px oklch(60% 0.17 45 / 0.45);
 }
 
-/* Long press progress arc */
-.btn-master-rec__arc {
+.control-btn .icon-record-dot { width: 22px; height: 22px; border-radius: 50%; background: var(--bezel); }
+.control-btn .icon-pause-bar { width: 7px; height: 26px; border-radius: 3px; background: var(--ink); }
+.control-btn .icon-play {
+  width: 0; height: 0;
+  border-top: 13px solid transparent;
+  border-bottom: 13px solid transparent;
+  border-left: 20px solid var(--ink);
+  margin-left: 4px;
+}
+.control-btn .icon-stop { width: 26px; height: 26px; border-radius: 6px; background: var(--bezel); }
+
+/* Arco de progreso (mantener pulsado para finalizar) */
+.control-btn__arc {
   position: absolute;
   top: -4px;
   left: -4px;
   width: calc(100% + 8px);
   height: calc(100% + 8px);
   transform: rotate(-90deg);
+  pointer-events: none;
 }
-
-.btn-master-rec__arc circle {
+.control-btn__arc circle {
   fill: none;
-  stroke: var(--color-neon-stop);
+  stroke: var(--rust-line);
   stroke-width: 4;
   stroke-dasharray: 0 377;
   stroke-linecap: round;
   transition: stroke-dasharray 0.1s linear;
 }
 
+.control-labels {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-faint);
+}
+.control-labels span { width: 76px; text-align: center; }
+.control-labels span.wide { width: 88px; }
+
 /* ==========================================================================
-   Action Buttons Row (Pause + Invisible)
+   Modo invisible (toggle secundario)
    ========================================================================== */
 
-.actions-row {
+.invisible-toggle {
   display: flex;
-  justify-content: center;
-  gap: var(--space-6);
-  margin: var(--space-2) 0;
-}
-
-.action-btn {
-  display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-width: var(--hitbox-min);
+  gap: 8px;
   min-height: var(--hitbox-min);
-  background-color: var(--color-bg-overlay);
-  border: 1px solid var(--color-bg-elevated);
-  border-radius: var(--radius-lg);
-  color: var(--color-text-mid);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
+  margin: var(--space-5) auto 0;
+  padding: 10px 20px;
+  border-radius: var(--r-pill);
+  border: 2px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   cursor: pointer;
-  transition: var(--transition-fast);
-  gap: var(--space-1);
-  padding: var(--space-2);
+  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
-
-.action-btn svg {
-  width: 24px;
-  height: 24px;
+.invisible-toggle svg {
+  width: 20px;
+  height: 20px;
   stroke: currentColor;
   fill: none;
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-
-.action-btn:active {
-  transform: scale(0.92);
-  background-color: var(--color-bg-elevated);
-}
-
-.action-btn--active {
-  color: var(--color-neon-brand);
-  border-color: var(--color-neon-brand);
+.invisible-toggle--active {
+  border-color: var(--amber-border);
+  background: var(--amber-soft);
+  color: var(--amber);
 }
 
 /* ==========================================================================
-   Telemetry Grid
-   ========================================================================== */
-
-.telemetry-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
-  padding: var(--padding-mobile);
-}
-
-.telemetry-block {
-  background-color: color-mix(in srgb, var(--color-bg-overlay) 60%, transparent);
-  border-radius: var(--radius-md);
-  padding: var(--padding-compact);
-  border-left: 3px solid var(--color-bg-elevated);
-}
-
-.telemetry-block--highlight {
-  border-left-color: var(--color-neon-go);
-}
-
-.telemetry-block__label {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-mid);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 4px;
-}
-
-.telemetry-block__value {
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-max);
-}
-
-.telemetry-block__value span {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-mid);
-  margin-left: 4px;
-  font-weight: var(--font-weight-regular);
-}
-
-/* ==========================================================================
-   Bottom Navigation
-   ========================================================================== */
-
-.navbar-bottom {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 68px;
-  background-color: color-mix(in srgb, var(--color-bg-surface) 94%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-top: 1px solid var(--color-bg-overlay);
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  z-index: 999;
-}
-
-.nav-item {
-  min-width: var(--hitbox-min);
-  min-height: var(--hitbox-min);
-  background: none;
-  border: none;
-  color: var(--color-text-mid);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: var(--transition-fast);
-  padding: 0;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-}
-
-.nav-item svg {
-  width: 22px;
-  height: 22px;
-  stroke: currentColor;
-  fill: none;
-  transition: var(--transition-fast);
-}
-
-.nav-item__label {
-  font-size: 10px;
-  font-weight: var(--font-weight-medium);
-  margin-top: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.nav-item--active {
-  color: var(--color-neon-brand);
-}
-
-/* ==========================================================================
-   GPS Permission Overlay
+   Overlay de permiso GPS
    ========================================================================== */
 
 .gps-overlay {
   position: fixed;
   inset: 0;
-  background-color: color-mix(in srgb, var(--color-bg-base) 95%, transparent);
+  background: color-mix(in oklch, var(--bg-bottom) 92%, transparent);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: var(--space-4);
-  padding: var(--space-8);
+  padding: var(--space-7);
   z-index: 1000;
   text-align: center;
 }
-
 .gps-overlay__message {
-  font-size: var(--font-size-lg);
-  color: var(--color-text-mid);
+  font-size: 16px;
+  color: var(--ink-soft);
   max-width: 280px;
-}
-
-.gps-overlay__btn {
-  min-width: var(--hitbox-min);
-  min-height: var(--hitbox-min);
-  padding: var(--space-3) var(--space-6);
-  background-color: var(--color-neon-brand);
-  color: var(--color-text-dark);
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-bold);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
 }
 
 /* ==========================================================================
    Keyframes
    ========================================================================== */
-
-@keyframes pulse-recording {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-neon-go) 60%, transparent),
-                inset 0 0 10px color-mix(in srgb, var(--color-neon-go) 20%, transparent);
-  }
-  70% {
-    box-shadow: 0 0 0 18px transparent,
-                inset 0 0 10px color-mix(in srgb, var(--color-neon-go) 20%, transparent);
-  }
-  100% {
-    box-shadow: 0 0 0 0 transparent,
-                inset 0 0 10px color-mix(in srgb, var(--color-neon-go) 20%, transparent);
-  }
-}
 
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
