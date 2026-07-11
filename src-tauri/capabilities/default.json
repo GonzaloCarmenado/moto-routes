@@ -6,6 +6,7 @@
     "core:default",
     "opener:default",
     "log:default",
+    "sql:default",
     "core:window:default",
     "core:window:allow-close",
     "core:window:allow-set-size",

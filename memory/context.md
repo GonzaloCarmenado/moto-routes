@@ -120,11 +120,11 @@ El script `pnpm run dev` ejecuta automáticamente `pnpm dev:kill` antes de arran
 
 **Puerto fijo**: `1420` (configurado en `vite.config.ts` con `strictPort: true`). Es fijo porque Tauri lo necesita en `tauri.conf.json` → `build.devUrl`. Si se cambia, hay que actualizar ambos archivos.
 
-**Problema conocido**: Si una sesión de Vite se cierra abruptamente, el proceso hijo puede quedar zombie ocupando el puerto. El script `dev:kill` lo mata antes de arrancar.
+**Problema conocido**: Si una sesión de Vite se cierra abruptamente, el proceso hijo puede quedar zombie ocupando el puerto. `scripts/kill-port.mjs` lo mata antes de arrancar (usando `Get-NetTCPConnection` de Windows + `Stop-Process`).
 
 **Comando manual alternativo** si el script no funciona:
 ```bash
-pnpm dev:kill && pnpm run dev
+pnpm run dev:kill && pnpm run dev
 ```
 
 ## Build Android (Windows workaround)

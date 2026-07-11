@@ -2,7 +2,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist/', 'node_modules/', 'coverage/', 'src-tauri/'],
+    ignores: ['dist/', 'node_modules/', 'coverage/', 'src-tauri/', 'cypress/', 'scripts/'],
   },
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylistic,

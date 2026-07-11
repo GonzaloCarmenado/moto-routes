@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { createCockpitService, type GpsProvider, type StorageProvider } from './cockpit.service.js';
+import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
 
 function createMockGps(): GpsProvider {
   return {
@@ -268,5 +269,39 @@ describe('createCockpitService', () => {
     const stateArg = listener.mock.calls[0]![0] as { status: string };
     stateArg.status = 'paused';
     expect(service.getCurrentState().status).toBe('recording');
+  });
+});
+
+describe('createCockpitService with repository', () => {
+  let gps: GpsProvider;
+  let repo: MemoryRouteRepository;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    gps = createMockGps();
+    repo = new MemoryRouteRepository();
+  });
+
+  it('should persist route on stopRecording when repository provided', async () => {
+    const service = createCockpitService(gps, createMockStorage(), repo);
+    service.startRecording();
+    service.stopRecording();
+    const all = await repo.getAll();
+    expect(all).toHaveLength(1);
+    expect(all[0]!.duration).toBeGreaterThanOrEqual(0);
+  });
+
+  it('should still return metadata even if repository is provided', () => {
+    const service = createCockpitService(gps, createMockStorage(), repo);
+    service.startRecording();
+    const metadata = service.stopRecording();
+    expect(metadata).not.toBeNull();
+  });
+
+  it('should work without repository (backwards compat)', () => {
+    const service = createCockpitService(gps, createMockStorage());
+    service.startRecording();
+    const metadata = service.stopRecording();
+    expect(metadata).not.toBeNull();
   });
 });
