@@ -17,30 +17,21 @@ open class BuildTask : DefaultTask() {
     @TaskAction
     fun assemble() {
         val executable = """pnpm""";
-        try {
-            runTauriCli(executable)
-        } catch (e: Exception) {
-            if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-                // Try different Windows-specific extensions
-                val fallbacks = listOf(
-                    "$executable.exe",
-                    "$executable.cmd",
-                    "$executable.bat",
-                )
-                
-                var lastException: Exception = e
-                for (fallback in fallbacks) {
-                    try {
-                        runTauriCli(fallback)
-                        return
-                    } catch (fallbackException: Exception) {
-                        lastException = fallbackException
-                    }
+        // On Windows, try .cmd first (pnpm.bat doesn't exist on many systems)
+        if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+            val attempts = listOf("$executable.cmd", "$executable", "$executable.exe", "$executable.bat")
+            var lastException: Exception? = null
+            for (attempt in attempts) {
+                try {
+                    runTauriCli(attempt)
+                    return
+                } catch (e: Exception) {
+                    lastException = e
                 }
-                throw lastException
-            } else {
-                throw e;
             }
+            throw lastException ?: GradleException("Failed to run pnpm")
+        } else {
+            runTauriCli(executable)
         }
     }
 
