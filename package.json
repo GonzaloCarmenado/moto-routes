@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Ride Tracker Mobile App - GPS route recording for motorcyclists",
   "scripts": {
-    "dev": "vite",
+    "dev": "pnpm dev:kill && vite",
+    "dev:kill": "pwsh -NoProfile -Command \"$p=Get-NetTCPConnection -LocalPort 1420 -ErrorAction SilentlyContinue; if($p){Stop-Process -Id $p.OwningProcess -Force}\"",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",

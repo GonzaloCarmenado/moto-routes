@@ -158,8 +158,8 @@ export function createCockpitService(
 
   return {
     subscribe,
-    getCurrentState: () => ({ ...state }),
-    startRecording: () => {
+    getCurrentState: (): CockpitState => ({ ...state }),
+    startRecording: (): void => {
       if (state.status !== 'idle') return;
       state = { ...state, status: 'recording', points: [], currentSpeed: 0, avgSpeed: 0,
         totalDistance: 0, elapsedTime: 0, altitude: 0, stopState: 'moving', stopTimer: 0,
@@ -169,7 +169,7 @@ export function createCockpitService(
       startTick();
       startWatch();
     },
-    stopRecording: () => {
+    stopRecording: (): RouteMetadata | null => {
       if (state.status === 'idle') return null;
       cleanup();
       const metadata = buildMetadata(state);
@@ -177,14 +177,14 @@ export function createCockpitService(
       notify();
       return metadata;
     },
-    pauseRecording: () => {
+    pauseRecording: (): void => {
       if (state.status !== 'recording') return;
       state = { ...state, status: 'paused' };
       if (gpsTickInterval != null) clearInterval(gpsTickInterval);
       gpsTickInterval = null;
       notify();
     },
-    resumeRecording: () => {
+    resumeRecording: (): void => {
       if (state.status !== 'paused') return;
       state = { ...state, status: 'recording' };
       startTick();
@@ -193,7 +193,7 @@ export function createCockpitService(
     },
     checkGpsPermission,
     requestGpsPermission,
-    setInvisibleMode: (active: boolean) => {
+    setInvisibleMode: (active: boolean): void => {
       state = { ...state, invisibleMode: active };
       notify();
     },

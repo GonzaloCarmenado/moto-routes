@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grabación de ruta — moto-routes</title>
+<link rel="stylesheet" href="../css/global.css">
+</head>
+<body>
+
+<div class="screen">
+
+  <div class="app-header">
+    <span class="chip chip-recording">
+      <span style="width:8px; height:8px; border-radius:50%; background: var(--amber); box-shadow: 0 0 8px oklch(70% 0.17 45 / 0.8);"></span>
+      EN RUTA
+    </span>
+    <span class="num" style="font-size:18px; color: var(--ink-soft);">38:12</span>
+  </div>
+
+  <h1 style="font-size:20px; margin-bottom:30px;">Puerto de la Bonaigua</h1>
+
+  <div class="speed-display">
+    <div class="num speed-value">78</div>
+    <div class="speed-unit">km/h actual</div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-tile">
+      <span class="stat-label">Distancia</span>
+      <span class="stat-value">46.2<span class="stat-unit"> km</span></span>
+    </div>
+    <div class="stat-tile">
+      <span class="stat-label">Tiempo</span>
+      <span class="stat-value">38:12</span>
+    </div>
+    <div class="stat-tile">
+      <span class="stat-label">Desnivel</span>
+      <span class="stat-value">+612<span class="stat-unit"> m</span></span>
+    </div>
+  </div>
+
+  <div class="avg-speed-banner">Vel. media de la ruta: <strong>52 km/h</strong></div>
+
+  <div class="record-controls">
+    <button class="control-btn pause" aria-label="Pausar ruta">
+      <span style="display:flex; gap:6px;">
+        <span class="icon-pause-bar"></span>
+        <span class="icon-pause-bar"></span>
+      </span>
+    </button>
+    <button class="control-btn stop" aria-label="Finalizar ruta">
+      <span class="icon-stop"></span>
+    </button>
+    <div style="width:76px;"></div>
+  </div>
+  <div class="control-labels">
+    <span style="width:76px; text-align:center;">Pausar</span>
+    <span style="width:88px; text-align:center;">Finalizar</span>
+    <span style="width:76px;"></span>
+  </div>
+
+</div>
+
+  <nav class="bottom-nav">
+    <a href="listado-rutas.html" class="nav-item">
+      <span style="display:flex; flex-direction:column; gap:3px;">
+        <span style="display:block; width:22px; height:3px; border-radius:2px; background:currentColor;"></span>
+        <span style="display:block; width:22px; height:3px; border-radius:2px; background:currentColor;"></span>
+        <span style="display:block; width:16px; height:3px; border-radius:2px; background:currentColor;"></span>
+      </span>
+      Rutas
+    </a>
+    <a href="grabacion-ruta.html" class="nav-item" style="color: var(--amber); margin-top: -30px;">
+      <span class="nav-item-record">
+        <span style="width:16px; height:16px; border-radius:50%; background: var(--bezel);"></span>
+      </span>
+      Grabar
+    </a>
+    <a href="#" class="nav-item">
+      <span style="width:22px; height:22px; border-radius:50%; border:3px solid currentColor;"></span>
+      Perfil
+    </a>
+  </nav>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guía de estilos — moto-routes</title>
+<link rel="stylesheet" href="../css/global.css">
+<style>
+  .sg-wrap { max-width: 920px; margin: 0 auto; padding: 56px 32px 100px; }
+  .sg-section { margin-bottom: 56px; }
+  .sg-title { font-size: 28px; margin-bottom: 8px; }
+  .sg-desc { color: var(--ink-faint); font-size: 15px; margin-bottom: 28px; max-width: 640px; line-height: 1.5; }
+  .sg-swatches { display: flex; flex-wrap: wrap; gap: 16px; }
+  .sg-swatch { width: 140px; }
+  .sg-swatch .box { height: 90px; border-radius: var(--r-md); border: 1px solid var(--line); margin-bottom: 8px; }
+  .sg-swatch .name { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .sg-swatch .value { font-size: 11px; color: var(--ink-faint); font-family: "Space Mono", monospace; }
+  .sg-type-row { display: flex; align-items: baseline; gap: 20px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .sg-type-label { width: 160px; font-size: 12px; color: var(--ink-faint); font-family: "Space Mono", monospace; flex-shrink: 0; }
+  .sg-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+</style>
+</head>
+<body>
+<div class="sg-wrap">
+
+  <div class="sg-section">
+    <h1 class="sg-title">moto-routes — Guía de estilos</h1>
+    <p class="sg-desc">Sistema "asfalto nocturno": cuero oscuro, negro asfalto y ámbar cálido. Referencia visual rápida de los tokens definidos en <code>css/global.css</code>. Ver <code>docs/DESIGN_PHILOSOPHY.md</code> para el razonamiento completo.</p>
+  </div>
+
+  <div class="sg-section">
+    <h2 class="sg-title" style="font-size:20px;">Color</h2>
+    <div class="sg-swatches">
+      <div class="sg-swatch"><div class="box" style="background: var(--bg-top);"></div><div class="name">Fondo (arriba)</div><div class="value">--bg-top</div></div>
+      <div class="sg-swatch"><div class="box" style="background: var(--bg-bottom);"></div><div class="name">Fondo (abajo)</div><div class="value">--bg-bottom</div></div>
+      <div class="sg-swatch"><div class="box" style="background: var(--panel);"></div><div class="name">Panel / tarjeta</div><div class="value">--panel</div></div>
+      <div class="sg-swatch"><div class="box" style="background: var(--panel-sunken);"></div><div class="name">Panel hundido</div><div class="value">--panel-sunken</div></div>
+      <div class="sg-swatch"><div class="box" style="background: var(--amber);"></div><div class="name">Ámbar</div><div class="value">--amber</div></div>
+      <div class="sg-swatch"><div class="box" style="background: var(--amber-strong);"></div><div class="name">Ámbar fuerte</div><div class="value">--amber-strong</div></div>
+      <div class="sg-swatch"><div class="box" style="background: var(--amber-soft);"></div><div class="name">Ámbar tenue</div><div class="value">--amber-soft</div></div>
+      <div class="sg-swatch"><div class="box" style="background: var(--rust-line);"></div><div class="name">Línea óxido</div><div class="value">--rust-line</div></div>
+      <div class="sg-swatch"><div class="box" style="background: var(--ink); border-color: var(--line-strong);"></div><div class="name">Tinta</div><div class="value">--ink</div></div>
+      <div class="sg-swatch"><div class="box" style="background: var(--ink-faint); border-color: var(--line-strong);"></div><div class="name">Tinta tenue</div><div class="value">--ink-faint</div></div>
+    </div>
+  </div>
+
+  <div class="sg-section">
+    <h2 class="sg-title" style="font-size:20px;">Tipografía</h2>
+    <div class="sg-type-row"><span class="sg-type-label">Roboto Slab / 600</span><span style="font-family: var(--font-display); font-size: 26px; font-weight: 600;">Puerto de la Bonaigua</span></div>
+    <div class="sg-type-row"><span class="sg-type-label">Barlow / 600</span><span style="font-family: var(--font-ui); font-size: 16px; font-weight: 600;">Interfaz y cuerpo de texto</span></div>
+    <div class="sg-type-row"><span class="sg-type-label">Barlow / 400</span><span style="font-family: var(--font-ui); font-size: 15px; color: var(--ink-soft);">Texto secundario y descripciones</span></div>
+    <div class="sg-type-row"><span class="sg-type-label">Barlow Semi Cond. / 800</span><span class="num" style="font-size: 56px; color: var(--amber);">78</span></div>
+  </div>
+
+  <div class="sg-section">
+    <h2 class="sg-title" style="font-size:20px;">Botones</h2>
+    <div class="sg-row">
+      <button class="btn btn-primary">Grabar ruta</button>
+      <button class="btn btn-secondary">Cancelar</button>
+      <button class="control-btn stop" style="width:64px; height:64px;"><span class="icon-stop" style="width:20px; height:20px;"></span></button>
+      <button class="control-btn pause" style="width:64px; height:64px;"><span style="display:flex; gap:5px;"><span class="icon-pause-bar" style="height:20px;"></span><span class="icon-pause-bar" style="height:20px;"></span></span></button>
+    </div>
+  </div>
+
+  <div class="sg-section">
+    <h2 class="sg-title" style="font-size:20px;">Chips de estado</h2>
+    <div class="sg-row">
+      <span class="chip chip-recording">● EN RUTA</span>
+      <span class="chip chip-paused">PAUSADA</span>
+      <span class="chip chip-neutral">12 rutas</span>
+    </div>
+  </div>
+
+  <div class="sg-section">
+    <h2 class="sg-title" style="font-size:20px;">Stat tile</h2>
+    <div style="display:grid; grid-template-columns: repeat(3, 140px); gap: 10px;">
+      <div class="stat-tile"><span class="stat-label">Distancia</span><span class="stat-value">46.2<span class="stat-unit"> km</span></span></div>
+      <div class="stat-tile"><span class="stat-label">Tiempo</span><span class="stat-value">38:12</span></div>
+      <div class="stat-tile"><span class="stat-label">Desnivel</span><span class="stat-value">+612<span class="stat-unit"> m</span></span></div>
+    </div>
+  </div>
+
+  <div class="sg-section">
+    <h2 class="sg-title" style="font-size:20px;">Tarjeta de ruta</h2>
+    <div style="max-width: 340px;">
+      <a class="route-card" href="#">
+        <div class="thumb"></div>
+        <div class="info">
+          <span class="name">Puerto de la Bonaigua</span>
+          <span class="date">14 jul 2026</span>
+          <div class="badges">
+            <span class="badge distance">46.2 km</span>
+            <span class="badge duration">1h 12m</span>
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <div class="sg-section">
+    <h2 class="sg-title" style="font-size:20px;">Placeholder de medios</h2>
+    <div style="display:flex; gap:12px;">
+      <div class="media-placeholder" style="width:120px; height:120px; border-radius: var(--r-md);"><span class="label">foto</span></div>
+      <div class="media-placeholder" style="width:220px; height:120px; border-radius: var(--r-md);"><span class="label">mapa de ruta</span></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

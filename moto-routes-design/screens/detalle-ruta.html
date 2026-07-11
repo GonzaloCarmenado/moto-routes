@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Detalle de ruta — moto-routes</title>
+<link rel="stylesheet" href="../css/global.css">
+</head>
+<body>
+
+<div style="padding-bottom: calc(var(--nav-height) + 12px);">
+
+  <div class="route-map">
+    <svg viewBox="0 0 390 260" style="position:absolute; inset:0; width:100%; height:100%;">
+      <path d="M 40 210 C 90 160, 70 100, 130 90 S 230 130, 220 60 S 330 40, 350 20" fill="none" stroke="var(--amber)" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 14" />
+      <circle cx="40" cy="210" r="7" fill="oklch(60% 0.1 90)" />
+      <circle cx="350" cy="20" r="7" fill="var(--amber)" />
+    </svg>
+    <span class="map-tag">mapa de la ruta</span>
+  </div>
+
+  <div style="padding: 18px 22px 0;">
+    <h1 class="page-title" style="font-size:22px; margin-bottom:4px;">Puerto de la Bonaigua</h1>
+    <p class="page-subtitle">14 de julio · Valle de Arán</p>
+
+    <div class="stat-grid cols-2">
+      <div class="stat-tile"><span class="stat-label">Distancia</span><span class="stat-value">46.2 <span class="stat-unit">km</span></span></div>
+      <div class="stat-tile"><span class="stat-label">Duración</span><span class="stat-value">1h 12m</span></div>
+      <div class="stat-tile"><span class="stat-label">Vel. media</span><span class="stat-value">52 <span class="stat-unit">km/h</span></span></div>
+      <div class="stat-tile"><span class="stat-label">Desnivel</span><span class="stat-value">+612 <span class="stat-unit">m</span></span></div>
+    </div>
+
+    <div class="route-chart">
+      <div class="chart-label">Velocidad durante la ruta</div>
+      <svg viewBox="0 0 340 90" style="width:100%; height:90px;">
+        <polyline points="0,70 30,60 60,40 90,45 120,20 150,35 180,25 210,50 240,30 270,42 300,15 330,28" fill="none" stroke="var(--amber)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+        <line x1="0" y1="85" x2="340" y2="85" stroke="var(--line)" stroke-width="1" />
+      </svg>
+    </div>
+
+    <div class="section-label">Fotos de la ruta</div>
+    <div class="photo-gallery">
+      <div class="photo-thumb">foto 1</div>
+      <div class="photo-thumb">foto 2</div>
+      <div class="photo-thumb">foto 3</div>
+      <div class="photo-thumb add">+</div>
+    </div>
+
+    <div class="section-label">Notas</div>
+    <p style="font-size:14px; line-height:1.5; color: var(--ink-soft); font-style:italic; margin-bottom:24px;">"Curvas cerradas hasta el puerto, niebla al amanecer y un café que supo a victoria arriba del todo."</p>
+  </div>
+</div>
+
+  <nav class="bottom-nav">
+    <a href="listado-rutas.html" class="nav-item">
+      <span style="display:flex; flex-direction:column; gap:3px;">
+        <span style="display:block; width:22px; height:3px; border-radius:2px; background:currentColor;"></span>
+        <span style="display:block; width:22px; height:3px; border-radius:2px; background:currentColor;"></span>
+        <span style="display:block; width:16px; height:3px; border-radius:2px; background:currentColor;"></span>
+      </span>
+      Rutas
+    </a>
+    <a href="grabacion-ruta.html" class="nav-item" style="color: var(--amber); margin-top: -30px;">
+      <span class="nav-item-record">
+        <span style="width:16px; height:16px; border-radius:50%; background: var(--bezel);"></span>
+      </span>
+      Grabar
+    </a>
+    <a href="#" class="nav-item">
+      <span style="width:22px; height:22px; border-radius:50%; border:3px solid currentColor;"></span>
+      Perfil
+    </a>
+  </nav>
+</body>
+</html>

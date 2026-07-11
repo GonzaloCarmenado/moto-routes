@@ -1,109 +1,183 @@
 /**
- * RIDE TRACKER - Design Tokens
- * Architecture: Mobile-First Dark Mode Technical UI
+ * MOTO ROUTES — Design Tokens
+ * Sistema visual: "Asfalto Nocturno" — cuero oscuro, negro asfalto y ámbar
+ * cálido. Dramático, no futurista: nada de HUDs, glassmorphism ni neón.
  * Source of truth: specs/ui/design-system.md
  *
  * ⚠️ NUNCA hardcodear estos valores. Usar var(--token) siempre.
  */
 
 /* ==========================================================================
-   1. COLORS - Dark Mode Technical Palette
+   1. FUENTES — subset local (self-hosted, requerido por CSP font-src 'self'
+      y por ser una app Tauri offline)
+   ========================================================================== */
+
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../assets/fonts/barlow-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../../assets/fonts/barlow-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../../assets/fonts/barlow-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../../assets/fonts/barlow-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow Semi Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../../assets/fonts/barlow-semi-condensed-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow Semi Condensed';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('../../assets/fonts/barlow-semi-condensed-800.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Roboto Slab';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../../assets/fonts/roboto-slab-600.woff2') format('woff2');
+}
+
+/* ==========================================================================
+   2. TOKENS
    ========================================================================== */
 
 :root {
-  /* Backgrounds */
-  --color-bg-base: #0b0c10;
-  --color-bg-surface: #161a24;
-  --color-bg-overlay: #222836;
-  --color-bg-elevated: #2e364a;
+  /* Superficies — asfalto y cuero oscuro */
+  --bg-top:       oklch(22% 0.018 50);
+  --bg-bottom:    oklch(14% 0.014 50);
+  --panel:        oklch(24% 0.018 50);    /* tarjetas / stat tiles */
+  --panel-sunken: oklch(20% 0.016 50);    /* hundido / thumbnails */
+  --bezel:        oklch(9% 0.01 50);
+  --nav-bg:       oklch(18% 0.016 50);
 
-  /* Neon Status Colors */
-  --color-neon-go: #00ff66;
-  --color-neon-stop: #ff3131;
-  --color-neon-brand: #00d2ff;
+  /* Tinta (sobre fondo oscuro) */
+  --ink:          oklch(92% 0.01 60);
+  --ink-soft:     oklch(70% 0.015 55);
+  --ink-faint:    oklch(55% 0.02 55);
 
-  /* Text */
-  --color-text-max: #ffffff;
-  --color-text-mid: #94a3b8;
-  --color-text-dark: #0f172a;
+  /* Acento primario — ámbar cálido */
+  --amber:        oklch(74% 0.17 48);
+  --amber-strong: oklch(58% 0.17 45);
+  --amber-soft:   oklch(28% 0.03 45);     /* fondo tenue del acento */
+  --amber-border: oklch(45% 0.14 45 / 0.5);
 
-  /* Glow Effects */
-  --glow-go: 0 0 20px rgba(0, 255, 102, 0.5), inset 0 0 10px rgba(0, 255, 102, 0.2);
-  --glow-stop: 0 0 20px rgba(255, 49, 49, 0.5), inset 0 0 10px rgba(255, 49, 49, 0.2);
-  --glow-brand: 0 0 15px rgba(0, 210, 255, 0.4);
+  /* Acento secundario — óxido apagado (detalles, bordes superiores) */
+  --rust-line:    oklch(60% 0.14 45);
 
-  /* ========================================================================
-     2. TYPOGRAPHY
-     ======================================================================== */
+  /* Líneas / bordes */
+  --line:         oklch(30% 0.02 50);
+  --line-strong:  oklch(45% 0.02 55);
 
-  --font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-  --font-mono: ui-monospace, 'Fira Code', monospace;
+  /* Estados */
+  --danger:       oklch(55% 0.18 30);
+  --success:      oklch(65% 0.13 140);
+  --warning:      oklch(75% 0.14 80);
 
-  --font-weight-black: 900;
-  --font-weight-bold: 700;
-  --font-weight-medium: 500;
-  --font-weight-regular: 400;
+  /* Tipografía */
+  --font-display: "Roboto Slab", "Georgia", serif;               /* titulares, marca */
+  --font-ui:      "Barlow", "Segoe UI", sans-serif;               /* interfaz, cuerpo */
+  --font-data:    "Barlow Semi Condensed", "Barlow", sans-serif;  /* números grandes */
 
-  --font-size-xs: 0.625rem;   /* 10px */
-  --font-size-sm: 0.75rem;    /* 12px */
-  --font-size-base: 0.875rem; /* 14px */
-  --font-size-lg: 1rem;       /* 16px */
-  --font-size-xl: 1.25rem;    /* 20px */
-  --font-size-2xl: 1.5rem;    /* 24px */
-  --font-size-3xl: 2rem;      /* 32px */
-  --font-size-4xl: 4rem;      /* 64px */
-
-  --line-height-tight: 1.1;
-  --line-height-normal: 1.4;
-
-  /* ========================================================================
-     3. SPACING (4px Scale)
-     ======================================================================== */
-
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
-  --space-12: 3rem;
-  --space-16: 4rem;
-
-  /* Touch Accessibility */
+  /* Hitbox mínima para uso con guantes de moto */
   --hitbox-min: 56px;
-  --padding-mobile: 16px;
-  --padding-compact: 12px;
 
-  /* ========================================================================
-     4. BORDERS, SHADOWS & RADII
-     ======================================================================== */
+  /* Radios */
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-pill: 999px;
 
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.5rem;
-  --radius-full: 9999px;
+  /* Sombra — sutil, cálida, nunca flotante-neón */
+  --shadow-card: 0 1px 2px oklch(20% 0.02 50 / 0.06), 0 6px 16px oklch(20% 0.02 50 / 0.08);
+  --shadow-btn:  0 2px 6px oklch(20% 0.02 50 / 0.18);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.5);
+  /* Espaciado base */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
 
-  --border-width: 1px;
-  --border-width-thick: 2px;
+  /* Altura de la botonera inferior (safe area incluida) */
+  --nav-height: 84px;
 
-  /* ========================================================================
-     5. TRANSITIONS
-     ======================================================================== */
-
-  --transition-fast: 0.15s linear;
-  --transition-smooth: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Transiciones */
+  --transition-fast:    0.15s ease;
+  --transition-smooth:  0.25s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-elastic: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
 
-  /* ========================================================================
-     6. BREAKPOINTS (for reference, use in media queries)
-     ======================================================================== */
+/* ==========================================================================
+   3. ELEMENTOS BASE
+   Este archivo se importa con @import tanto en index.css (DOM ligero) como
+   en cada *.element.css (Shadow DOM). Las reglas de aquí abajo son las
+   únicas que llegan de forma fiable a dentro de un shadow root — un
+   selector definido en index.css NUNCA alcanza el contenido de un
+   Shadow DOM, así que cualquier regla realmente "global" debe vivir en
+   este fichero, no en index.css.
+   ========================================================================== */
 
-  --bp-sm: 640px;
-  --bp-md: 768px;
-  --bp-lg: 1024px;
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+p { margin: 0; }
+
+a {
+  color: var(--amber);
+  text-decoration: none;
+}
+a:hover {
+  color: oklch(80% 0.15 48);
+  text-decoration: underline;
+}
+
+img { max-width: 100%; display: block; }
+
+/* Números / datos de instrumentación (velocidad, distancia, tiempo) */
+.num, .stat-value, .speed-value {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -11,12 +11,12 @@ button {
   min-height: var(--hitbox-min);
   width: var(--hitbox-min);
   height: var(--hitbox-min);
-  border-radius: var(--radius-full);
-  border: 2px solid var(--color-bg-elevated);
-  background-color: var(--color-bg-surface);
-  color: var(--color-text-max);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
+  border-radius: var(--r-pill);
+  border: 2px solid var(--panel);
+  background-color: var(--nav-bg);
+  color: var(--ink);
+  font-size: 1.25rem;
+  font-weight: 600;
   cursor: pointer;
   transition: var(--transition-smooth);
   display: flex;
@@ -28,13 +28,13 @@ button {
 
 button:active {
   transform: scale(0.92);
-  background-color: var(--color-bg-overlay);
+  background-color: var(--panel-sunken);
 }
 
 span {
-  font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-black);
-  color: var(--color-neon-brand);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--amber);
   min-width: 60px;
   text-align: center;
 }

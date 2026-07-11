@@ -1,7 +1,16 @@
 import { BaseElement } from '../shared/base-element.js';
 import { createCockpitService, type CockpitService, type GpsProvider, type StorageProvider } from './cockpit.service.js';
 import { formatSpeed, formatDuration } from './cockpit.transform.js';
+import type { CockpitState } from './cockpit.types.js';
 import styles from './cockpit.element.css?inline';
+
+interface CockpitDisplayValues {
+  speed: string;
+  avgSpeed: string;
+  dist: string;
+  time: string;
+  alt: string;
+}
 
 class CockpitView extends BaseElement {
   private service: CockpitService | null = null;
@@ -45,8 +54,8 @@ class CockpitView extends BaseElement {
           navigator.geolocation.getCurrentPosition(resolve, reject);
         }),
       watchPosition: (callback) => {
-        const id = navigator.geolocation.watchPosition(callback, () => {});
-        return () => navigator.geolocation.clearWatch(id);
+        const id = navigator.geolocation.watchPosition(callback, () => { /* GPS error silently ignored */ });
+        return (): void => { navigator.geolocation.clearWatch(id); };
       },
       checkPermissions: (): Promise<boolean> => {
         return Promise.resolve(navigator.geolocation !== null);
@@ -55,8 +64,8 @@ class CockpitView extends BaseElement {
         if (!navigator.geolocation) return Promise.resolve(false);
         return new Promise((resolve) => {
           navigator.geolocation.getCurrentPosition(
-            () => resolve(true),
-            () => resolve(false),
+            () => { resolve(true); },
+            () => { resolve(false); },
           );
         });
       },
@@ -154,58 +163,72 @@ class CockpitView extends BaseElement {
     });
   }
 
-  private getStatusDotClass(): string {
-    if (!this.service) return 'status-dot--stopped';
+  private getChipClass(): string {
+    if (!this.service) return 'chip-neutral';
     const status = this.service.getCurrentState().status;
-    if (status === 'recording') return '';
-    if (status === 'paused') return 'status-dot--paused';
-    return 'status-dot--stopped';
+    if (status === 'recording') return 'chip-recording';
+    if (status === 'paused') return 'chip-paused';
+    return 'chip-neutral';
   }
 
-  private getStatusText(): string {
-    if (!this.service) return 'STOP';
+  private getChipLabel(): string {
+    if (!this.service) return 'Listo';
     const status = this.service.getCurrentState().status;
-    if (status === 'recording') return 'REC';
-    if (status === 'paused') return 'PAUSE';
-    return 'STOP';
+    if (status === 'recording') return 'En ruta';
+    if (status === 'paused') return 'Pausada';
+    return 'Listo';
   }
 
-  private buildStatusBar(): HTMLElement {
-    const bar = document.createElement('div');
-    bar.className = 'status-bar';
-    bar.innerHTML = `
-      <span>Moto Routes</span>
-      <div class="status-bar__recording">
-        <span class="status-dot ${this.getStatusDotClass()}"></span>
-        <span>${this.getStatusText()}</span>
+  private buildHeader(time: string): HTMLElement {
+    const header = document.createElement('div');
+    header.className = 'app-header';
+    header.innerHTML = `
+      <span class="chip ${this.getChipClass()}">
+        <span class="chip__dot"></span>
+        ${this.getChipLabel()}
+      </span>
+      <span class="num app-header__time">${time}</span>`;
+    return header;
+  }
+
+  private buildSpeedDisplay(speed: string): HTMLElement {
+    const display = document.createElement('div');
+    display.className = 'speed-display';
+    display.innerHTML = `
+      <div class="num speed-value">${speed}</div>
+      <div class="speed-unit">km/h</div>`;
+    return display;
+  }
+
+  private buildStatGrid(dist: string, time: string, alt: string): HTMLElement {
+    const grid = document.createElement('div');
+    grid.className = 'stat-grid';
+    grid.innerHTML = `
+      <div class="stat-tile">
+        <span class="stat-label">Distancia</span>
+        <span class="stat-value">${dist}<span class="stat-unit"> km</span></span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-label">Tiempo</span>
+        <span class="stat-value">${time}</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-label">Altitud</span>
+        <span class="stat-value">${alt}<span class="stat-unit"> m</span></span>
       </div>`;
-    return bar;
+    return grid;
   }
 
-  private buildDial(speed: string): HTMLElement {
-    const dial = document.createElement('div');
-    dial.className = 'cockpit-dial';
-    dial.innerHTML = `
-      <div class="cockpit-dial__value">${speed}</div>
-      <div class="cockpit-dial__unit">km/h</div>`;
-    return dial;
+  private buildAvgSpeedBanner(avgSpeed: string): HTMLElement {
+    const banner = document.createElement('div');
+    banner.className = 'avg-speed-banner';
+    banner.innerHTML = `Vel. media de la ruta: <strong>${avgSpeed} km/h</strong>`;
+    return banner;
   }
 
-  private buildMasterButton(isActive: boolean): HTMLElement {
-    const btn = document.createElement('button');
-    btn.id = 'cockpit-master-btn';
-    btn.setAttribute('data-cy', 'cockpit-master-btn');
-    btn.className = `btn-master-rec ${isActive ? 'btn-master-rec--active' : ''}`;
-    btn.textContent = isActive ? 'STOP' : '● START';
-    if (!isActive) {
-      btn.addEventListener('click', () => { this.handleStartStop(); });
-    } else {
-      btn.addEventListener('pointerdown', () => { this.handleStopPress(); });
-      btn.addEventListener('pointerup', () => { this.handleStopRelease(); });
-      btn.addEventListener('pointerleave', () => { this.handleStopRelease(); });
-    }
+  private buildProgressArc(): SVGSVGElement {
     const arcSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    arcSvg.setAttribute('class', 'btn-master-rec__arc');
+    arcSvg.setAttribute('class', 'control-btn__arc');
     arcSvg.setAttribute('viewBox', '0 0 120 120');
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     circle.setAttribute('cx', '60');
@@ -213,72 +236,73 @@ class CockpitView extends BaseElement {
     circle.setAttribute('r', '56');
     this.arcCircle = circle;
     arcSvg.appendChild(circle);
-    btn.appendChild(arcSvg);
+    return arcSvg;
+  }
+
+  private buildMasterButton(isActive: boolean): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.id = 'cockpit-master-btn';
+    btn.setAttribute('data-cy', 'cockpit-master-btn');
+    if (!isActive) {
+      btn.className = 'control-btn start';
+      btn.setAttribute('aria-label', 'Iniciar grabación');
+      btn.innerHTML = '<span class="icon-record-dot"></span>';
+      btn.addEventListener('click', () => { this.handleStartStop(); });
+      return btn;
+    }
+    btn.className = 'control-btn stop';
+    btn.setAttribute('aria-label', 'Mantén pulsado para finalizar la ruta');
+    btn.innerHTML = '<span class="icon-stop"></span>';
+    btn.addEventListener('pointerdown', () => { this.handleStopPress(); });
+    btn.addEventListener('pointerup', () => { this.handleStopRelease(); });
+    btn.addEventListener('pointerleave', () => { this.handleStopRelease(); });
+    btn.appendChild(this.buildProgressArc());
     return btn;
   }
 
-  private buildActionsRow(
-    isActive: boolean, isPaused: boolean, invisibleMode: boolean,
-  ): HTMLElement {
-    const row = document.createElement('div');
-    row.className = 'actions-row';
-
-    const pauseBtn = document.createElement('button');
-    pauseBtn.id = 'cockpit-pause-btn';
-    pauseBtn.setAttribute('data-cy', 'cockpit-pause-btn');
-    pauseBtn.className = 'action-btn';
-    pauseBtn.innerHTML = `
-      <svg viewBox="0 0 24 24">${isPaused
-        ? '<polygon points="6 4 20 12 6 20 6 4" fill="currentColor"/>'
-        : '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>'}</svg>
-      <span>${isPaused ? 'Reanudar' : 'Pausa'}</span>`;
+  private buildPauseButton(isActive: boolean, isPaused: boolean): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.id = 'cockpit-pause-btn';
+    btn.setAttribute('data-cy', 'cockpit-pause-btn');
+    btn.className = 'control-btn pause';
+    btn.setAttribute('aria-label', isPaused ? 'Reanudar ruta' : 'Pausar ruta');
+    btn.innerHTML = isPaused
+      ? '<span class="icon-play"></span>'
+      : '<span style="display:flex; gap:6px;"><span class="icon-pause-bar"></span><span class="icon-pause-bar"></span></span>';
     if (isActive) {
-      pauseBtn.addEventListener('click', () => { this.handlePauseResume(); });
+      btn.addEventListener('click', () => { this.handlePauseResume(); });
     } else {
-      pauseBtn.style.opacity = '0.3';
-      pauseBtn.style.pointerEvents = 'none';
+      btn.disabled = true;
     }
+    return btn;
+  }
 
-    const invisBtn = document.createElement('button');
-    invisBtn.id = 'cockpit-invisible-btn';
-    invisBtn.setAttribute('data-cy', 'cockpit-invisible-btn');
-    invisBtn.className = `action-btn ${invisibleMode ? 'action-btn--active' : ''}`;
+  private buildControls(isActive: boolean, isPaused: boolean): HTMLElement {
+    const wrapper = document.createElement('div');
+    const controls = document.createElement('div');
+    controls.className = 'record-controls';
+    controls.appendChild(this.buildPauseButton(isActive, isPaused));
+    controls.appendChild(this.buildMasterButton(isActive));
+    wrapper.appendChild(controls);
+
+    const labels = document.createElement('div');
+    labels.className = 'control-labels';
+    labels.innerHTML = `<span>${isPaused ? 'Reanudar' : 'Pausar'}</span><span class="wide">${isActive ? 'Finalizar' : 'Grabar'}</span>`;
+    wrapper.appendChild(labels);
+    return wrapper;
+  }
+
+  private buildInvisibleToggle(invisibleMode: boolean): HTMLElement {
+    const btn = document.createElement('button');
+    btn.id = 'cockpit-invisible-btn';
+    btn.setAttribute('data-cy', 'cockpit-invisible-btn');
+    btn.className = `invisible-toggle ${invisibleMode ? 'invisible-toggle--active' : ''}`;
     const eyePath = invisibleMode
       ? 'M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22'
       : 'M12 5c-7 0-11 8-11 8s4 8 11 8 11-8 11-8-4-8-11-8zm0 13a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z';
-    invisBtn.innerHTML = `
-      <svg viewBox="0 0 24 24"><path d="${eyePath}"/></svg>
-      <span>Invisible</span>`;
-    invisBtn.addEventListener('click', () => { this.handleInvisibleToggle(); });
-
-    row.appendChild(pauseBtn);
-    row.appendChild(invisBtn);
-    return row;
-  }
-
-  private buildTelemetryGrid(
-    isRecording: boolean, avgSpeed: string, dist: string, time: string, alt: string,
-  ): HTMLElement {
-    const grid = document.createElement('div');
-    grid.className = 'telemetry-grid';
-    grid.innerHTML = `
-      <div class="telemetry-block ${isRecording ? 'telemetry-block--highlight' : ''}">
-        <div class="telemetry-block__label">Vel. Media</div>
-        <div class="telemetry-block__value">${avgSpeed}<span>km/h</span></div>
-      </div>
-      <div class="telemetry-block">
-        <div class="telemetry-block__label">Distancia</div>
-        <div class="telemetry-block__value">${dist}<span>km</span></div>
-      </div>
-      <div class="telemetry-block">
-        <div class="telemetry-block__label">Tiempo</div>
-        <div class="telemetry-block__value">${time}<span></span></div>
-      </div>
-      <div class="telemetry-block">
-        <div class="telemetry-block__label">Altitud</div>
-        <div class="telemetry-block__value">${alt}<span>m</span></div>
-      </div>`;
-    return grid;
+    btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="${eyePath}"/></svg><span>Modo invisible</span>`;
+    btn.addEventListener('click', () => { this.handleInvisibleToggle(); });
+    return btn;
   }
 
   private buildGpsOverlay(): HTMLElement {
@@ -288,35 +312,45 @@ class CockpitView extends BaseElement {
     overlay.style.display = 'none';
     overlay.innerHTML = `
       <p class="gps-overlay__message">Se necesita permiso de GPS para grabar rutas</p>
-      <button id="gps-request-btn" class="gps-overlay__btn" data-cy="gps-request-btn">Abrir ajustes</button>`;
+      <button id="gps-request-btn" class="btn btn-primary" data-cy="gps-request-btn">Abrir ajustes</button>`;
     const gpsBtn = overlay.querySelector('#gps-request-btn');
     gpsBtn?.addEventListener('click', () => { this.handleRequestGps(); });
     return overlay;
+  }
+
+  private getDisplayValues(state: CockpitState | undefined): CockpitDisplayValues {
+    if (!state) return { speed: '0', avgSpeed: '--', dist: '--', time: '--:--', alt: '--' };
+    return {
+      speed: formatSpeed(state.currentSpeed),
+      avgSpeed: state.avgSpeed.toFixed(0),
+      dist: state.totalDistance.toFixed(1),
+      time: formatDuration(state.elapsedTime),
+      alt: state.altitude.toFixed(0),
+    };
   }
 
   protected render(): void {
     const root = this.shadowRoot;
     if (!root) return;
     const state = this.service?.getCurrentState();
-    const isRecording = state?.status === 'recording';
+    const isActive = state?.status === 'recording' || state?.status === 'paused';
     const isPaused = state?.status === 'paused';
-    const isActive = isRecording || isPaused;
-
-    const speed = state ? formatSpeed(state.currentSpeed) : '0';
-    const avgSpeed = state ? String(state.avgSpeed.toFixed(0)) : '--';
-    const dist = state ? String(state.totalDistance.toFixed(1)) : '--';
-    const time = state ? formatDuration(state.elapsedTime) : '--:--';
-    const alt = state ? String(state.altitude.toFixed(0)) : '--';
+    const { speed, avgSpeed, dist, time, alt } = this.getDisplayValues(state);
 
     const style = document.createElement('style');
     style.textContent = styles;
+    const screen = document.createElement('div');
+    screen.className = 'cockpit-screen';
+    screen.appendChild(this.buildHeader(time));
+    screen.appendChild(this.buildSpeedDisplay(speed));
+    screen.appendChild(this.buildStatGrid(dist, time, alt));
+    screen.appendChild(this.buildAvgSpeedBanner(avgSpeed));
+    screen.appendChild(this.buildControls(isActive, isPaused));
+    screen.appendChild(this.buildInvisibleToggle(state?.invisibleMode ?? false));
+
     const wrapper = document.createElement('div');
     wrapper.className = 'app-wrapper';
-    wrapper.appendChild(this.buildStatusBar());
-    wrapper.appendChild(this.buildDial(speed));
-    wrapper.appendChild(this.buildMasterButton(isActive));
-    wrapper.appendChild(this.buildActionsRow(isActive, isPaused, state?.invisibleMode ?? false));
-    wrapper.appendChild(this.buildTelemetryGrid(isRecording, avgSpeed, dist, time, alt));
+    wrapper.appendChild(screen);
 
     root.innerHTML = '';
     root.appendChild(style);

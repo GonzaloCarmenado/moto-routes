@@ -4,24 +4,30 @@
 
 Este documento define la **filosofía visual** de **Moto Routes (Ride Tracker)**. Aplicación móvil para motociclistas que combina navegación GPS, grabación de rutas y bitácora multimedia. Todo el código CSS debe usar los tokens definidos aquí.
 
+Fuente de la entrega de diseño: `moto-routes-design/` (screens de referencia, `docs/DESIGN_PHILOSOPHY.md`, `docs/STYLE_GUIDE.html`, `css/global.css`). Este documento traduce esa entrega a los tokens reales de `src/shared/styles/tokens.css`.
+
 ---
 
 ## 1. Personalidad de Marca
 
-### Concepto: "Telemetry & Freedom" (Telemetría y Libertad)
+### Concepto: "Asfalto Nocturno"
 
-Fusiona la precisión de un **cuadro de instrumentos de competición (TFT/LCD)** con la fluidez de un **cuaderno de bitácora digital**.
+moto-routes no es un GPS. Es un **cuaderno de bitácora**: registra el viaje mientras ocurre y lo convierte en un recuerdo con datos. El diseño evoca el asfalto de noche y el cuadro de instrumentos de una moto — negro cuero, metal oscuro, un ámbar cálido que responde como el testigo de un salpicadero. Dramático y con carácter, pero nunca futurista: nada de HUDs, glassmorphism ni neón azulado. Es mecánico, no digital.
+
+**Palabras clave:** asfalto nocturno, cuero oscuro, cuadro de instrumentos, ámbar cálido, carretera, aventura.
 
 ### ¿Qué queremos transmitir?
 
-- **Legibilidad Extrema**: Alto contraste (7:1 mínimo) para lectura con vibraciones y luz solar directa.
-- **Precisión Técnica**: Visualización tipo cockpit de competición, datos en tiempo real.
-- **Confianza**: Estética sólida, nada rebuscado. Modo oscuro obligatorio por seguridad vial.
-- **Accesibilidad Física**: Zonas táctiles mínimas de 56×56px para uso con guantes de moto.
+- **El dato protagonista, no el adorno**: en la pantalla de grabación solo importa lo que el piloto necesita de un vistazo (velocidad, tiempo, distancia); todo lo demás es secundario y silencioso.
+- **Papel, no pantalla de cristal**: fondos cálidos color papel/cuero envejecido en vez de blancos fríos o negros puros.
+- **Legibilidad Extrema**: alto contraste para lectura con vibraciones y luz solar directa, cifras grandes con tipografía tabular tipo cuentakilómetros.
+- **Accesibilidad Física**: zonas táctiles mínimas de 56×56px para uso con guantes de moto.
+- **Modo oscuro obligatorio** por seguridad vial (sin deslumbramiento nocturno). No existe variante clara.
+- **Un acento, usado con disciplina**: el ámbar es el color de la acción (grabar, dato en vivo, estado activo); el óxido es de apoyo (líneas, acabados). Nunca compiten por atención.
 
 ### ¿Qué NO transmitimos?
 
-- No es "divertida" — sin colores neón excesivos ni animaciones distractivas.
+- No es un HUD de competición ni un panel "tech" — sin neón, sin glassmorphism, sin azules digitales.
 - No es "minimalista extrema" — la información de telemetría tiene presencia y peso visual.
 - No es "modo claro" — prohibido por deslumbramiento nocturno.
 - No es "recargada" — sin sombras excesivas ni bordes decorativos innecesarios.
@@ -30,133 +36,118 @@ Fusiona la precisión de un **cuadro de instrumentos de competición (TFT/LCD)**
 
 ## 2. Paleta de Colores
 
-Arquitectura cromática en **Modo Oscuro Técnico Obligatorio**. No existe variante en modo claro.
+Arquitectura cromática en **Modo Oscuro Técnico Obligatorio**, cálida (asfalto/cuero), no fría. No existe variante en modo claro.
 
-| Token CSS | Valor hex | Uso principal |
-|-----------|-----------|---------------|
-| `--color-bg-base` | `#0b0c10` | Fondo general absoluto de la aplicación |
-| `--color-bg-surface` | `#161a24` | Tarjetas contenedoras, widgets de estadísticas |
-| `--color-bg-overlay` | `#222836` | Inputs, botones secundarios, cabeceras de tabla |
-| `--color-bg-elevated` | `#2e364a` | Elementos elevados, bordes de botones |
-
-### Colores de Estado (Neón Técnico)
-
-| Token CSS | Valor hex | Uso principal |
-|-----------|-----------|---------------|
-| `--color-neon-go` | `#00ff66` | Grabación activa (REC), velocidad óptima, filtros seleccionados |
-| `--color-neon-stop` | `#ff3131` | Botón de parada, zonas de peligro, alertas de desconexión GPS |
-| `--color-neon-brand` | `#00d2ff` | Trazado de rutas, POIs, enlaces, navegación activa |
+| Token CSS | Uso principal |
+|-----------|---------------|
+| `--bg-top` / `--bg-bottom` | Degradado de fondo de toda la app (cabecera → pie) |
+| `--panel` | Tarjetas, stat tiles |
+| `--panel-sunken` | Superficies hundidas (thumbnails, placeholders) |
+| `--bezel` | Marco/base más oscura (texto sobre ámbar, fondo de overlays) |
+| `--nav-bg` | Fondo de la botonera inferior (cuando exista) |
 
 ### Texto
 
-| Token CSS | Valor hex | Uso principal |
-|-----------|-----------|---------------|
-| `--color-text-max` | `#ffffff` | Dígitos del velocímetro, títulos, métricas en tiempo real |
-| `--color-text-mid` | `#94a3b8` | Subtítulos, unidades de medida, descripciones |
-| `--color-text-dark` | `#0f172a` | Texto sobre fondos claros (raro, solo en badges) |
+| Token CSS | Uso principal |
+|-----------|---------------|
+| `--ink` | Texto principal (nunca blanco puro) |
+| `--ink-soft` | Texto secundario |
+| `--ink-faint` | Etiquetas, metadatos, unidades |
 
-### Efectos Glow
+### Acentos
 
-| Token CSS | Valor | Uso principal |
-|-----------|-------|---------------|
-| `--glow-go` | `0 0 20px rgba(0, 255, 102, 0.5), inset 0 0 10px rgba(0, 255, 102, 0.2)` | Botón REC activo |
-| `--glow-stop` | `0 0 20px rgba(255, 49, 49, 0.5), inset 0 0 10px rgba(255, 49, 49, 0.2)` | Botón STOP activo |
-| `--glow-brand` | `0 0 15px rgba(0, 210, 255, 0.4)` | Marcadores de ruta |
+| Token CSS | Uso principal |
+|-----------|---------------|
+| `--amber` / `--amber-strong` | Acento primario — el único color que "brilla": velocidad en vivo, botón de grabar, estado activo |
+| `--amber-soft` / `--amber-border` | Fondo y borde tenue del acento (chips, banners) |
+| `--rust-line` | Línea de óxido — borde superior de tarjetas y stat tiles, un detalle de acabado, no una superficie |
+| `--danger` / `--success` / `--warning` | Estados funcionales |
+
+### Líneas
+
+| Token CSS | Uso principal |
+|-----------|---------------|
+| `--line` / `--line-strong` | Bordes y separadores |
 
 ---
 
 ## 3. Tipografía
 
-| Token CSS | Valor | Aplicación |
-|-----------|-------|------------|
-| `--font-sans` | `'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif` | UI general |
-| `--font-mono` | `ui-monospace, 'Fira Code', monospace` | Datos de telemetría, velocidad |
-| `--font-weight-black` | `900` | Velocímetro, dígitos grandes |
-| `--font-weight-bold` | `700` | Títulos, énfasis fuerte |
-| `--font-weight-medium` | `500` | Énfasis ligero |
-| `--font-weight-regular` | `400` | Texto corrido |
-| `--font-size-xs` | `0.625rem` (10px) | Timestamps, metadatos |
-| `--font-size-sm` | `0.75rem` (12px) | Subtítulos, badges |
-| `--font-size-base` | `0.875rem` (14px) | Texto de cuerpo |
-| `--font-size-lg` | `1rem` (16px) | Títulos de tarjeta |
-| `--font-size-xl` | `1.25rem` (20px) | Títulos de sección |
-| `--font-size-2xl` | `1.5rem` (24px) | Títulos de página |
-| `--font-size-3xl` | `2rem` (32px) | Velocímetro valor |
-| `--font-size-4xl` | `4rem` (64px) | Velocímetro dígito grande |
-| `--line-height-tight` | `1.1` | Velocímetro |
-| `--line-height-normal` | `1.4` | Texto de cuerpo |
+| Token CSS | Fuente | Aplicación |
+|-----------|--------|------------|
+| `--font-display` | Roboto Slab (600) → fallback Georgia, serif | Titulares, nombres de ruta, marca — señalética de carretera |
+| `--font-ui` | Barlow (400–700) → fallback Segoe UI, sans-serif | Interfaz, cuerpo de texto, etiquetas — legible con guantes y en movimiento |
+| `--font-data` | Barlow Semi Condensed (700–800) → fallback Barlow | Cifras grandes: velocidad, distancia, tiempo. `font-variant-numeric: tabular-nums`, simula el cuentakilómetros |
+
+Las fuentes están auto-alojadas como subset `.woff2` en `src/assets/fonts/` (solo los pesos realmente usados) porque la app es Tauri offline con CSP `font-src 'self'` — no hay dependencia de Google Fonts en runtime. Las reglas `@font-face` viven en `tokens.css`.
+
+Las clases `.num`, `.stat-value`, `.speed-value` aplican `--font-data` + `tabular-nums` automáticamente a cualquier cifra.
 
 ---
 
-## 4. Espaciado (Escala de 4px)
+## 4. Espaciado
 
-| Token CSS | Valor | Uso principal |
-|-----------|-------|---------------|
-| `--space-1` | `0.25rem` | Gap mínimo |
-| `--space-2` | `0.5rem` | Gap inline |
-| `--space-3` | `0.75rem` | Padding compacto |
-| `--space-4` | `1rem` (16px) | Padding móvil estándar |
-| `--space-6` | `1.5rem` | Separación entre bloques |
-| `--space-8` | `2rem` | Separación entre secciones |
-| `--space-12` | `3rem` | Márgenes de layout |
-| `--space-16` | `4rem` | Separación mayor |
+Escala de 4px, más compacta que el sistema anterior:
+
+| Token CSS | Valor |
+|-----------|-------|
+| `--space-1` … `--space-7` | 4 / 8 / 12 / 16 / 24 / 32 / 48 px |
 
 ### Accesibilidad Táctil
 
-| Token CSS | Valor | Uso principal |
-|-----------|-------|---------------|
-| `--hitbox-min` | `56px` | Mínimo área táctil para guantes |
-| `--padding-mobile` | `16px` | Padding lateral estándar |
-| `--padding-compact` | `12px` | Padding compacto |
+| Token CSS | Valor | Uso |
+|-----------|-------|-----|
+| `--hitbox-min` | 56px | Mínimo área táctil para guantes de moto |
+| `--nav-height` | 84px | Altura reservada para la botonera inferior (incluye safe-area) |
 
 ---
 
 ## 5. Bordes, Sombras y Radios
 
-| Token CSS | Valor | Uso principal |
-|-----------|-------|---------------|
-| `--radius-sm` | `0.25rem` (4px) | Inputs, badges |
-| `--radius-md` | `0.5rem` (8px) | Tarjetas pequeñas |
-| `--radius-lg` | `1rem` (16px) | Tarjetas principales, modales |
-| `--radius-xl` | `1.5rem` (24px) | Contenedores grandes, drawer |
-| `--radius-full` | `9999px` | Píldoras, botones circulares |
-| `--shadow-sm` | `0 1px 2px rgba(0,0,0,0.3)` | Sutil |
-| `--shadow-md` | `0 4px 6px rgba(0,0,0,0.4)` | Tarjetas |
-| `--shadow-lg` | `0 10px 25px rgba(0,0,0,0.5)` | Modales, drawer |
-| `--border-width` | `1px` | Borde estándar |
-| `--border-width-thick` | `2px` | Timeline, marcadores |
+| Token CSS | Valor | Uso |
+|-----------|-------|-----|
+| `--r-sm` | 8px | Placeholders, etiquetas pequeñas |
+| `--r-md` | 14px | Tarjetas pequeñas, chips grandes |
+| `--r-lg` | 20px | Tarjetas principales |
+| `--r-pill` | 999px | Botones, chips, píldoras |
+| `--shadow-card` | — | Sombra cálida sutil de tarjetas |
+| `--shadow-btn` | — | Sombra de botones |
+
+Sombras cálidas y profundas — el contraste viene de la luz ámbar, no de sombras frías ni de glow neón.
 
 ---
 
 ## 6. Animaciones y Transiciones
 
-| Token CSS | Valor | Uso principal |
-|-----------|-------|---------------|
-| `--transition-fast` | `0.15s linear` | Hover, focus |
-| `--transition-smooth` | `0.25s cubic-bezier(0.4, 0, 0.2, 1)` | Apertura/cierre estándar |
-| `--transition-elastic` | `0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)` | Botón maestro REC |
+| Token CSS | Valor | Uso |
+|-----------|-------|-----|
+| `--transition-fast` | 0.15s ease | Hover, focus, pulsación de botones |
+| `--transition-smooth` | 0.25s cubic-bezier(0.4, 0, 0.2, 1) | Apertura/cierre estándar |
+| `--transition-elastic` | 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) | Micro-interacciones con rebote |
+
+`prefers-reduced-motion: reduce` se respeta globalmente (regla en `tokens.css`, ver §10).
 
 ---
 
-## 7. Breakpoints Responsive
+## 7. Componentes clave
 
-| Token CSS | Valor | Dispositivo |
-|-----------|-------|-------------|
-| `--bp-sm` | `640px` | Móvil landscape |
-| `--bp-md` | `768px` | Tablet portrait |
-| `--bp-lg` | `1024px` | Desktop pequeño |
+- **Stat tile** (`.stat-tile` / `.stat-grid`): bloque etiqueta + valor + unidad, la unidad base de cualquier dato en la app. Borde superior de óxido (`--rust-line`).
+- **Chip de estado** (`.chip`, `.chip-recording` / `.chip-paused` / `.chip-neutral`): "En ruta" / "Pausada" / etiquetas neutras.
+- **Banner de velocidad media** (`.avg-speed-banner`): dato agregado destacado con fondo ámbar tenue.
+- **Controles de grabación** (`.record-controls`, `.control-btn`): botón circular ámbar (acción primaria) + botón secundario de pausa (contorno).
+- **Placeholder de medios** (`.media-placeholder`): franjas diagonales + etiqueta monoespaciada, para mapas y fotos aún no cargados.
+- **Botonera inferior** (`.bottom-nav`, `.nav-item`, `.nav-item-record`): Rutas · Grabar (destacado, circular, elevado) · Perfil. **Documentada pero no implementada todavía** — no hay routing ni más pantallas montadas en `src/`; se añadirá cuando exista navegación entre vistas.
 
 ---
 
-## 8. Áreas de la Aplicación
+## 8. Áreas de la aplicación
 
-| Área | Propósito | Componentes principales | Notas visuales |
-|------|-----------|------------------------|----------------|
-| Cockpit (Grabación) | Pantalla principal en ruta | Dial circular, botón REC, grid telemetría | Fondo negro absoluto, métricas brillantes |
-| Mis Rutas | Listado de rutas guardadas | Filtros chips, tarjetas de ruta | Scroll horizontal de filtros |
-| Detalle de Ruta | Visualización de ruta + paradas | Mapa interactivo, timeline drawer, galería | Modo noche en mapa, pins neon |
-| Navegación Inferior | Navegación global | Bottom navbar con 4-5 iconos | Sticky, glassmorphism |
-| Garaje | Gestión de motos | Tarjetas de moto, selector | Miniaturas compactas |
+| Área | Estado | Componentes principales | Notas visuales |
+|------|--------|--------------------------|-----------------|
+| Cockpit (Grabación) | **Implementado** (`src/cockpit/`) | Chip de estado, velocidad en vivo, stat-grid, banner de vel. media, controles de grabación, modo invisible, overlay GPS | Fondo asfalto/cuero, ámbar como único acento vivo |
+| Mis Rutas | Pendiente — mockup en `moto-routes-design/screens/listado-rutas.html` | Tarjetas de ruta (`.route-card`) | Reconocimiento visual rápido: miniatura + nombre + fecha + distancia/duración |
+| Detalle de Ruta | Pendiente — mockup en `moto-routes-design/screens/detalle-ruta.html` | Mapa, stat-grid, gráfica de velocidad, galería de fotos, notas | Ficha construida por bloques apilables, ampliable sin rediseñar |
+| Navegación Inferior | Pendiente (sin routing todavía) | `.bottom-nav` | Rutas · Grabar (destacado) · Perfil |
 
 ---
 
@@ -164,11 +155,9 @@ Arquitectura cromática en **Modo Oscuro Técnico Obligatorio**. No existe varia
 
 | Propiedad | Valor |
 |-----------|-------|
-| Formato | SVG puro, vectorial |
+| Formato | SVG puro, vectorial, trazo (sin rellenos complejos ni degradados) |
 | Grosor trazo | `2px`, `stroke-linecap: round`, `stroke-linejoin: round` |
-| Tamaño base | `24px × 24px` (box) |
-| Tamaño navbar | `22px × 22px` |
-| Prohibido | Rellenos complejos, degradados, iconos de raster |
+| Tamaño base | `24px × 24px` |
 
 ---
 
@@ -176,10 +165,11 @@ Arquitectura cromática en **Modo Oscuro Técnico Obligatorio**. No existe varia
 
 1. **Usar design tokens siempre**: NUNCA hardcodear colores, fuentes o espaciados. Usar `var(--token)`.
 2. **CSS en archivos `.css` separados**, importados con `?inline` en Web Components.
-3. **Mobile-first**: El estilo base es para móvil, los breakpoints añaden complejidad.
-4. **Contraste WCAG AA**: Ratio mínimo 4.5:1 para texto normal, 7:1 para texto de telemetría.
-5. **Hitbox mínima 56×56px** para todos los elementos interactivos en ruta.
-6. **Reducir motion si el usuario lo prefiere**: Respetar `prefers-reduced-motion`.
-7. **No usar `!important`**: Refactorizar en lugar de forzar.
-8. **Modo oscuro obligatorio**: No existe modo claro.
-9. **Scrollbar oculta**: `scrollbar-width: none` en contenedores con scroll horizontal.
+3. **Shadow DOM ⇒ nada de global.css mágico**: `src/index.css` estiliza el DOM ligero (`<body>`, `<app-root>`), pero **sus reglas nunca alcanzan el contenido de un Shadow DOM**. Cualquier regla que deba aplicar dentro de un componente (`h1`-`h4`, `.num`/`.stat-value`, `prefers-reduced-motion`, etc.) vive en `tokens.css`, que cada `*.element.css` importa con `@import` — así sí llega dentro del shadow root. No asumas que una regla en `index.css` es "global" solo porque el archivo se llama así.
+4. **Mobile-first**: el estilo base es para móvil, los breakpoints añaden complejidad.
+5. **Contraste WCAG AA**: ratio mínimo 4.5:1 para texto normal, 3:1 para texto grande.
+6. **Hitbox mínima 56×56px** para todos los elementos interactivos en ruta.
+7. **Reducir motion si el usuario lo prefiere**: respetar `prefers-reduced-motion` (regla global en `tokens.css`).
+8. **No usar `!important`**: salvo la excepción ya documentada de `prefers-reduced-motion`.
+9. **Modo oscuro obligatorio**: no existe modo claro.
+10. **Componentes compartidos solo con 2+ consumidores**: mientras Cockpit sea el único dominio implementado, sus clases de componente (`.chip`, `.stat-tile`, `.control-btn`, etc.) viven en `cockpit.element.css`. Se promueven a `src/shared/` cuando una segunda pantalla los reutilice (ver `specs/ui/frontend-conventions.md` §4).
