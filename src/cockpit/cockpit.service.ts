@@ -6,6 +6,8 @@
 
 import type { CockpitState, RoutePoint, RouteMetadata } from './cockpit.types.js';
 import { calculateDistance, calculateAvgSpeed, detectStop } from './cockpit.transform.js';
+import type { IRouteRepository } from '../shared/models/route.repository.js';
+import type { CreateRoute, CreateRoutePoint, CreateRouteStop } from '../shared/models/route.types.js';
 
 export interface GpsProvider {
   getCurrentPosition(): Promise<GeolocationPosition>;
@@ -31,6 +33,8 @@ export interface CockpitService {
   requestGpsPermission(): Promise<boolean>;
   setInvisibleMode(active: boolean): void;
 }
+
+const BACKUP_KEY = 'moto-routes-pending-backup';
 
 function createInitialState(): CockpitState {
   return {
@@ -60,9 +64,45 @@ function buildMetadata(s: CockpitState): RouteMetadata {
   };
 }
 
+function buildCreateRoute(s: CockpitState): CreateRoute {
+  return {
+    duration: s.elapsedTime,
+    totalDistance: s.totalDistance,
+    avgSpeed: s.avgSpeed,
+    status: 'completed',
+    visibility: 'private',
+    origin: 'local',
+  };
+}
+
+function buildCreatePoints(s: CockpitState): CreateRoutePoint[] {
+  return s.points.map((p) => ({
+    routeId: '', // será asignado por el repositorio
+    timestamp: p.timestamp,
+    lat: p.lat,
+    lng: p.lng,
+    alt: p.alt,
+    speed: p.speed,
+  }));
+}
+
+function buildStops(_s: CockpitState): CreateRouteStop[] {
+  // Por ahora sin detección de paradas implementada
+  return [];
+}
+
+function persistFallback(data: string): void {
+  try {
+    localStorage.setItem(BACKUP_KEY, data);
+  } catch {
+    // localStorage lleno o no disponible — silencioso
+  }
+}
+
 export function createCockpitService(
   gps: GpsProvider,
   _storage: StorageProvider,
+  repository?: IRouteRepository,
 ): CockpitService {
   let state: CockpitState = createInitialState();
   const listeners = new Set<StateListener>();
@@ -173,6 +213,18 @@ export function createCockpitService(
       if (state.status === 'idle') return null;
       cleanup();
       const metadata = buildMetadata(state);
+
+      // Persistir si hay repositorio
+      if (repository) {
+        const route = buildCreateRoute(state);
+        const points = buildCreatePoints(state);
+        const stops = buildStops(state);
+        repository.save(route, points, stops).catch(() => {
+          // Si falla, guardar backup en localStorage
+          persistFallback(JSON.stringify({ route, points, stops }));
+        });
+      }
+
       state = { ...createInitialState(), hasGpsPermission: state.hasGpsPermission };
       notify();
       return metadata;
