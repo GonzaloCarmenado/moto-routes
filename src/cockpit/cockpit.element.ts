@@ -2,6 +2,8 @@ import { BaseElement } from '../shared/base-element.js';
 import { createCockpitService, type CockpitService, type GpsProvider, type StorageProvider } from './cockpit.service.js';
 import { formatSpeed, formatDuration } from './cockpit.transform.js';
 import type { CockpitState } from './cockpit.types.js';
+import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
+import { simulateRecording } from '../shared/services/route-simulator.js';
 import styles from './cockpit.element.css?inline';
 
 interface CockpitDisplayValues {
@@ -34,6 +36,8 @@ class CockpitView extends BaseElement {
     this.cleanupLongPress();
   }
 
+  private readonly simRepo = new MemoryRouteRepository();
+
   private initService(): void {
     const gps = this.createGpsProvider();
     const storage: StorageProvider = {
@@ -41,10 +45,26 @@ class CockpitView extends BaseElement {
         return Promise.resolve();
       },
     };
-    this.service = createCockpitService(gps, storage);
+    this.service = createCockpitService(gps, storage, this.simRepo);
     this.service.subscribe(() => {
       this.render();
     });
+  }
+
+  // TODO: Botón temporal de simulación — ELIMINAR cuando se valide la persistencia
+  private async handleSimulate(): Promise<void> {
+    const btn = this.shadowRoot?.getElementById('simulate-btn');
+    if (btn) btn.textContent = 'Guardando...';
+    try {
+      const result = await simulateRecording(this.simRepo);
+      const all = await this.simRepo.getAll();
+      if (btn) btn.textContent = `✅ ${String(result.pointCount)} pts — ${String(all.length)} rutas`;
+      setTimeout(() => {
+        if (btn) btn.textContent = '🎲 Simular grabación';
+      }, 3000);
+    } catch {
+      if (btn) btn.textContent = '❌ Error';
+    }
   }
 
   private createGpsProvider(): GpsProvider {
@@ -356,6 +376,14 @@ class CockpitView extends BaseElement {
     root.appendChild(style);
     root.appendChild(wrapper);
     root.appendChild(this.buildGpsOverlay());
+    // TODO: TEMPORAL — Eliminar tras validar persistencia
+    const sb = document.createElement('button');
+    sb.id = 'simulate-btn';
+    sb.setAttribute('data-cy', 'simulate-btn');
+    sb.textContent = '\u{1F3B2} Simular grabaci\u00F3n';
+    sb.style.cssText = 'position:fixed;bottom:8px;left:8px;right:8px;z-index:999;padding:10px;border:1px solid var(--amber);border-radius:var(--r-md,8px);background:var(--panel,oklch(24% 0.02 50));color:var(--ink,oklch(92% 0.01 60));font-family:var(--font-ui,sans-serif);font-size:14px;cursor:pointer;';
+    sb.addEventListener('click', () => { void this.handleSimulate(); });
+    root.appendChild(sb);
   }
 }
 
