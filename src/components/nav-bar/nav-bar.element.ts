@@ -14,11 +14,16 @@ class NavBar extends HTMLElement {
     this.dispatchEvent(new CustomEvent('nav-grabar', { bubbles: true, composed: true }));
   }
 
+  private handleRutasClick(): void {
+    this.dispatchEvent(new CustomEvent('nav-rutas', { bubbles: true, composed: true }));
+  }
+
   private buildRutasBtn(): HTMLButtonElement {
     const btn = document.createElement('button');
     btn.className = 'nav-item';
     btn.setAttribute('data-cy', 'nav-rutas');
     btn.innerHTML = this.buildListIcon() + '<span class="nav-label">Rutas</span>';
+    btn.addEventListener('click', () => { this.handleRutasClick(); });
     return btn;
   }
 
