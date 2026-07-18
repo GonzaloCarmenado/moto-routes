@@ -395,7 +395,7 @@ class CockpitView extends BaseElement {
     sb.id = 'simulate-btn';
     sb.setAttribute('data-cy', 'simulate-btn');
     sb.textContent = '\u{1F3B2} Simular grabaci\u00F3n';
-    sb.style.cssText = 'position:fixed;bottom:8px;left:8px;right:8px;z-index:999;padding:10px;border:1px solid var(--amber);border-radius:var(--r-md,8px);background:var(--panel,oklch(24% 0.02 50));color:var(--ink,oklch(92% 0.01 60));font-family:var(--font-ui,sans-serif);font-size:14px;cursor:pointer;';
+    sb.style.cssText = 'display:block;width:100%;margin-top:16px;padding:10px;border:1px solid var(--amber);border-radius:var(--r-md,8px);background:var(--panel,oklch(24% 0.02 50));color:var(--ink,oklch(92% 0.01 60));font-family:var(--font-ui,sans-serif);font-size:14px;cursor:pointer;';
     sb.addEventListener('click', () => { void this.handleSimulate(); });
     root.appendChild(sb);
   }
