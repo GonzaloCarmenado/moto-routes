@@ -76,6 +76,9 @@ class RouteList extends HTMLElement {
   private buildCard(route: Route): HTMLElement {
     const card = document.createElement('div');
     card.className = 'route-card';
+    card.addEventListener('click', () => {
+      window.dispatchEvent(new CustomEvent('view-route', { detail: { routeId: route.id } }));
+    });
 
     const thumb = document.createElement('div');
     thumb.className = 'thumb media-placeholder';

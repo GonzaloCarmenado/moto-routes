@@ -71,6 +71,27 @@ describe('route-list', () => {
     document.body.removeChild(list);
   });
 
+  it('should emit view-route event when card is clicked', async () => {
+    await repo.save(
+      { duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+
+    const list = await createList();
+    const root = list.shadowRoot!;
+    const card = root.querySelector('.route-card') as HTMLElement;
+
+    const handler = vi.fn();
+    window.addEventListener('view-route', handler);
+    card?.click();
+
+    expect(handler).toHaveBeenCalledOnce();
+    expect((handler.mock.calls[0]![0] as CustomEvent).detail.routeId).toBeTypeOf('string');
+    window.removeEventListener('view-route', handler);
+    document.body.removeChild(list);
+  });
+
   it('should render card structure with thumb, name, date, and badges', async () => {
     await repo.save(
       { duration: 420, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
