@@ -14,36 +14,41 @@ class NavBar extends HTMLElement {
     this.dispatchEvent(new CustomEvent('nav-grabar', { bubbles: true, composed: true }));
   }
 
+  private buildRutasBtn(): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.className = 'nav-item';
+    btn.setAttribute('data-cy', 'nav-rutas');
+    btn.innerHTML = this.buildListIcon() + '<span class="nav-label">Rutas</span>';
+    return btn;
+  }
+
+  private buildGrabarBtn(): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.className = 'nav-item nav-item--record nav-item--active';
+    btn.setAttribute('data-cy', 'nav-grabar');
+    btn.setAttribute('aria-label', 'Ir a grabar ruta');
+    btn.innerHTML = '<span class="record-dot"></span><span class="nav-label">Grabar</span>';
+    btn.addEventListener('click', () => { this.handleGrabarClick(); });
+    return btn;
+  }
+
+  private buildPerfilBtn(): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.className = 'nav-item';
+    btn.setAttribute('data-cy', 'nav-perfil');
+    btn.innerHTML = this.buildProfileIcon() + '<span class="nav-label">Perfil</span>';
+    return btn;
+  }
+
   private render(): void {
     const style = document.createElement('style');
     style.textContent = styles;
 
     const nav = document.createElement('nav');
     nav.className = 'bottom-nav';
-
-    // Rutas
-    const rutasBtn = document.createElement('button');
-    rutasBtn.className = 'nav-item';
-    rutasBtn.setAttribute('data-cy', 'nav-rutas');
-    rutasBtn.innerHTML = this.buildListIcon() + '<span class="nav-label">Rutas</span>';
-
-    // Grabar (activo, destacado)
-    const grabarBtn = document.createElement('button');
-    grabarBtn.className = 'nav-item nav-item--record nav-item--active';
-    grabarBtn.setAttribute('data-cy', 'nav-grabar');
-    grabarBtn.setAttribute('aria-label', 'Ir a grabar ruta');
-    grabarBtn.innerHTML = '<span class="record-dot"></span><span class="nav-label">Grabar</span>';
-    grabarBtn.addEventListener('click', () => { this.handleGrabarClick(); });
-
-    // Perfil
-    const perfilBtn = document.createElement('button');
-    perfilBtn.className = 'nav-item';
-    perfilBtn.setAttribute('data-cy', 'nav-perfil');
-    perfilBtn.innerHTML = this.buildProfileIcon() + '<span class="nav-label">Perfil</span>';
-
-    nav.appendChild(rutasBtn);
-    nav.appendChild(grabarBtn);
-    nav.appendChild(perfilBtn);
+    nav.appendChild(this.buildRutasBtn());
+    nav.appendChild(this.buildGrabarBtn());
+    nav.appendChild(this.buildPerfilBtn());
 
     const root = this.shadowRoot;
     if (!root) return;
