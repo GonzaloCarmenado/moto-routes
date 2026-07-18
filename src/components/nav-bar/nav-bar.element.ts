@@ -9,13 +9,12 @@ class NavBar extends HTMLElement {
   connectedCallback(): void {
     this.render();
   }
-
   private handleGrabarClick(): void {
-    this.dispatchEvent(new CustomEvent('nav-grabar', { bubbles: true, composed: true }));
+    window.dispatchEvent(new CustomEvent('nav-grabar'));
   }
 
   private handleRutasClick(): void {
-    this.dispatchEvent(new CustomEvent('nav-rutas', { bubbles: true, composed: true }));
+    window.dispatchEvent(new CustomEvent('nav-rutas'));
   }
 
   private buildRutasBtn(): HTMLButtonElement {
