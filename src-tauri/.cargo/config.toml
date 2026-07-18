@@ -1,0 +1,5 @@
+# Configuracion para cross-compilacion Android
+# NDK r29 - usa el clang específico con API level
+
+[target.aarch64-linux-android]
+linker = "D:\\Android\\Sdk\\ndk\\29.0.13846066\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\aarch64-linux-android34-clang.cmd"

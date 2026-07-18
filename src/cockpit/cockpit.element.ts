@@ -2,6 +2,9 @@ import { BaseElement } from '../shared/base-element.js';
 import { createCockpitService, type CockpitService, type GpsProvider, type StorageProvider } from './cockpit.service.js';
 import { formatSpeed, formatDuration } from './cockpit.transform.js';
 import type { CockpitState } from './cockpit.types.js';
+import type { IRouteRepository } from '../shared/models/route.repository.js';
+import { SqliteRouteRepository } from '../shared/repositories/sqlite-route.repository.js';
+import { createSqliteDb } from '../shared/repositories/sqlite-route.factory.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
 import { simulateRecording } from '../shared/services/route-simulator.js';
 import styles from './cockpit.element.css?inline';
@@ -27,7 +30,11 @@ class CockpitView extends BaseElement {
   }
 
   connectedCallback(): void {
-    this.initService();
+    void this.initAndRender();
+  }
+
+  private async initAndRender(): Promise<void> {
+    await this.initService();
     this.render();
     void this.service?.checkGpsPermission();
   }
@@ -36,16 +43,23 @@ class CockpitView extends BaseElement {
     this.cleanupLongPress();
   }
 
-  private readonly simRepo = new MemoryRouteRepository();
+  private repo: IRouteRepository = new MemoryRouteRepository();
 
-  private initService(): void {
+  private async initService(): Promise<void> {
     const gps = this.createGpsProvider();
     const storage: StorageProvider = {
       save: (_path: string, _data: string): Promise<void> => {
         return Promise.resolve();
       },
     };
-    this.service = createCockpitService(gps, storage, this.simRepo);
+    // Intentar usar SQLite (persistente) si estamos en Tauri, sino MemoryRouteRepository
+    try {
+      const sqliteDb = await createSqliteDb();
+      this.repo = new SqliteRouteRepository(sqliteDb);
+    } catch {
+      this.repo = new MemoryRouteRepository();
+    }
+    this.service = createCockpitService(gps, storage, this.repo);
     this.service.subscribe(() => {
       this.render();
     });
@@ -56,14 +70,14 @@ class CockpitView extends BaseElement {
     const btn = this.shadowRoot?.getElementById('simulate-btn');
     if (btn) btn.textContent = 'Guardando...';
     try {
-      const result = await simulateRecording(this.simRepo);
-      const all = await this.simRepo.getAll();
+      const result = await simulateRecording(this.repo);
+      const all = await this.repo.getAll();
       if (btn) btn.textContent = `✅ ${String(result.pointCount)} pts — ${String(all.length)} rutas`;
       setTimeout(() => {
         if (btn) btn.textContent = '🎲 Simular grabación';
       }, 3000);
     } catch {
-      if (btn) btn.textContent = '❌ Error';
+      if (btn) btn.textContent = '❌ Error al guardar';
     }
   }
 
