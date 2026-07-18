@@ -3,7 +3,6 @@ import './cockpit.element.js';
 
 describe('CockpitView', () => {
   beforeEach(() => {
-    // Mock del GPS para evitar errores de consola
     const mockGeolocation = {
       getCurrentPosition: vi.fn((success: PositionCallback) => {
         success({
@@ -48,9 +47,14 @@ describe('CockpitView', () => {
     vi.restoreAllMocks();
   });
 
-  it('should render master button with hitbox classes (AC-009)', () => {
+  async function waitRender(): Promise<void> {
+    await new Promise((r) => setTimeout(r, 10));
+  }
+
+  it('should render master button with hitbox classes (AC-009)', async () => {
     const cockpit = document.createElement('cockpit-view');
     document.body.appendChild(cockpit);
+    await waitRender();
     const shadowRoot = cockpit.shadowRoot!;
     const btn = shadowRoot.getElementById('cockpit-master-btn');
     expect(btn).not.toBeNull();
@@ -58,9 +62,10 @@ describe('CockpitView', () => {
     document.body.removeChild(cockpit);
   });
 
-  it('should render invisible toggle with hitbox classes (AC-009)', () => {
+  it('should render invisible toggle with hitbox classes (AC-009)', async () => {
     const cockpit = document.createElement('cockpit-view');
     document.body.appendChild(cockpit);
+    await waitRender();
     const shadowRoot = cockpit.shadowRoot!;
     const invisBtn = shadowRoot.getElementById('cockpit-invisible-btn');
     expect(invisBtn).not.toBeNull();
@@ -68,9 +73,10 @@ describe('CockpitView', () => {
     document.body.removeChild(cockpit);
   });
 
-  it('should have invisible button without active state when idle (AC-015)', () => {
+  it('should have invisible button without active state when idle (AC-015)', async () => {
     const cockpit = document.createElement('cockpit-view');
     document.body.appendChild(cockpit);
+    await waitRender();
     const shadowRoot = cockpit.shadowRoot!;
     const invisBtn = shadowRoot.getElementById('cockpit-invisible-btn');
     expect(invisBtn).not.toBeNull();
@@ -78,18 +84,20 @@ describe('CockpitView', () => {
     document.body.removeChild(cockpit);
   });
 
-  it('should label the master button as "Iniciar grabación" when idle (AC-002)', () => {
+  it('should label the master button as "Iniciar grabación" when idle (AC-002)', async () => {
     const cockpit = document.createElement('cockpit-view');
     document.body.appendChild(cockpit);
+    await waitRender();
     const shadowRoot = cockpit.shadowRoot!;
     const btn = shadowRoot.getElementById('cockpit-master-btn');
     expect(btn?.getAttribute('aria-label')).toBe('Iniciar grabación');
     document.body.removeChild(cockpit);
   });
 
-  it('should render pause button disabled when idle', () => {
+  it('should render pause button disabled when idle', async () => {
     const cockpit = document.createElement('cockpit-view');
     document.body.appendChild(cockpit);
+    await waitRender();
     const shadowRoot = cockpit.shadowRoot!;
     const pauseBtn = shadowRoot.getElementById('cockpit-pause-btn') as HTMLButtonElement;
     expect(pauseBtn).not.toBeNull();
@@ -98,9 +106,10 @@ describe('CockpitView', () => {
     document.body.removeChild(cockpit);
   });
 
-  it('should render the speed display with value and unit', () => {
+  it('should render the speed display with value and unit', async () => {
     const cockpit = document.createElement('cockpit-view');
     document.body.appendChild(cockpit);
+    await waitRender();
     const shadowRoot = cockpit.shadowRoot!;
     const speedValue = shadowRoot.querySelector('.speed-display .speed-value');
     const speedUnit = shadowRoot.querySelector('.speed-display .speed-unit');
@@ -109,9 +118,10 @@ describe('CockpitView', () => {
     document.body.removeChild(cockpit);
   });
 
-  it('should render 3 stat tiles and the average speed banner', () => {
+  it('should render 3 stat tiles and the average speed banner', async () => {
     const cockpit = document.createElement('cockpit-view');
     document.body.appendChild(cockpit);
+    await waitRender();
     const shadowRoot = cockpit.shadowRoot!;
     const tiles = shadowRoot.querySelectorAll('.stat-tile');
     const banner = shadowRoot.querySelector('.avg-speed-banner');
@@ -120,9 +130,10 @@ describe('CockpitView', () => {
     document.body.removeChild(cockpit);
   });
 
-  it('should show chip with "Listo" label when idle', () => {
+  it('should show chip with "Listo" label when idle', async () => {
     const cockpit = document.createElement('cockpit-view');
     document.body.appendChild(cockpit);
+    await waitRender();
     const shadowRoot = cockpit.shadowRoot!;
     const chip = shadowRoot.querySelector('.chip');
     expect(chip?.textContent).toContain('Listo');
@@ -130,9 +141,10 @@ describe('CockpitView', () => {
     document.body.removeChild(cockpit);
   });
 
-  it('should render GPS overlay hidden initially', () => {
+  it('should render GPS overlay hidden initially', async () => {
     const cockpit = document.createElement('cockpit-view');
     document.body.appendChild(cockpit);
+    await waitRender();
     const shadowRoot = cockpit.shadowRoot!;
     const overlay = shadowRoot.getElementById('gps-overlay');
     expect(overlay).not.toBeNull();
@@ -140,9 +152,10 @@ describe('CockpitView', () => {
     document.body.removeChild(cockpit);
   });
 
-  it('should render GPS request button inside overlay', () => {
+  it('should render GPS request button inside overlay', async () => {
     const cockpit = document.createElement('cockpit-view');
     document.body.appendChild(cockpit);
+    await waitRender();
     const shadowRoot = cockpit.shadowRoot!;
     const gpsBtn = shadowRoot.getElementById('gps-request-btn');
     expect(gpsBtn).not.toBeNull();
@@ -150,7 +163,7 @@ describe('CockpitView', () => {
     document.body.removeChild(cockpit);
   });
 
-  it('should render when geolocation is unavailable', () => {
+  it('should render when geolocation is unavailable', async () => {
     Object.defineProperty(globalThis.navigator, 'geolocation', {
       value: null,
       writable: true,
@@ -158,6 +171,7 @@ describe('CockpitView', () => {
     });
     const cockpit = document.createElement('cockpit-view');
     document.body.appendChild(cockpit);
+    await waitRender();
     const shadowRoot = cockpit.shadowRoot!;
     const btn = shadowRoot.getElementById('cockpit-master-btn');
     expect(btn).not.toBeNull();
