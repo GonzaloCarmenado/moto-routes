@@ -18,8 +18,9 @@
 - **Formatting TS**: Prettier 3
 - **Formatting Rust**: rustfmt
 - **Git Hooks**: Husky 9 (pre-commit: ESLint + Clippy + rustfmt + tests + cargo audit)
-- **Package Manager**: npm + Cargo
+- **Package Manager**: pnpm + Cargo
 - **Security**: CSP estricto, permisos mínimos, sin eval, path validation
+- **BBDD Local**: SQLite vía `@tauri-apps/plugin-sql` (archivo: `moto-routes.db`)
 
 ## Herramientas de Desarrollo
 - **GitHub CLI**: `gh` (oficial, ya instalado) → issues, PRs, releases
@@ -48,6 +49,12 @@ src/                          # Frontend (TypeScript + Vite)
 │   │   └── tokens.css        # Design tokens globales
 │   ├── utils/
 │   │   └── dom.ts            # Utilidades DOM
+│   ├── repositories/
+│   │   ├── sqlite-route.repository.ts  # Repositorio SQLite para rutas
+│   │   ├── sqlite-route.factory.ts     # Factory para crear la conexión
+│   │   └── sqlite-route.repository.spec.ts
+│   ├── models/
+│   │   └── route.repository.spec.ts    # Suite de tests compartida
 │   └── tauri/
 │       └── commands.ts       # Wrappers tipados para invoke()
 ├── index.css                 # Estilos base globales
@@ -66,7 +73,9 @@ src-tauri/                    # Backend (Rust)
 ├── Cargo.toml
 ├── tauri.conf.json
 ├── build.rs
-└── .gitignore
+├── .gitignore
+└── .cargo/
+    └── config.toml           # Cross-compiler NDK para Android
 
 tests/
 └── setup.ts                  # Test setup global
@@ -105,9 +114,9 @@ memory/                       # Sistema de memoria persistente
 
 ## Estado Actual del Proyecto
 - **Fase**: Inicial - APK Android compilado
-- **Feature activo**: Ninguno (infraestructura base configurada)
-- **Último hito completado**: APK debug generado para arm64-v8a en `src-tauri/gen/android/app/build/outputs/apk/arm64/debug/app-arm64-debug.apk`
-- **Próximo hito**: Definir primera feature (grabación de rutas)
+- **Feature activo**: Persistencia de rutas (modelos, repositorio SQLite, almacenamiento)
+- **Último hito completado**: APK debug generado y funcional en dispositivo Android
+- **Próximo hito**: Visualización de datos guardados en BBDD
 
 ## Desarrollo Web (Vite)
 Para lanzar el proyecto en modo web (sin Tauri), usar:
@@ -127,16 +136,37 @@ El script `pnpm run dev` ejecuta automáticamente `pnpm dev:kill` antes de arran
 pnpm run dev:kill && pnpm run dev
 ```
 
-## Build Android (Windows workaround)
-Tauri 2 tiene un bug conocido en Windows con el Kotlin incremental compiler cuando el proyecto está en una unidad diferente a C: (ej: D:). Además, los symlinks no funcionan sin permisos especiales.
+## Build Android (Windows workaround) - IMPORTANTE: HISTORIAL DE FALLOS EVITADOS
 
-**Workaround documentado** en `memory/tokens.md` con el comando exacto para compilar.
+### ⚠️ LECCIÓN APRENDIDA: Usar siempre `pnpm tauri android build`
 
-**Resumen**: 
-1. `pnpm build` (frontend)
-2. `cargo build --target aarch64-linux-android` (Rust)
-3. Copiar `libapp_lib.so` manualmente a `jniLibs/arm64-v8a/`
-4. `gradlew assembleDebug --no-daemon -x :app:rustBuild*` (APK)
+No usar scripts manuales que copien assets o salten tareas de Gradle. El APK correcto lo genera Tauri CLI en:
+- `src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`
+
+El APK en `arm64/debug/app-arm64-debug.apk` NO sirve (no tiene los assets correctos).
+
+### Proceso correcto (único que funciona):
+
+```powershell
+# 1. Compilar frontend + Rust + APK (todo en uno)
+pnpm tauri android build --target aarch64 --debug
+
+# 2. Instalar en móvil
+adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+
+# 3. (Opcional) Ver BBDD SQLite
+adb exec-out run-as com.motoroutes.app cat databases/moto-routes.db | sqlite3
+```
+
+### Errores ya resueltos y por qué no repetirlos:
+1. **No usar `build-apk.ps1` manual** → instalaba el APK `arm64/` equivocado
+2. **No saltar tareas Rust de Gradle** → `-x :app:rustBuild*` impide que Tauri genere los assets correctamente
+3. **No forzar `versionCode` manual** → El `pnpm tauri android build` ya lo maneja
+4. **No copiar `dist/` manualmente a assets de Android** → Tauri CLI lo hace solo
+
+### Requisitos previos (ya configurados, no modificar):
+- `src-tauri/.cargo/config.toml` → apunta al NDK r29 para cross-compilación
+- Variables de entorno CC/AR se configuran automáticamente en el build de Tauri
 
 ## Convenciones
 - **Estilo de código**: TypeScript strict mode + ESLint strict + Prettier
@@ -145,6 +175,27 @@ Tauri 2 tiene un bug conocido en Windows con el Kotlin incremental compiler cuan
 - **Nombrado**: Carpetas en kebab-case, clases/componentes en PascalCase, funciones en camelCase
 - **Idioma**: Docs y specs en español, código en inglés
 
+## Visualizar datos de la BBDD Android (SQLite)
+
+### Script
+Usar `scripts/pull-db.ps1` que:
+1. Busca el archivo `moto-routes.db` en las posibles ubicaciones del sandbox
+2. Lo extrae al PC como `moto-routes-export.db`
+3. Verifica que sea una BBDD SQLite válida
+4. Muestra resumen de rutas, puntos y paradas
+5. Exporta schema + datos completos en SQL
+
+```powershell
+.\scripts\pull-db.ps1
+```
+
+### Requisitos
+- `adb` (Android SDK platform-tools)
+- `sqlite3` opcional (si no está, guarda el .db para abrirlo con DB Browser)
+
+### Nota
+La BBDD se crea bajo demanda (lazy initialization). Si no hay datos guardados, el script informa que la BBDD no existe aún.
+
 ## Reglas para Cline/DeepSeek
 - Siempre cargar este archivo al iniciar sesión
 - No escribir código sin una spec en specs/features/
@@ -152,3 +203,4 @@ Tauri 2 tiene un bug conocido en Windows con el Kotlin incremental compiler cuan
 - Usar TDD: tests antes que implementación
 - Mantener este archivo actualizado con el estado del proyecto
 - Ser eficiente con tokens: solo cargar archivos necesarios
+- **Para build Android: usar siempre `pnpm tauri android build --target aarch64 --debug`**, nunca scripts manuales
