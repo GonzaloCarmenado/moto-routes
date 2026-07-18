@@ -20,15 +20,16 @@ describe('nav-bar', () => {
     expect(perfil).not.toBeNull();
   });
 
-  it('emits nav-grabar event when Grabar button is clicked', () => {
+  it('emits nav-grabar event on window when Grabar button is clicked', () => {
     const root = navBar.shadowRoot;
     const grabarBtn = root?.querySelector('[data-cy="nav-grabar"]') as HTMLButtonElement;
 
     const handler = vi.fn();
-    navBar.addEventListener('nav-grabar', handler);
+    window.addEventListener('nav-grabar', handler);
     grabarBtn?.click();
 
     expect(handler).toHaveBeenCalledOnce();
+    window.removeEventListener('nav-grabar', handler);
   });
 
   it('buttons Rutas and Perfil do not emit nav-grabar', () => {
@@ -37,7 +38,7 @@ describe('nav-bar', () => {
     const perfilBtn = root?.querySelector('[data-cy="nav-perfil"]') as HTMLButtonElement;
 
     const handler = vi.fn();
-    navBar.addEventListener('nav-grabar', handler);
+    window.addEventListener('nav-grabar', handler);
 
     // Click on Rutas — should not trigger nav-grabar
     rutasBtn?.click();
@@ -46,6 +47,7 @@ describe('nav-bar', () => {
     // Click on Perfil — should not trigger nav-grabar
     perfilBtn?.click();
     expect(handler).not.toHaveBeenCalled();
+    window.removeEventListener('nav-grabar', handler);
   });
 
   it('Grabar button has active class', () => {

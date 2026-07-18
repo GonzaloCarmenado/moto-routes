@@ -44,6 +44,13 @@ class CockpitView extends BaseElement {
   }
 
   private repo: IRouteRepository = new MemoryRouteRepository();
+  private repoInjected = false;
+
+  // Permite que app-root inyecte el repositorio compartido
+  set repository(repo: IRouteRepository) {
+    this.repo = repo;
+    this.repoInjected = true;
+  }
 
   private async initService(): Promise<void> {
     const gps = this.createGpsProvider();
@@ -52,12 +59,14 @@ class CockpitView extends BaseElement {
         return Promise.resolve();
       },
     };
-    // Intentar usar SQLite (persistente) si estamos en Tauri, sino MemoryRouteRepository
-    try {
-      const sqliteDb = await createSqliteDb();
-      this.repo = new SqliteRouteRepository(sqliteDb);
-    } catch {
-      this.repo = new MemoryRouteRepository();
+    // Si no nos inyectaron repositorio, intentamos crear SQLite propio
+    if (!this.repoInjected) {
+      try {
+        const sqliteDb = await createSqliteDb();
+        this.repo = new SqliteRouteRepository(sqliteDb);
+      } catch {
+        this.repo = new MemoryRouteRepository();
+      }
     }
     this.service = createCockpitService(gps, storage, this.repo);
     this.service.subscribe(() => {
