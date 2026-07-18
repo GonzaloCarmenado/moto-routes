@@ -16,7 +16,7 @@
 
 .cockpit-screen {
   flex: 1;
-  padding: 24px 22px 40px;
+  padding: 24px 22px calc(var(--nav-height) + 40px);
 }
 
 /* ==========================================================================
