@@ -28,14 +28,24 @@ function createMockStorage(): StorageProvider {
   };
 }
 
-describe('createCockpitService', () => {
-  let gps: GpsProvider;
+function mockWatchCallback(gps: GpsProvider): (pos: GeolocationPosition) => void {
+  let watchCallback: ((pos: GeolocationPosition) => void) | null = null;
+  const watchMock = vi.fn().mockImplementation((cb: (pos: GeolocationPosition) => void) => {
+    watchCallback = cb;
+    return vi.fn();
+  });
+  gps.watchPosition = watchMock;
+  return (pos: GeolocationPosition): void => {
+    if (watchCallback) watchCallback(pos);
+  };
+}
+
+describe('createCockpitService - estado de grabación', () => {
   let service: ReturnType<typeof createCockpitService>;
 
   beforeEach(() => {
     vi.useFakeTimers();
-    gps = createMockGps();
-    service = createCockpitService(gps, createMockStorage());
+    service = createCockpitService(createMockGps(), createMockStorage());
   });
 
   it('should start in idle state', () => {
@@ -49,23 +59,20 @@ describe('createCockpitService', () => {
 
   it('should start recording', () => {
     service.startRecording();
-    const state = service.getCurrentState();
-    expect(state.status).toBe('recording');
+    expect(service.getCurrentState().status).toBe('recording');
   });
 
   it('should ignore start if already recording', () => {
     service.startRecording();
     service.startRecording(); // second call ignored
-    const state = service.getCurrentState();
-    expect(state.status).toBe('recording');
+    expect(service.getCurrentState().status).toBe('recording');
   });
 
   it('should stop recording and return metadata', () => {
     service.startRecording();
     const metadata = service.stopRecording();
     expect(metadata).not.toBeNull();
-    const state = service.getCurrentState();
-    expect(state.status).toBe('idle');
+    expect(service.getCurrentState().status).toBe('idle');
   });
 
   it('should return null on stop when idle', () => {
@@ -89,6 +96,15 @@ describe('createCockpitService', () => {
     service.resumeRecording(); // idle → noop
     expect(service.getCurrentState().status).toBe('idle');
   });
+});
+
+describe('createCockpitService - notificaciones a listeners', () => {
+  let service: ReturnType<typeof createCockpitService>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    service = createCockpitService(createMockGps(), createMockStorage());
+  });
 
   it('should notify listeners on state change', () => {
     const listener = vi.fn();
@@ -103,6 +119,37 @@ describe('createCockpitService', () => {
     unsubscribe();
     service.startRecording();
     expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('should notify on each state change', () => {
+    const listener = vi.fn();
+    service.subscribe(listener);
+    listener.mockClear();
+
+    service.setInvisibleMode(true);
+    expect(listener).toHaveBeenCalledTimes(1);
+    const stateArg = listener.mock.calls[0]![0] as { invisibleMode: boolean };
+    expect(stateArg.invisibleMode).toBe(true);
+  });
+
+  it('should pass snapshot (clone) to listeners', () => {
+    const listener = vi.fn();
+    service.subscribe(listener);
+    service.startRecording();
+    const stateArg = listener.mock.calls[0]![0] as { status: string };
+    stateArg.status = 'paused';
+    expect(service.getCurrentState().status).toBe('recording');
+  });
+});
+
+describe('createCockpitService - permisos GPS y modo invisible', () => {
+  let gps: GpsProvider;
+  let service: ReturnType<typeof createCockpitService>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    gps = createMockGps();
+    service = createCockpitService(gps, createMockStorage());
   });
 
   it('should toggle invisible mode', () => {
@@ -137,21 +184,20 @@ describe('createCockpitService', () => {
     expect(ok).toBe(false);
     expect(service.getCurrentState().hasGpsPermission).toBe(false);
   });
+});
 
-  function getWatchCallback(): (pos: GeolocationPosition) => void {
-    let watchCallback: ((pos: GeolocationPosition) => void) | null = null;
-    const watchMock = vi.fn().mockImplementation((cb: (pos: GeolocationPosition) => void) => {
-      watchCallback = cb;
-      return vi.fn();
-    });
-    gps.watchPosition = watchMock;
-    return (pos: GeolocationPosition): void => {
-      if (watchCallback) watchCallback(pos);
-    };
-  }
+describe('createCockpitService - puntos GPS y distancia', () => {
+  let gps: GpsProvider;
+  let service: ReturnType<typeof createCockpitService>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    gps = createMockGps();
+    service = createCockpitService(gps, createMockStorage());
+  });
 
   it('should add GPS points via watchPosition callback', () => {
-    const fireWatch = getWatchCallback();
+    const fireWatch = mockWatchCallback(gps);
     service.startRecording();
 
     const fakePos = {
@@ -177,7 +223,7 @@ describe('createCockpitService', () => {
   });
 
   it('should accumulate distance across multiple points', () => {
-    const fireWatch = getWatchCallback();
+    const fireWatch = mockWatchCallback(gps);
     service.startRecording();
 
     fireWatch({
@@ -193,6 +239,32 @@ describe('createCockpitService', () => {
     const state = service.getCurrentState();
     expect(state.points).toHaveLength(2);
     expect(state.totalDistance).toBeGreaterThan(0);
+  });
+
+  it('should handle gps signal loss (speed null safety)', () => {
+    const fireWatch = mockWatchCallback(gps);
+    service.startRecording();
+
+    fireWatch({
+      coords: { latitude: 0, longitude: 0, altitude: null, speed: null, accuracy: 10, altitudeAccuracy: null, heading: null },
+      timestamp: 1000,
+    } as unknown as GeolocationPosition);
+
+    const state = service.getCurrentState();
+    expect(state.points).toHaveLength(1);
+    expect(state.points[0]!.speed).toBe(0);
+    expect(state.points[0]!.alt).toBe(0);
+  });
+});
+
+describe('createCockpitService - temporizador', () => {
+  let gps: GpsProvider;
+  let service: ReturnType<typeof createCockpitService>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    gps = createMockGps();
+    service = createCockpitService(gps, createMockStorage());
   });
 
   it('should increment elapsed time via interval', () => {
@@ -216,20 +288,14 @@ describe('createCockpitService', () => {
     vi.advanceTimersByTime(1000);
     expect(service.getCurrentState().elapsedTime).toBe(elapsedAfterStop);
   });
+});
 
-  it('should handle gps signal loss (speed null safety)', () => {
-    const fireWatch = getWatchCallback();
-    service.startRecording();
+describe('createCockpitService - metadata al finalizar', () => {
+  let service: ReturnType<typeof createCockpitService>;
 
-    fireWatch({
-      coords: { latitude: 0, longitude: 0, altitude: null, speed: null, accuracy: 10, altitudeAccuracy: null, heading: null },
-      timestamp: 1000,
-    } as unknown as GeolocationPosition);
-
-    const state = service.getCurrentState();
-    expect(state.points).toHaveLength(1);
-    expect(state.points[0]!.speed).toBe(0);
-    expect(state.points[0]!.alt).toBe(0);
+  beforeEach(() => {
+    vi.useFakeTimers();
+    service = createCockpitService(createMockGps(), createMockStorage());
   });
 
   it('should build metadata with route info after recording', () => {
@@ -249,26 +315,6 @@ describe('createCockpitService', () => {
     service.startRecording();
     service.stopRecording();
     expect(service.getCurrentState().hasGpsPermission).toBe(true);
-  });
-
-  it('should notify on each state change', () => {
-    const listener = vi.fn();
-    service.subscribe(listener);
-    listener.mockClear();
-
-    service.setInvisibleMode(true);
-    expect(listener).toHaveBeenCalledTimes(1);
-    const stateArg = listener.mock.calls[0]![0] as { invisibleMode: boolean };
-    expect(stateArg.invisibleMode).toBe(true);
-  });
-
-  it('should pass snapshot (clone) to listeners', () => {
-    const listener = vi.fn();
-    service.subscribe(listener);
-    service.startRecording();
-    const stateArg = listener.mock.calls[0]![0] as { status: string };
-    stateArg.status = 'paused';
-    expect(service.getCurrentState().status).toBe('recording');
   });
 });
 

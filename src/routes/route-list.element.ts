@@ -45,39 +45,47 @@ class RouteList extends HTMLElement {
 
     const screen = document.createElement('div');
     screen.className = 'route-list';
-
-    // Title
-    const title = document.createElement('h1');
-    title.className = 'route-list__title';
-    title.textContent = 'Tus rutas';
-    screen.appendChild(title);
-
-    // Subtitle
-    const totalKm = routes.reduce((sum, r) => sum + r.totalDistance, 0);
-    const subtitle = document.createElement('p');
-    subtitle.className = 'route-list__subtitle';
-    subtitle.textContent = `${String(routes.length)} rutas guardadas · ${totalKm.toFixed(1)} km recorridos`;
-    screen.appendChild(subtitle);
-
-    if (routes.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'route-list__empty';
-      empty.textContent = 'No hay rutas guardadas todavía';
-      screen.appendChild(empty);
-    } else {
-      const list = document.createElement('div');
-      list.className = 'route-list__cards';
-      for (const route of routes) {
-        list.appendChild(this.buildCard(route));
-      }
-      screen.appendChild(list);
-    }
+    screen.appendChild(this.buildHeader(routes));
+    screen.appendChild(this.buildBody(routes));
 
     const root = this.shadowRoot;
     if (!root) return;
     root.innerHTML = '';
     root.appendChild(style);
     root.appendChild(screen);
+  }
+
+  private buildHeader(routes: Route[]): DocumentFragment {
+    const fragment = document.createDocumentFragment();
+
+    const title = document.createElement('h1');
+    title.className = 'route-list__title';
+    title.textContent = 'Tus rutas';
+    fragment.appendChild(title);
+
+    const totalKm = routes.reduce((sum, r) => sum + r.totalDistance, 0);
+    const subtitle = document.createElement('p');
+    subtitle.className = 'route-list__subtitle';
+    subtitle.textContent = `${String(routes.length)} rutas guardadas · ${totalKm.toFixed(1)} km recorridos`;
+    fragment.appendChild(subtitle);
+
+    return fragment;
+  }
+
+  private buildBody(routes: Route[]): HTMLElement {
+    if (routes.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'route-list__empty';
+      empty.textContent = 'No hay rutas guardadas todavía';
+      return empty;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'route-list__cards';
+    for (const route of routes) {
+      list.appendChild(this.buildCard(route));
+    }
+    return list;
   }
 
   private buildCard(route: Route): HTMLElement {

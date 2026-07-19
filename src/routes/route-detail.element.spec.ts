@@ -32,7 +32,18 @@ async function waitRender(): Promise<void> {
   await new Promise((r) => setTimeout(r, 0));
 }
 
-describe('route-detail', () => {
+type RouteDetailEl = HTMLElement & { repository: IRouteRepository; routeId: string };
+
+async function mountRouteDetail(repo: IRouteRepository, routeId: string): Promise<{ el: RouteDetailEl; root: ShadowRoot }> {
+  const el = document.createElement('route-detail') as RouteDetailEl;
+  el.repository = repo;
+  el.routeId = routeId;
+  document.body.appendChild(el);
+  await waitRender();
+  return { el, root: el.shadowRoot! };
+}
+
+describe('route-detail - contenido básico', () => {
   let repo: IRouteRepository;
   let savedRoute: Route;
 
@@ -46,13 +57,7 @@ describe('route-detail', () => {
   });
 
   it('should show empty message when route does not exist', async () => {
-    const el = document.createElement('route-detail') as HTMLElement & { repository: IRouteRepository; routeId: string };
-    el.repository = repo;
-    el.routeId = 'non-existent-id';
-    document.body.appendChild(el);
-    await waitRender();
-
-    const root = el.shadowRoot!;
+    const { el, root } = await mountRouteDetail(repo, 'non-existent-id');
     const empty = root.querySelector('.empty-msg');
     expect(empty).not.toBeNull();
     expect(empty?.textContent).toContain('Ruta no encontrada');
@@ -60,34 +65,15 @@ describe('route-detail', () => {
   });
 
   it('should show route details when route exists', async () => {
-    const el = document.createElement('route-detail') as HTMLElement & { repository: IRouteRepository; routeId: string };
-    el.repository = repo;
-    el.routeId = savedRoute.id;
-    document.body.appendChild(el);
-    await waitRender();
-
-    const root = el.shadowRoot!;
-
-    const title = root.querySelector('.detail-title');
-    expect(title).not.toBeNull();
-
-    const date = root.querySelector('.detail-date');
-    expect(date).not.toBeNull();
-
-    const tiles = root.querySelectorAll('.stat-tile');
-    expect(tiles.length).toBe(4);
-
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    expect(root.querySelector('.detail-title')).not.toBeNull();
+    expect(root.querySelector('.detail-date')).not.toBeNull();
+    expect(root.querySelectorAll('.stat-tile').length).toBe(4);
     document.body.removeChild(el);
   });
 
   it('should emit back-to-list event when back button is clicked', async () => {
-    const el = document.createElement('route-detail') as HTMLElement & { repository: IRouteRepository; routeId: string };
-    el.repository = repo;
-    el.routeId = savedRoute.id;
-    document.body.appendChild(el);
-    await waitRender();
-
-    const root = el.shadowRoot!;
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
     const backBtn = root.querySelector('.back-btn') as HTMLButtonElement;
 
     const handler = vi.fn();
@@ -97,6 +83,20 @@ describe('route-detail', () => {
     expect(handler).toHaveBeenCalledOnce();
     window.removeEventListener('back-to-list', handler);
     document.body.removeChild(el);
+  });
+});
+
+describe('route-detail - integración con route-map', () => {
+  let repo: IRouteRepository;
+  let savedRoute: Route;
+
+  beforeEach(async () => {
+    repo = new MemoryRouteRepository();
+    savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
   });
 
   it('should render a route-map element and pass it the loaded GPS points', async () => {
@@ -110,13 +110,7 @@ describe('route-detail', () => {
       [],
     );
 
-    const el = document.createElement('route-detail') as HTMLElement & { repository: IRouteRepository; routeId: string };
-    el.repository = repo;
-    el.routeId = pointRoute.id;
-    document.body.appendChild(el);
-    await waitRender();
-
-    const root = el.shadowRoot!;
+    const { el, root } = await mountRouteDetail(repo, pointRoute.id);
     const routeMap = root.querySelector<HTMLElement & { points: { lat: number; lng: number }[] }>('route-map');
     expect(routeMap).not.toBeNull();
     expect(routeMap?.points).toEqual([
@@ -127,13 +121,7 @@ describe('route-detail', () => {
   });
 
   it('should render a route-map element with an empty points array when the route has no GPS points', async () => {
-    const el = document.createElement('route-detail') as HTMLElement & { repository: IRouteRepository; routeId: string };
-    el.repository = repo;
-    el.routeId = savedRoute.id;
-    document.body.appendChild(el);
-    await waitRender();
-
-    const root = el.shadowRoot!;
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
     const routeMap = root.querySelector<HTMLElement & { points: { lat: number; lng: number }[] }>('route-map');
     expect(routeMap).not.toBeNull();
     expect(routeMap?.points).toEqual([]);

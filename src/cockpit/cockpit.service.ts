@@ -99,155 +99,187 @@ function persistFallback(data: string): void {
   }
 }
 
+function persistRouteOnStop(repository: IRouteRepository | undefined, state: CockpitState): void {
+  if (!repository) return;
+  const route = buildCreateRoute(state);
+  const points = buildCreatePoints(state);
+  const stops = buildStops(state);
+  repository.save(route, points, stops).catch(() => {
+    // Si falla, guardar backup en localStorage
+    persistFallback(JSON.stringify({ route, points, stops }));
+  });
+}
+
+/** Estado mutable compartido por las funciones del servicio (evita closures anidados). */
+interface ServiceStore {
+  state: CockpitState;
+  listeners: Set<StateListener>;
+  lastPoint: RoutePoint | null;
+}
+
+function notify(store: ServiceStore): void {
+  const snapshot = { ...store.state };
+  for (const fn of store.listeners) {
+    fn(snapshot);
+  }
+}
+
+function subscribeAction(store: ServiceStore, listener: StateListener): () => void {
+  store.listeners.add(listener);
+  return () => {
+    store.listeners.delete(listener);
+  };
+}
+
+async function requestGpsPermissionAction(store: ServiceStore, gps: GpsProvider): Promise<boolean> {
+  const ok = await gps.requestPermissions();
+  store.state = { ...store.state, hasGpsPermission: ok };
+  notify(store);
+  return ok;
+}
+
+async function checkGpsPermissionAction(store: ServiceStore, gps: GpsProvider): Promise<boolean> {
+  const ok = await gps.checkPermissions();
+  store.state = { ...store.state, hasGpsPermission: ok };
+  notify(store);
+  return ok;
+}
+
+function addPoint(store: ServiceStore, point: RoutePoint): void {
+  let distanceDelta = 0;
+  if (store.lastPoint) {
+    distanceDelta = calculateDistance(store.lastPoint, point);
+  }
+  store.lastPoint = point;
+
+  const totalDistance = store.state.totalDistance + distanceDelta;
+  const avgSpeed = calculateAvgSpeed(totalDistance, store.state.elapsedTime || 1);
+  const stopResult = detectStop(point.speed, store.state.stopTimer, store.state.stopState);
+
+  store.state = {
+    ...store.state,
+    points: [...store.state.points, point],
+    currentSpeed: point.speed,
+    avgSpeed,
+    totalDistance,
+    altitude: point.alt,
+    gpsSignalLost: false,
+    gpsLostTimer: 0,
+    stopState: stopResult.state,
+    stopTimer: stopResult.timer,
+  };
+  notify(store);
+}
+
+/** Controla el intervalo de tick (tiempo transcurrido) y el watch de GPS por separado:
+ * pausar solo detiene el tick, no el watch (comportamiento preexistente). */
+interface RecordingLoop {
+  startTick(onTick: () => void): void;
+  stopTick(): void;
+  startWatch(onPoint: (point: RoutePoint) => void): void;
+  stopWatch(): void;
+}
+
+function createRecordingLoop(gps: GpsProvider): RecordingLoop {
+  let gpsTickInterval: ReturnType<typeof setInterval> | null = null;
+  let cleanupWatch: (() => void) | null = null;
+
+  return {
+    startTick(onTick: () => void): void {
+      gpsTickInterval = setInterval(onTick, 1000);
+    },
+    stopTick(): void {
+      if (gpsTickInterval != null) {
+        clearInterval(gpsTickInterval);
+        gpsTickInterval = null;
+      }
+    },
+    startWatch(onPoint: (point: RoutePoint) => void): void {
+      cleanupWatch = gps.watchPosition((pos) => {
+        const speed = pos.coords.speed != null ? pos.coords.speed * 3.6 : 0;
+        onPoint({
+          timestamp: pos.timestamp,
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          alt: pos.coords.altitude ?? 0,
+          speed,
+        });
+      });
+    },
+    stopWatch(): void {
+      if (cleanupWatch != null) {
+        cleanupWatch();
+        cleanupWatch = null;
+      }
+    },
+  };
+}
+
+function startRecordingAction(store: ServiceStore, loop: RecordingLoop): void {
+  if (store.state.status !== 'idle') return;
+  store.state = {
+    ...store.state, status: 'recording', points: [], currentSpeed: 0, avgSpeed: 0,
+    totalDistance: 0, elapsedTime: 0, altitude: 0, stopState: 'moving', stopTimer: 0,
+    gpsSignalLost: false, gpsLostTimer: 0,
+  };
+  store.lastPoint = null;
+  notify(store);
+  loop.startTick(() => {
+    store.state = { ...store.state, elapsedTime: store.state.elapsedTime + 1 };
+    notify(store);
+  });
+  loop.startWatch((point) => { addPoint(store, point); });
+}
+
+function stopRecordingAction(store: ServiceStore, loop: RecordingLoop, repository: IRouteRepository | undefined): RouteMetadata | null {
+  if (store.state.status === 'idle') return null;
+  loop.stopTick();
+  loop.stopWatch();
+  const metadata = buildMetadata(store.state);
+  persistRouteOnStop(repository, store.state);
+  store.state = { ...createInitialState(), hasGpsPermission: store.state.hasGpsPermission };
+  notify(store);
+  return metadata;
+}
+
+function pauseRecordingAction(store: ServiceStore, loop: RecordingLoop): void {
+  if (store.state.status !== 'recording') return;
+  store.state = { ...store.state, status: 'paused' };
+  loop.stopTick();
+  notify(store);
+}
+
+function resumeRecordingAction(store: ServiceStore, loop: RecordingLoop): void {
+  if (store.state.status !== 'paused') return;
+  store.state = { ...store.state, status: 'recording' };
+  loop.startTick(() => {
+    store.state = { ...store.state, elapsedTime: store.state.elapsedTime + 1 };
+    notify(store);
+  });
+  loop.startWatch((point) => { addPoint(store, point); });
+  notify(store);
+}
+
 export function createCockpitService(
   gps: GpsProvider,
   _storage: StorageProvider,
   repository?: IRouteRepository,
 ): CockpitService {
-  let state: CockpitState = createInitialState();
-  const listeners = new Set<StateListener>();
-  let cleanupWatch: (() => void) | null = null;
-  let gpsTickInterval: ReturnType<typeof setInterval> | null = null;
-  let lastPoint: RoutePoint | null = null;
-
-  function notify(): void {
-    const snapshot = { ...state };
-    for (const fn of listeners) {
-      fn(snapshot);
-    }
-  }
-
-  function subscribe(listener: StateListener): () => void {
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-    };
-  }
-
-  async function requestGpsPermission(): Promise<boolean> {
-    const ok = await gps.requestPermissions();
-    state = { ...state, hasGpsPermission: ok };
-    notify();
-    return ok;
-  }
-
-  async function checkGpsPermission(): Promise<boolean> {
-    const ok = await gps.checkPermissions();
-    state = { ...state, hasGpsPermission: ok };
-    notify();
-    return ok;
-  }
-
-  function addPoint(point: RoutePoint): void {
-    let distanceDelta = 0;
-    if (lastPoint) {
-      distanceDelta = calculateDistance(lastPoint, point);
-    }
-    lastPoint = point;
-
-    const totalDistance = state.totalDistance + distanceDelta;
-    const avgSpeed = calculateAvgSpeed(totalDistance, state.elapsedTime || 1);
-    const stopResult = detectStop(point.speed, state.stopTimer, state.stopState);
-
-    state = {
-      ...state,
-      points: [...state.points, point],
-      currentSpeed: point.speed,
-      avgSpeed,
-      totalDistance,
-      altitude: point.alt,
-      gpsSignalLost: false,
-      gpsLostTimer: 0,
-      stopState: stopResult.state,
-      stopTimer: stopResult.timer,
-    };
-    notify();
-  }
-
-  function startTick(): void {
-    gpsTickInterval = setInterval(() => {
-      state = { ...state, elapsedTime: state.elapsedTime + 1 };
-      notify();
-    }, 1000);
-  }
-
-  function startWatch(): void {
-    cleanupWatch = gps.watchPosition((pos) => {
-      const speed = pos.coords.speed != null ? pos.coords.speed * 3.6 : 0;
-      const point: RoutePoint = {
-        timestamp: pos.timestamp,
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        alt: pos.coords.altitude ?? 0,
-        speed,
-      };
-      addPoint(point);
-    });
-  }
-
-  function cleanup(): void {
-    if (gpsTickInterval != null) {
-      clearInterval(gpsTickInterval);
-      gpsTickInterval = null;
-    }
-    if (cleanupWatch != null) {
-      cleanupWatch();
-      cleanupWatch = null;
-    }
-  }
+  const store: ServiceStore = { state: createInitialState(), listeners: new Set(), lastPoint: null };
+  const loop = createRecordingLoop(gps);
 
   return {
-    subscribe,
-    getCurrentState: (): CockpitState => ({ ...state }),
-    startRecording: (): void => {
-      if (state.status !== 'idle') return;
-      state = { ...state, status: 'recording', points: [], currentSpeed: 0, avgSpeed: 0,
-        totalDistance: 0, elapsedTime: 0, altitude: 0, stopState: 'moving', stopTimer: 0,
-        gpsSignalLost: false, gpsLostTimer: 0 };
-      lastPoint = null;
-      notify();
-      startTick();
-      startWatch();
-    },
-    stopRecording: (): RouteMetadata | null => {
-      if (state.status === 'idle') return null;
-      cleanup();
-      const metadata = buildMetadata(state);
-
-      // Persistir si hay repositorio
-      if (repository) {
-        const route = buildCreateRoute(state);
-        const points = buildCreatePoints(state);
-        const stops = buildStops(state);
-        repository.save(route, points, stops).catch(() => {
-          // Si falla, guardar backup en localStorage
-          persistFallback(JSON.stringify({ route, points, stops }));
-        });
-      }
-
-      state = { ...createInitialState(), hasGpsPermission: state.hasGpsPermission };
-      notify();
-      return metadata;
-    },
-    pauseRecording: (): void => {
-      if (state.status !== 'recording') return;
-      state = { ...state, status: 'paused' };
-      if (gpsTickInterval != null) clearInterval(gpsTickInterval);
-      gpsTickInterval = null;
-      notify();
-    },
-    resumeRecording: (): void => {
-      if (state.status !== 'paused') return;
-      state = { ...state, status: 'recording' };
-      startTick();
-      startWatch();
-      notify();
-    },
-    checkGpsPermission,
-    requestGpsPermission,
+    subscribe: (listener): (() => void) => subscribeAction(store, listener),
+    getCurrentState: (): CockpitState => ({ ...store.state }),
+    startRecording: (): void => { startRecordingAction(store, loop); },
+    stopRecording: (): RouteMetadata | null => stopRecordingAction(store, loop, repository),
+    pauseRecording: (): void => { pauseRecordingAction(store, loop); },
+    resumeRecording: (): void => { resumeRecordingAction(store, loop); },
+    checkGpsPermission: (): Promise<boolean> => checkGpsPermissionAction(store, gps),
+    requestGpsPermission: (): Promise<boolean> => requestGpsPermissionAction(store, gps),
     setInvisibleMode: (active: boolean): void => {
-      state = { ...state, invisibleMode: active };
-      notify();
+      store.state = { ...store.state, invisibleMode: active };
+      notify(store);
     },
   };
 }
