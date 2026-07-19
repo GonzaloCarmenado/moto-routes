@@ -10,6 +10,7 @@ import { PHOTO_CAPTURE_EVENT, type PhotoCaptureEventDetail } from '../photos/pho
 import { MemoryPhotoRepository } from '../shared/repositories/memory-photo.repository.js';
 import { captureFromCamera, pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
 import { addPhotoToRoute } from './route-detail-photo.service.js';
+import { getPhotoUrl } from '../shared/services/photo-storage.service.js';
 
 /**
  * Tipo que asocia una foto con su URL de objeto para mostrar en UI.
@@ -71,13 +72,12 @@ class RouteDetail extends HTMLElement {
       this._photoRepo.getByRouteId(this._routeId),
     ]);
     this._points = points.map((p) => ({ lat: p.lat, lng: p.lng }));
-    // Convert photos to PhotoWithUrl — in memory they don't have real URLs,
-    // so we create placeholder URLs (the actual file data is stored separately)
     this.revokePhotoUrls();
-    this._photos = photos.map((p) => ({
+    // Convert file paths to accessible URLs (handles Tauri convertFileSrc)
+    this._photos = await Promise.all(photos.map(async (p) => ({
       ...p,
-      objectUrl: p.filePath, // In MemoryPhotoRepository, filePath could be a data URL
-    }));
+      objectUrl: await getPhotoUrl(p.filePath),
+    })));
     this.render(route, this._points);
   }
 
@@ -245,11 +245,13 @@ class RouteDetail extends HTMLElement {
       const result = await addPhotoToRoute(file, this._routeId, this._photoRepo, this._points);
 
       if (result) {
-        // Refresh photos — filePath now contains blob URL
-        this._photos = (await this._photoRepo.getByRouteId(this._routeId)).map((p) => ({
-          ...p,
-          objectUrl: p.filePath,
-        }));
+        // Refresh photos with proper URLs (handles Tauri convertFileSrc)
+        this._photos = await Promise.all(
+          (await this._photoRepo.getByRouteId(this._routeId)).map(async (p) => ({
+            ...p,
+            objectUrl: await getPhotoUrl(p.filePath),
+          })),
+        );
         this.rerenderPhotosSection();
       }
     }

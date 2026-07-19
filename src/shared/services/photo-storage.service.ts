@@ -5,7 +5,7 @@
  */
 
 import type { IPhotoRepository } from '../models/photo.repository.js';
-import type { CreatePhoto, Photo } from '../models/photo.types.js';
+import type { CreatePhoto } from '../models/photo.types.js';
 
 const PHOTOS_DIR = 'photos';
 
@@ -65,21 +65,21 @@ async function savePhotoFileTauri(file: File): Promise<string> {
 
 /**
  * Obtiene la URL accesible para una foto guardada.
- * En Tauri, convierte la ruta del appDataDir a URL accesible por el WebView.
+ * En Tauri, convierte la ruta del appDataDir a URL accesible por el WebView usando convertFileSrc.
  * En navegador, devuelve la misma URL (ya es blob:).
  */
-export function getPhotoUrl(filePath: string): string {
+export async function getPhotoUrl(filePath: string): Promise<string> {
   if (filePath.startsWith('blob:')) return filePath;
   if (filePath.startsWith('photos/')) return filePath; // placeholder
 
   // En Tauri, convertir ruta del appDataDir a asset URL
-  try {
-    // Usar convertFileSrc de Tauri para convertir ruta a URL accesible
-    // Esto se importa dinámicamente para evitar error en navegador
-    const { convertFileSrc } = window.__TAURI__?.core ?? {};
-    if (convertFileSrc) return convertFileSrc(filePath);
-  } catch {
-    // Ignorar
+  if (isTauri()) {
+    try {
+      const { convertFileSrc } = await import('@tauri-apps/api/core');
+      return convertFileSrc(filePath);
+    } catch {
+      // Ignorar
+    }
   }
 
   return filePath;
