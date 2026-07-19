@@ -15,15 +15,22 @@ class RouteList extends HTMLElement {
     return this._repository;
   }
 
+  private readonly onNavRutas = (): void => { void this.fetchAndRender(); };
+
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
   }
 
   connectedCallback(): void {
+    window.addEventListener('nav-rutas', this.onNavRutas);
     if (this._repository) {
       void this.fetchAndRender();
     }
+  }
+
+  disconnectedCallback(): void {
+    window.removeEventListener('nav-rutas', this.onNavRutas);
   }
 
   private async fetchAndRender(): Promise<void> {

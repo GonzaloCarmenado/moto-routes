@@ -87,8 +87,28 @@ describe('route-list', () => {
     card?.click();
 
     expect(handler).toHaveBeenCalledOnce();
-    expect((handler.mock.calls[0]![0] as CustomEvent).detail.routeId).toBeTypeOf('string');
+    expect((handler.mock.calls[0]![0] as CustomEvent<{ routeId: string }>).detail.routeId).toBeTypeOf('string');
     window.removeEventListener('view-route', handler);
+    document.body.removeChild(list);
+  });
+
+  it('should refetch and render newly saved routes when the "nav-rutas" event fires', async () => {
+    const list = await createList();
+    let root = list.shadowRoot!;
+    expect(root.querySelector('.route-list__empty')).not.toBeNull();
+
+    await repo.save(
+      { duration: 300, totalDistance: 10, avgSpeed: 60, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+
+    window.dispatchEvent(new CustomEvent('nav-rutas'));
+    await waitRender();
+
+    root = list.shadowRoot!;
+    expect(root.querySelectorAll('.route-card').length).toBe(1);
+    expect(root.querySelector('.route-list__empty')).toBeNull();
     document.body.removeChild(list);
   });
 

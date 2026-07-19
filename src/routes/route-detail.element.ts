@@ -2,13 +2,11 @@ import styles from './route-detail.element.css?inline';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { Route } from '../shared/models/route.types.js';
 import { formatDuration } from '../cockpit/cockpit.transform.js';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import '../shared/route-map/route-map.element.js';
 
 class RouteDetail extends HTMLElement {
   private _repository: IRouteRepository | null = null;
   private _routeId: string | null = null;
-  private mapInstance: L.Map | null = null;
 
   set repository(repo: IRouteRepository | null) {
     this._repository = repo;
@@ -123,45 +121,11 @@ class RouteDetail extends HTMLElement {
   }
 
   private buildMap(points: { lat: number; lng: number }[]): HTMLElement {
-    const mapContainer = document.createElement('div');
-    mapContainer.className = 'route-map';
-    mapContainer.id = 'map';
-
-    if (points.length === 0) {
-      const noGps = document.createElement('div');
-      noGps.className = 'map-empty';
-      noGps.textContent = 'Sin datos de GPS';
-      mapContainer.appendChild(noGps);
-      return mapContainer;
-    }
-
-    // Init Leaflet map after DOM append
-    requestAnimationFrame(() => {
-      if (this.mapInstance) this.mapInstance.remove();
-      const map = L.map(mapContainer, { attributionControl: false }).setView([points[0]!.lat, points[0]!.lng], 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-      }).addTo(map);
-
-      const latlngs = points.map((p) => [p.lat, p.lng] as [number, number]);
-      const polyline = L.polyline(latlngs, { color: '#d4880f', weight: 4 }).addTo(map);
-
-      // Start marker (green)
-      L.circleMarker([points[0]!.lat, points[0]!.lng], {
-        radius: 7, color: '#2e7d32', fillColor: '#2e7d32', fillOpacity: 1,
-      }).addTo(map);
-
-      // End marker (amber)
-      const last = points[points.length - 1]!;
-      L.circleMarker([last.lat, last.lng], {
-        radius: 7, color: '#d4880f', fillColor: '#d4880f', fillOpacity: 1,
-      }).addTo(map);
-
-      map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
-      this.mapInstance = map;
-    });
-
-    return mapContainer;
+    const routeMap = document.createElement('route-map') as HTMLElement & {
+      points: { lat: number; lng: number }[];
+    };
+    routeMap.points = points.map((p) => ({ lat: p.lat, lng: p.lng }));
+    return routeMap;
   }
 }
 
