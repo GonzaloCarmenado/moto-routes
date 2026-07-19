@@ -9,7 +9,28 @@ import { validatePhoto } from '../shared/services/photo-capture-adapter.service.
 import { extractPhotoLocation } from '../shared/services/photo-geolocation.service.js';
 
 /**
- * Añade una foto a una ruta, devolviendo tanto los metadatos como el objeto URL para mostrar.
+ * Convierte un File a base64 data URL para persistencia duradera.
+ */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Detecta Tauri.
+ */
+function isTauri(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+/**
+ * Añade una foto a una ruta con persistencia real.
+ * - Android: guarda archivo en appDataDir (ruta persistente), metadata en SQLite
+ * - Web: guarda foto como base64 data URL en MemoryPhotoRepository (localStorage)
  */
 export async function addPhotoToRoute(
   file: CaptureResult,
@@ -24,12 +45,24 @@ export async function addPhotoToRoute(
 
   const location = await extractPhotoLocation(file, undefined, routePoints);
 
-  // Create object URL for preview
-  const objectUrl = URL.createObjectURL(file);
+  let filePath: string;
+  let objectUrl: string;
+
+  if (isTauri()) {
+    // Android: guardar en appDataDir, obtener ruta del sistema de archivos
+    const { savePhotoFile } = await import('../shared/services/photo-storage.service.js');
+    filePath = await savePhotoFile(file);
+    // Blob URL temporal para visualización inmediata
+    objectUrl = URL.createObjectURL(file);
+  } else {
+    // Web: guardar como base64 data URL (persistente en localStorage)
+    filePath = await fileToBase64(file);
+    objectUrl = filePath; // data URL se puede usar directamente como src
+  }
 
   const photo: CreatePhoto = {
     routeId,
-    filePath: objectUrl, // Store blob URL for immediate preview
+    filePath,
     latitude: location?.lat ?? null,
     longitude: location?.lng ?? null,
     capturedAt: new Date().toISOString(),
