@@ -121,6 +121,18 @@
 
 Verificado en navegador real: consola sin errores de MapLibre, trazado ámbar visible entre los marcadores de inicio y fin siguiendo los puntos GPS simulados (captura confirmada). Los 4 tests de `route-map.element.spec.ts` siguen en verde con jsdom (que no reproduce este bug — la limitación de `getComputedStyle` para *custom properties* solo se manifiesta en navegadores reales, por eso no se detectó con Vitest y requirió verificación manual en Cypress).
 
+## 🐛 Corrección adicional: color de línea correcto pero apagado (ronda 2)
+
+Tras el fix anterior, el usuario reportó que la línea "se ve como negra" sobre el mapa oscuro. Investigación en navegador real (Cypress + `getImageData` sobre un canvas 1×1) reveló que:
+
+- El fix de la sonda `<span>` con `color` **funcionaba**, pero navegadores Chromium recientes (confirmado: Chrome 150) **ya no degradan `getComputedStyle().color` a `rgb()`** para colores definidos en `oklch()` — devuelven `"oklch(0.74 0.17 48)"` (solo normalizan `74%` → `0.74`, siguen en formato `oklch()`).
+- MapLibre **acepta** esta forma numérica sin lanzar error (a diferencia de la forma con `%`), pero su conversión interna de OKLCH a RGB para el *shader* WebGL es aproximada/incorrecta, produciendo un naranja apagado y de bajo contraste — de ahí la percepción de "negro" del usuario. Confirmado comparando la conversión real del navegador (`rgb(254, 132, 61)`, un naranja vivo) contra lo que se veía en pantalla.
+- Ni `getComputedStyle` ni `canvas.fillStyle` (leído como *string*) bajan a `rgb()` de forma fiable en este entorno; la única conversión determinista es **leer los píxeles ya renderizados** de un canvas 1×1 vía `getImageData()`, que siempre son bytes 0-255 sin ambigüedad de sintaxis.
+
+**Fix aplicado**: `resolveToken()` ahora, tras obtener el color computado literal (`oklch(0.74 0.17 48)`), lo pinta en un canvas 1×1 oculto y lee el píxel resultante con `getImageData()`, construyendo un string `rgb(r, g, b)` explícito que se pasa a MapLibre. Esto elimina cualquier dependencia de cómo MapLibre interprete funciones de color modernas — siempre recibe RGB plano. En jsdom (tests unitarios), `canvas.getContext('2d')` no está implementado y devuelve `null`; el código cae al `fallback` existente sin romper ningún test (9/9 en verde).
+
+Verificado en navegador real: cero errores de consola, línea renderizada con el naranja vivo correcto (contraste claramente mejorado frente a la ronda anterior, captura confirmada). El **token de diseño no cambió** (sigue siendo `--amber`, el definido en `specs/ui/design-system.md`); lo que se corrigió es la conversión de ese token a un formato que MapLibre interpreta con fidelidad.
+
 ## 🐛 Bug no relacionado detectado y corregido durante la verificación
 
 Durante la verificación manual en navegador (fuera del alcance de los AC de esta spec) se detectó que **`<route-list>` no se refrescaba al navegar a "Rutas" tras grabar/simular una ruta en la misma sesión** (visible sobre todo en modo web, con `MemoryRouteRepository`, porque no hay recarga de página entre grabar y consultar). Causa: `route-list.element.ts` solo recargaba datos en su setter `repository` y en el primer `connectedCallback`; `nav-bar` dispara `nav-rutas` en `window`, pero nadie lo escuchaba para forzar un refetch — `app-root` solo hace show/hide del elemento, nunca lo remonta.
