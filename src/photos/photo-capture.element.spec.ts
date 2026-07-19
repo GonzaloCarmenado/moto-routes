@@ -28,8 +28,9 @@ describe('<photo-capture>', () => {
     const btn = el.shadowRoot?.querySelector('button');
     btn?.click();
 
-    const menu = el.shadowRoot?.querySelector('[popover]');
+    const menu = el.shadowRoot?.querySelector('.photo-menu');
     expect(menu).not.toBeNull();
+    expect(menu!.classList.contains('menu-open')).toBe(true);
 
     const items = menu?.querySelectorAll('[data-cy="photo-menu-camera"], [data-cy="photo-menu-gallery"]');
     expect(items?.length).toBe(2);
@@ -65,18 +66,15 @@ describe('<photo-capture>', () => {
     expect(event.detail.source).toBe('gallery');
   });
 
-  it('should close menu when clicking outside', () => {
+  it('should keep menu open when clicking outside (manual popover)', () => {
     const btn = el.shadowRoot?.querySelector('button');
     btn?.click();
 
-    // Click outside
+    // Click outside — menu should stay open (only closes on Escape or selection)
     document.body.click();
 
-    const menu = el.shadowRoot?.querySelector('[popover]') as HTMLElement | null;
-    // After click outside, popover should be hidden
-    // Using the popover API: menu.hidden or !menu.matches(':popover-open')
-    // Since jsdom may not fully support popover, we check the attribute
-    expect(menu?.hasAttribute('open')).toBe(false);
+    const menu = el.shadowRoot?.querySelector('.photo-menu') as HTMLElement | null;
+    expect(menu?.classList.contains('menu-open')).toBe(true);
   });
 
   it('should close menu when pressing Escape', () => {
@@ -86,8 +84,8 @@ describe('<photo-capture>', () => {
     // Dispatch escape key
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 
-    const menu = el.shadowRoot?.querySelector('[popover]') as HTMLElement | null;
-    expect(menu?.hasAttribute('open')).toBe(false);
+    const menu = el.shadowRoot?.querySelector('.photo-menu') as HTMLElement | null;
+    expect(menu?.classList.contains('menu-open')).toBe(false);
   });
 
   it('should accept disabled property and disable the button', async () => {
@@ -106,7 +104,7 @@ describe('<photo-capture>', () => {
     // Click should not open menu since button is disabled
     btn?.click();
 
-    const menu = el.shadowRoot?.querySelector('[popover]');
-    expect(menu?.hasAttribute('open')).toBe(false);
+    const menu = el.shadowRoot?.querySelector('.photo-menu');
+    expect(menu?.classList.contains('menu-open')).toBe(false);
   });
 });

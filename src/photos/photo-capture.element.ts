@@ -1,9 +1,6 @@
 import { BaseElement } from '../shared/base-element.js';
 import { PHOTO_CAPTURE_EVENT, type CaptureSource, type PhotoCaptureEventDetail } from './photo-capture.types.js';
-
-const STYLES = `
-  @import './photo-capture.element.css';
-`;
+import styles from './photo-capture.element.css?inline';
 
 /** Icono de cámara SVG */
 const CAMERA_ICON = `
@@ -53,20 +50,16 @@ export class PhotoCaptureElement extends BaseElement {
 
   connectedCallback(): void {
     this.render();
-    this.menuEl = this.shadowRoot?.querySelector('[popover]') as HTMLElement | null;
+    this.menuEl = this.shadowRoot?.querySelector('.photo-menu') as HTMLElement | null;
     this.button = this.shadowRoot?.querySelector('.photo-btn') as HTMLElement | null;
 
     this.button?.addEventListener('click', this.onButtonClick.bind(this));
-
-    // Close menu on outside click
-    document.addEventListener('click', this.onOutsideClick.bind(this));
 
     // Close menu on Escape
     document.addEventListener('keydown', this.onKeyDown.bind(this));
   }
 
   disconnectedCallback(): void {
-    document.removeEventListener('click', this.onOutsideClick.bind(this));
     document.removeEventListener('keydown', this.onKeyDown.bind(this));
   }
 
@@ -80,18 +73,19 @@ export class PhotoCaptureElement extends BaseElement {
   protected render(): void {
     if (!this.shadowRoot) return;
 
+    const disabledAttr = this._disabled ? 'disabled' : '';
     this.shadowRoot.innerHTML = `
-      <style>${STYLES}</style>
+      <style>${styles}</style>
       <button
         class="photo-btn"
         data-cy="photo-add-button"
-        ?disabled="${this._disabled}"
+        ${disabledAttr}
         aria-label="Añadir foto"
         title="Añadir foto"
       >
         ${CAMERA_ICON}
       </button>
-      <div popover id="photo-menu" data-cy="photo-menu">
+      <div class="photo-menu" id="photo-menu" data-cy="photo-menu">
         <button
           class="menu-item"
           data-cy="photo-menu-camera"
@@ -114,47 +108,38 @@ export class PhotoCaptureElement extends BaseElement {
     if (this._disabled) return;
 
     event.stopPropagation();
-    const popover = this.shadowRoot?.querySelector('[popover]') as HTMLElement | null;
-    if (!popover) return;
+    const menu = this.menuEl;
+    if (!menu) return;
 
-    // Toggle popover open state
-    const isOpen = popover.hasAttribute('open');
+    const isOpen = menu.classList.contains('menu-open');
     if (isOpen) {
-      popover.removeAttribute('open');
+      menu.classList.remove('menu-open');
     } else {
-      popover.setAttribute('open', '');
+      menu.classList.add('menu-open');
 
-      // Add click listeners to menu items
-      const cameraBtn = popover.querySelector('[data-cy="photo-menu-camera"]');
-      const galleryBtn = popover.querySelector('[data-cy="photo-menu-gallery"]');
+      const cameraBtn = menu.querySelector('[data-cy="photo-menu-camera"]');
+      const galleryBtn = menu.querySelector('[data-cy="photo-menu-gallery"]');
 
-      cameraBtn?.addEventListener('click', () => this.selectSource('camera'), { once: true });
-      galleryBtn?.addEventListener('click', () => this.selectSource('gallery'), { once: true });
+      const onCamera = () => { this.selectSource('camera'); };
+      const onGallery = () => { this.selectSource('gallery'); };
+      cameraBtn?.addEventListener('click', onCamera, { once: true });
+      galleryBtn?.addEventListener('click', onGallery, { once: true });
     }
   }
 
   private selectSource(source: CaptureSource): void {
     this.closeMenu();
-
     this.emit<PhotoCaptureEventDetail>(PHOTO_CAPTURE_EVENT, { source });
   }
 
   private closeMenu(): void {
-    const popover = this.shadowRoot?.querySelector('[popover]') as HTMLElement | null;
-    popover?.removeAttribute('open');
-  }
-
-  private onOutsideClick(event: Event): void {
-    if (!this.menuEl?.hasAttribute('open')) return;
-
-    const path = event.composedPath();
-    if (!path.includes(this)) {
-      this.closeMenu();
+    if (this.menuEl) {
+      this.menuEl.classList.remove('menu-open');
     }
   }
 
   private onKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && this.menuEl?.hasAttribute('open')) {
+    if (event.key === 'Escape' && this.menuEl?.classList.contains('menu-open')) {
       this.closeMenu();
     }
   }
