@@ -1,7 +1,7 @@
 import styles from './route-map.element.css?inline';
 import maplibreStyles from 'maplibre-gl/dist/maplibre-gl.css?inline';
 import * as maplibregl from 'maplibre-gl';
-import { toGeoJSON, computeBounds } from './route-map.transform.js';
+import { toGeoJSON, computeBounds, oklchStringToRgb } from './route-map.transform.js';
 import type { RouteMapPoint } from './route-map.transform.js';
 
 const DARK_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
@@ -123,19 +123,35 @@ class RouteMap extends HTMLElement {
   }
 
   // MapLibre valida sus paint properties con su propio parser de color (no el
-  // motor CSS del navegador), que no entiende funciones modernas como oklch().
-  // getComputedStyle().getPropertyValue() en un custom property devuelve el
-  // texto literal tal cual se escribió (p.ej. "oklch(74% 0.17 48)"), sin
-  // normalizar. Para obtener un color que MapLibre sí entienda (rgb/rgba),
-  // se aplica el token a una propiedad CSS real ("color") en un elemento
-  // sonda: ahí el navegador sí computa y serializa el color final.
+  // motor CSS del navegador). getComputedStyle() en un custom property
+  // devuelve el oklch() literal (los navegadores ya no lo degradan a rgb()).
+  // Leer píxeles de un canvas (getImageData) para forzar la conversión NO es
+  // fiable: las protecciones anti-fingerprinting de algunos navegadores
+  // (ej. Opera GX, extensiones de privacidad) alteran o bloquean esa lectura,
+  // devolviendo negro. En su lugar, se convierte oklch→rgb con matemáticas
+  // puras (route-map.transform.ts), sin depender de ninguna API de canvas.
+  //
+  // La sonda se inserta dentro de this.shadowRoot (NO como hijo ligero de
+  // this): un hijo ligero de un host con shadow DOM y sin <slot> que lo
+  // recoja no forma parte del árbol renderizado ("flat tree"), y la
+  // herencia de custom properties para elementos no incluidos ahí es
+  // inconsistente entre navegadores (confirmado: devolvía rgb(0,0,0) en
+  // Chrome/incógnito real, aunque funcionaba en el Chrome de los tests).
+  // Insertarla en el shadowRoot la coloca junto a los elementos que sí
+  // heredan el token correctamente (p.ej. los marcadores).
   private resolveToken(name: string, fallback: string): string {
+    const root = this.shadowRoot;
+    if (!root) return fallback;
     const probe = document.createElement('span');
     probe.style.setProperty('color', `var(${name})`);
-    this.appendChild(probe);
-    const resolved = getComputedStyle(probe).color.trim();
+    root.appendChild(probe);
+    const literal = getComputedStyle(probe).color.trim();
     probe.remove();
-    return resolved.length > 0 ? resolved : fallback;
+    if (literal.length === 0) return fallback;
+    if (literal.startsWith('oklch(')) {
+      return oklchStringToRgb(literal) ?? fallback;
+    }
+    return literal;
   }
 }
 

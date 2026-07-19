@@ -1,5 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { toGeoJSON, computeBounds } from './route-map.transform.js';
+import { toGeoJSON, computeBounds, oklchStringToRgb } from './route-map.transform.js';
+
+function parseRgb(rgb: string): [number, number, number] {
+  const match = /rgb\((\d+), (\d+), (\d+)\)/.exec(rgb);
+  if (!match) throw new Error(`Not an rgb() string: ${rgb}`);
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function expectCloseRgb(actual: string, expected: [number, number, number], tolerance = 2): void {
+  const [r, g, b] = parseRgb(actual);
+  const [er, eg, eb] = expected;
+  expect(Math.abs(r - er)).toBeLessThanOrEqual(tolerance);
+  expect(Math.abs(g - eg)).toBeLessThanOrEqual(tolerance);
+  expect(Math.abs(b - eb)).toBeLessThanOrEqual(tolerance);
+}
 
 describe('toGeoJSON', () => {
   it('should convert points to a LineString with [lng, lat] order', () => {
@@ -57,5 +71,43 @@ describe('computeBounds', () => {
     const bounds = computeBounds([]);
 
     expect(bounds).toBeNull();
+  });
+});
+
+describe('oklchStringToRgb', () => {
+  it('should convert oklch with percent lightness to the browser-verified rgb value', () => {
+    // Oráculo: valor real medido en Chrome via canvas getImageData sobre
+    // el token --amber (oklch(74% 0.17 48)) en condiciones sin bloqueo.
+    const rgb = oklchStringToRgb('oklch(74% 0.17 48)');
+    expect(rgb).not.toBeNull();
+    expectCloseRgb(rgb!, [254, 132, 61]);
+  });
+
+  it('should convert oklch with decimal lightness (browser-normalized form) to the same rgb value', () => {
+    const rgb = oklchStringToRgb('oklch(0.74 0.17 48)');
+    expect(rgb).not.toBeNull();
+    expectCloseRgb(rgb!, [254, 132, 61]);
+  });
+
+  it('should return the same result for both percent and decimal forms', () => {
+    const withPercent = oklchStringToRgb('oklch(74% 0.17 48)');
+    const withDecimal = oklchStringToRgb('oklch(0.74 0.17 48)');
+    expect(withPercent).toBe(withDecimal);
+  });
+
+  it('should return null for a non-oklch string', () => {
+    expect(oklchStringToRgb('rgb(254, 132, 61)')).toBeNull();
+    expect(oklchStringToRgb('#d4880f')).toBeNull();
+    expect(oklchStringToRgb('')).toBeNull();
+  });
+
+  it('should clamp out-of-gamut channels instead of producing invalid values', () => {
+    const rgb = oklchStringToRgb('oklch(0.9 0.4 200)');
+    expect(rgb).not.toBeNull();
+    const [r, g, b] = parseRgb(rgb!);
+    for (const channel of [r, g, b]) {
+      expect(channel).toBeGreaterThanOrEqual(0);
+      expect(channel).toBeLessThanOrEqual(255);
+    }
   });
 });
