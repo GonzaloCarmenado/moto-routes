@@ -40,7 +40,7 @@ class CockpitView extends BaseElement {
   private arcCircle: SVGCircleElement | null = null;
   private readonly LONG_PRESS_MS = 1500;
   private readonly ARC_CIRC = 377;
-  private photoRepo: IPhotoRepository = new MemoryPhotoRepository();
+  private readonly photoRepo: IPhotoRepository = new MemoryPhotoRepository();
 
   constructor() {
     super();
@@ -283,7 +283,7 @@ class CockpitView extends BaseElement {
 
     // Photo capture button - only visible during recording or paused
     if (isActive) {
-      const photoCapture = document.createElement('photo-capture') as HTMLElement;
+      const photoCapture = document.createElement('photo-capture');
       photoCapture.setAttribute('data-cy', 'cockpit-photo-capture');
       photoCapture.addEventListener(PHOTO_CAPTURE_EVENT, ((event: CustomEvent<PhotoCaptureEventDetail>) => {
         void this.handlePhotoCapture(event.detail.source);
@@ -365,7 +365,7 @@ class CockpitView extends BaseElement {
       animation: fadeInOut 3s ease forwards;
     `;
     document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+    setTimeout(() => { toast.remove(); }, 3000);
   }
 
   private buildArc(): ProgressArc {

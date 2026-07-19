@@ -66,8 +66,10 @@ export async function extractPhotoLocation(
     const exifr = await import('exifr');
     const gps = await exifr.parse(file, { gps: true }) as ExifGpsResult | undefined;
 
-    if (gps && isValidCoordinates(gps.latitude, gps.longitude)) {
-      return { lat: gps.latitude, lng: gps.longitude };
+    const glat = gps?.latitude;
+    const glng = gps?.longitude;
+    if (glat != null && glng != null && isValidCoordinates(glat, glng)) {
+      return { lat: glat, lng: glng };
     }
   } catch {
     // Si exifr falla o no está disponible, continuar con fallbacks

@@ -7,7 +7,6 @@ import type { Photo, CreatePhoto } from '../models/photo.types.js';
  */
 export class MemoryPhotoRepository implements IPhotoRepository {
   private photos: Photo[] = [];
-  private nextId = 1;
 
   async add(photo: CreatePhoto): Promise<Photo> {
     const id = crypto.randomUUID();

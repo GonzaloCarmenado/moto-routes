@@ -11,13 +11,19 @@ import { MemoryPhotoRepository } from '../shared/repositories/memory-photo.repos
 import { captureFromCamera, pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
 import { addPhotoToRoute } from './route-detail-photo.service.js';
 
+/**
+ * Tipo que asocia una foto con su URL de objeto para mostrar en UI.
+ */
+interface PhotoWithUrl extends Photo {
+  objectUrl: string;
+}
+
 class RouteDetail extends HTMLElement {
   private _repository: IRouteRepository | null = null;
   private _routeId: string | null = null;
-  private _photoRepo: IPhotoRepository = new MemoryPhotoRepository();
-  private _photos: Photo[] = [];
+  private readonly _photoRepo: IPhotoRepository = new MemoryPhotoRepository();
+  private _photos: PhotoWithUrl[] = [];
   private _points: { lat: number; lng: number }[] = [];
-  private _photoViewerIndex = 0;
 
   set repository(repo: IRouteRepository | null) {
     this._repository = repo;
@@ -47,6 +53,16 @@ class RouteDetail extends HTMLElement {
     }
   }
 
+  disconnectedCallback(): void {
+    this.revokePhotoUrls();
+  }
+
+  private revokePhotoUrls(): void {
+    for (const p of this._photos) {
+      URL.revokeObjectURL(p.objectUrl);
+    }
+  }
+
   private async fetchAndRender(): Promise<void> {
     if (!this._repository || !this._routeId) return;
     const [route, points, photos] = await Promise.all([
@@ -55,7 +71,13 @@ class RouteDetail extends HTMLElement {
       this._photoRepo.getByRouteId(this._routeId),
     ]);
     this._points = points.map((p) => ({ lat: p.lat, lng: p.lng }));
-    this._photos = photos;
+    // Convert photos to PhotoWithUrl — in memory they don't have real URLs,
+    // so we create placeholder URLs (the actual file data is stored separately)
+    this.revokePhotoUrls();
+    this._photos = photos.map((p) => ({
+      ...p,
+      objectUrl: p.filePath, // In MemoryPhotoRepository, filePath could be a data URL
+    }));
     this.render(route, this._points);
   }
 
@@ -163,7 +185,7 @@ class RouteDetail extends HTMLElement {
     fragment.appendChild(photosLabel);
 
     // Botón para añadir foto
-    const photoCapture = document.createElement('photo-capture') as HTMLElement;
+    const photoCapture = document.createElement('photo-capture');
     photoCapture.setAttribute('data-cy', 'detail-photo-capture');
     photoCapture.setAttribute('style', 'margin-bottom: 12px;');
     photoCapture.addEventListener(PHOTO_CAPTURE_EVENT, ((event: CustomEvent<PhotoCaptureEventDetail>) => {
@@ -171,7 +193,7 @@ class RouteDetail extends HTMLElement {
     }) as EventListener);
     fragment.appendChild(photoCapture);
 
-    // Galería de fotos
+    // Galería de fotos con imágenes reales
     if (this._photos.length === 0) {
       const placeholder = document.createElement('div');
       placeholder.className = 'photo-placeholder';
@@ -188,11 +210,18 @@ class RouteDetail extends HTMLElement {
         const thumb = document.createElement('div');
         thumb.className = 'photo-thumbnail';
         thumb.setAttribute('data-cy', 'photo-thumbnail');
-        thumb.textContent = '📷';
-        thumb.title = new Date(photo.capturedAt).toLocaleString('es-ES');
-        thumb.addEventListener('click', () => {
-          this.openViewer(i);
-        });
+
+        const img = document.createElement('img');
+        img.src = photo.objectUrl;
+        img.alt = `Foto ${i + 1}`;
+        img.style.cssText = `
+          width: 100%; height: 100%; object-fit: cover;
+          border-radius: var(--r-sm, 8px);
+        `;
+        img.loading = 'lazy';
+        img.addEventListener('click', () => { this.openViewer(i); });
+        thumb.appendChild(img);
+
         gallery.appendChild(thumb);
       }
 
@@ -209,13 +238,25 @@ class RouteDetail extends HTMLElement {
       ? await captureFromCamera()
       : await pickFromGallery();
 
-    const result = await addPhotoToRoute(file, this._routeId, this._photoRepo, this._points);
+    // Store the file as object URL before persisting
+    if (file) {
+      const objectUrl = URL.createObjectURL(file);
+      const result = await addPhotoToRoute(file, this._routeId, this._photoRepo, this._points);
 
-    if (result) {
-      // Refresh photos and re-render the gallery
-      this._photos = await this._photoRepo.getByRouteId(this._routeId);
-      // Re-render the detail section (not full page)
-      this.rerenderPhotosSection();
+      if (result) {
+        // Refresh photos with the new objectUrl
+        this._photos = (await this._photoRepo.getByRouteId(this._routeId)).map((p) => ({
+          ...p,
+          objectUrl: p.filePath,
+        }));
+        // Override the last photo's URL with the actual blob URL
+        if (this._photos.length > 0) {
+          this._photos[this._photos.length - 1]!.objectUrl = objectUrl;
+        }
+        this.rerenderPhotosSection();
+      } else {
+        URL.revokeObjectURL(objectUrl);
+      }
     }
   }
 
@@ -226,34 +267,23 @@ class RouteDetail extends HTMLElement {
     const detail = root.querySelector('.detail-content');
     if (!detail) return;
 
-    // Remove old photos section (last child of content)
-    const oldSection = detail.querySelector('.section-label')?.parentElement
-      || detail.lastElementChild;
-    if (oldSection) {
-      // We need to remove the old photos section more precisely
-      const labels = detail.querySelectorAll('.section-label');
-      const lastLabel = labels[labels.length - 1];
-      if (lastLabel) {
-        // Remove from lastLabel to end
-        let el = lastLabel.nextSibling;
-        while (el) {
-          const next = el.nextSibling;
-          el.remove();
-          el = next;
-        }
-        lastLabel.remove();
+    const labels = detail.querySelectorAll('.section-label');
+    const lastLabel = labels[labels.length - 1];
+    if (lastLabel) {
+      let el: ChildNode | null = lastLabel.nextSibling;
+      while (el) {
+        const next = el.nextSibling;
+        el.remove();
+        el = next;
       }
+      lastLabel.remove();
     }
 
-    // Append new photos section
     const newSection = this.buildPhotosSection();
     detail.appendChild(newSection);
   }
 
   private openViewer(index: number): void {
-    this._photoViewerIndex = index;
-
-    // Create a simple lightbox
     const viewer = document.createElement('div');
     viewer.className = 'photo-viewer-overlay';
     viewer.setAttribute('data-cy', 'photo-viewer');
@@ -261,30 +291,39 @@ class RouteDetail extends HTMLElement {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.95); z-index: 9999;
       display: flex; align-items: center; justify-content: center;
-      flex-direction: column;
     `;
 
     const closeBtn = document.createElement('button');
     closeBtn.setAttribute('data-cy', 'photo-viewer-close');
     closeBtn.textContent = '✕';
     closeBtn.style.cssText = `
-      position: absolute; top: 16px; right: 16px;
-      width: 56px; height: 56px;
-      background: transparent; border: none; color: white;
-      font-size: 24px; cursor: pointer; z-index: 10;
+      position: absolute; top: 16px; right: 16px; z-index: 10;
+      width: 56px; height: 56px; background: transparent; border: none;
+      color: white; font-size: 28px; cursor: pointer;
     `;
-    closeBtn.addEventListener('click', () => viewer.remove());
+    closeBtn.addEventListener('click', () => { viewer.remove(); });
 
-    const img = document.createElement('div');
+    const photo = this._photos[index];
+    if (!photo) return;
+
+    const img = document.createElement('img');
+    img.src = photo.objectUrl;
+    img.alt = `Foto ${index + 1}`;
     img.style.cssText = `
-      color: var(--amber, #e8a838);
-      font-size: 64px; text-align: center;
+      max-width: 95%; max-height: 85%; object-fit: contain;
+      border-radius: 4px;
     `;
-    img.textContent = '📷';
-    img.innerHTML += `<br><span style="font-size: 16px; color: #888;">Foto ${index + 1} de ${this._photos.length}</span>`;
+
+    const counter = document.createElement('div');
+    counter.style.cssText = `
+      position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%);
+      color: #888; font-size: 14px; font-family: var(--font-ui, Barlow, sans-serif);
+    `;
+    counter.textContent = `${index + 1} de ${this._photos.length}`;
 
     viewer.appendChild(closeBtn);
     viewer.appendChild(img);
+    viewer.appendChild(counter);
     document.body.appendChild(viewer);
   }
 }

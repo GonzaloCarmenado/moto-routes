@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock virtual para los plugins Tauri que no están disponibles en npm
 vi.mock('@tauri-apps/plugin-camera', () => ({}));
