@@ -9,8 +9,12 @@ const ROUTE_SOURCE_ID = 'route-line';
 const ROUTE_LAYER_ID = 'route-line-layer';
 const AMBER_FALLBACK = '#d4880f';
 
+import type { Photo } from '../models/photo.types.js';
+import { addPhotoMarkers } from './route-map-photos.js';
+
 class RouteMap extends HTMLElement {
   private _points: RouteMapPoint[] = [];
+  private _photos: Photo[] = [];
   private mapInstance: maplibregl.Map | null = null;
 
   set points(value: RouteMapPoint[]) {
@@ -20,6 +24,18 @@ class RouteMap extends HTMLElement {
 
   get points(): RouteMapPoint[] {
     return this._points;
+  }
+
+  set photos(value: Photo[]) {
+    this._photos = value;
+    if (this.isConnected && this.mapInstance) {
+      // Just add markers without re-initializing the map
+      addPhotoMarkers(this.mapInstance, this._photos);
+    }
+  }
+
+  get photos(): Photo[] {
+    return this._photos;
   }
 
   constructor() {

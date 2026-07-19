@@ -1,6 +1,16 @@
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@tauri-apps/plugin-camera': resolve(__dirname, 'src/__mocks__/@tauri-apps/plugin-camera'),
+      '@tauri-apps/plugin-dialog': resolve(__dirname, 'src/__mocks__/@tauri-apps/plugin-dialog'),
+    },
+  },
   test: {
     globals: true,
     environment: 'jsdom',
