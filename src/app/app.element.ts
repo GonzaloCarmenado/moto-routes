@@ -16,7 +16,7 @@ class AppRoot extends HTMLElement {
   private readonly onGrabar = (): void => { this.showView('cockpit'); };
   private readonly onRutas = (): void => { this.showView('routes'); };
   private readonly onViewRoute = (e: Event): void => {
-    const routeId = (e as CustomEvent).detail.routeId as string;
+    const routeId = (e as CustomEvent<{ routeId: string }>).detail.routeId;
     if (this.routeDetailEl) {
       (this.routeDetailEl as HTMLElement & { routeId: string }).routeId = routeId;
       this.showView('detail');

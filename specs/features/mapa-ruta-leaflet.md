@@ -1,5 +1,7 @@
 # Feature: Mapa de Ruta con Leaflet + OpenStreetMap
 
+> ⚠️ **SUPERSEDED** por [`mapa-ruta-maplibre.md`](mapa-ruta-maplibre.md). Leaflet + OSM raster queda descartado a favor de MapLibre GL + OpenFreeMap (vector, gratis, sin key). Se conserva como referencia histórica.
+
 ## Descripción
 Reemplazar el SVG decorativo del `<route-detail>` por un mapa real interactivo usando Leaflet con tiles de OpenStreetMap. El mapa muestra el trazado de la ruta con los puntos GPS guardados en SQLite, marcador de inicio (verde) y fin (ámbar), y se centra automáticamente en los límites de la ruta.
 

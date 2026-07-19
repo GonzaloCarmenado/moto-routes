@@ -4,33 +4,32 @@ import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { Route } from '../shared/models/route.types.js';
 import './route-detail.element.js';
 
-// Mock Leaflet para tests
-vi.mock('leaflet', () => {
+// Mock MapLibre para tests (route-map.element.ts internamente instancia el mapa)
+vi.mock('maplibre-gl', () => {
   const mockMap = {
     remove: vi.fn(),
     fitBounds: vi.fn(),
-    setView: vi.fn().mockReturnThis(),
+    addSource: vi.fn(),
+    addLayer: vi.fn(),
+    on: vi.fn((event: string, cb: () => void) => {
+      if (event === 'load') cb();
+    }),
   };
-  const mockTileLayer = { addTo: vi.fn().mockReturnThis() };
-  const mockPolyline = { getBounds: vi.fn().mockReturnValue({}), addTo: vi.fn().mockReturnThis() };
-  const mockCircleMarker = { addTo: vi.fn().mockReturnThis() };
   const mapFn = vi.fn(() => mockMap);
+  const markerFn = vi.fn(() => ({
+    setLngLat: vi.fn().mockReturnThis(),
+    addTo: vi.fn().mockReturnThis(),
+  }));
   return {
-    default: {
-      map: mapFn,
-      tileLayer: vi.fn(() => mockTileLayer),
-      polyline: vi.fn(() => mockPolyline),
-      circleMarker: vi.fn(() => mockCircleMarker),
-    },
+    default: { Map: mapFn, Marker: markerFn },
     Map: mapFn,
-    TileLayer: vi.fn(() => mockTileLayer),
-    Polyline: vi.fn(() => mockPolyline),
-    CircleMarker: vi.fn(() => mockCircleMarker),
+    Marker: markerFn,
   };
 });
 
 async function waitRender(): Promise<void> {
-  await new Promise((r) => setTimeout(r, 10));
+  await new Promise<void>((resolve) => requestAnimationFrame(() => { resolve(); }));
+  await new Promise((r) => setTimeout(r, 0));
 }
 
 describe('route-detail', () => {
@@ -100,13 +99,14 @@ describe('route-detail', () => {
     document.body.removeChild(el);
   });
 
-  it('should render leaflet map container when route has GPS points', async () => {
+  it('should render a route-map element and pass it the loaded GPS points', async () => {
+    const points = [
+      { routeId: '', timestamp: Date.now(), lat: 40.4168, lng: -3.7038, alt: 650, speed: 0 },
+      { routeId: '', timestamp: Date.now() + 1000, lat: 40.4170, lng: -3.7035, alt: 650, speed: 10 },
+    ];
     const pointRoute = await repo.save(
       { duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' },
-      [
-        { routeId: '', timestamp: Date.now(), lat: 40.4168, lng: -3.7038, alt: 650, speed: 0 },
-        { routeId: '', timestamp: Date.now() + 1000, lat: 40.4170, lng: -3.7035, alt: 650, speed: 10 },
-      ],
+      points,
       [],
     );
 
@@ -117,12 +117,16 @@ describe('route-detail', () => {
     await waitRender();
 
     const root = el.shadowRoot!;
-    const mapContainer = root.querySelector('#map');
-    expect(mapContainer).not.toBeNull();
+    const routeMap = root.querySelector<HTMLElement & { points: { lat: number; lng: number }[] }>('route-map');
+    expect(routeMap).not.toBeNull();
+    expect(routeMap?.points).toEqual([
+      { lat: 40.4168, lng: -3.7038 },
+      { lat: 40.4170, lng: -3.7035 },
+    ]);
     document.body.removeChild(el);
   });
 
-  it('should show no-gps message when route has no points', async () => {
+  it('should render a route-map element with an empty points array when the route has no GPS points', async () => {
     const el = document.createElement('route-detail') as HTMLElement & { repository: IRouteRepository; routeId: string };
     el.repository = repo;
     el.routeId = savedRoute.id;
@@ -130,9 +134,9 @@ describe('route-detail', () => {
     await waitRender();
 
     const root = el.shadowRoot!;
-    const noGps = root.querySelector('.map-empty');
-    expect(noGps).not.toBeNull();
-    expect(noGps?.textContent).toContain('Sin datos de GPS');
+    const routeMap = root.querySelector<HTMLElement & { points: { lat: number; lng: number }[] }>('route-map');
+    expect(routeMap).not.toBeNull();
+    expect(routeMap?.points).toEqual([]);
     document.body.removeChild(el);
   });
 });
