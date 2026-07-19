@@ -115,13 +115,32 @@ export class PhotoCaptureElement extends BaseElement {
     if (isOpen) {
       menu.classList.remove('menu-open');
     } else {
+      // Position menu relative to button (use fixed positioning to avoid overflow)
+      const btnRect = this.button?.getBoundingClientRect();
+      if (btnRect) {
+        const estimatedMenuH = 100; // approximate height of two menu items
+        const estimatedMenuW = 180; // matches CSS min-width
+        let top = btnRect.top - estimatedMenuH - 4;
+        if (top < 4) {
+          top = btnRect.bottom + 4; // show below if not enough space above
+        }
+
+        // Align to button's left edge by default; flip to the button's right
+        // edge only if that would push the menu off the right side of the screen.
+        let left = btnRect.left;
+        if (left + estimatedMenuW > window.innerWidth - 4) {
+          left = Math.max(4, btnRect.right - estimatedMenuW);
+        }
+        menu.style.cssText += `top:${String(top)}px;left:${String(left)}px;right:auto;bottom:auto;`;
+      }
+
       menu.classList.add('menu-open');
 
       const cameraBtn = menu.querySelector('[data-cy="photo-menu-camera"]');
       const galleryBtn = menu.querySelector('[data-cy="photo-menu-gallery"]');
 
-      const onCamera = () => { this.selectSource('camera'); };
-      const onGallery = () => { this.selectSource('gallery'); };
+      const onCamera = (): void => { this.selectSource('camera'); };
+      const onGallery = (): void => { this.selectSource('gallery'); };
       cameraBtn?.addEventListener('click', onCamera, { once: true });
       galleryBtn?.addEventListener('click', onGallery, { once: true });
     }
