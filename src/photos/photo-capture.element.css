@@ -40,9 +40,7 @@
 
 /* Menu dropdown */
 .photo-menu {
-  position: absolute;
-  bottom: calc(var(--hitbox-min, 56px) + 8px);
-  right: 0;
+  position: fixed;
   background: var(--panel, #1e1e1e);
   border: 1px solid var(--line, #3a3a3a);
   border-radius: var(--r-md, 14px);
@@ -50,7 +48,7 @@
   display: none;
   flex-direction: column;
   gap: var(--space-1, 4px);
-  min-width: 160px;
+  min-width: 180px;
   box-shadow: var(--shadow-card, 0 4px 12px rgba(0, 0, 0, 0.4));
   z-index: 100;
 }

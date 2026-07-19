@@ -217,9 +217,12 @@ class RouteDetail extends HTMLElement {
         img.style.cssText = `
           width: 100%; height: 100%; object-fit: cover;
           border-radius: var(--r-sm, 8px);
+          cursor: pointer;
         `;
         img.loading = 'lazy';
         img.addEventListener('click', () => { this.openViewer(i); });
+        // Also handle click on the container for fallback
+        thumb.addEventListener('click', () => { this.openViewer(i); });
         thumb.appendChild(img);
 
         gallery.appendChild(thumb);
@@ -238,24 +241,16 @@ class RouteDetail extends HTMLElement {
       ? await captureFromCamera()
       : await pickFromGallery();
 
-    // Store the file as object URL before persisting
     if (file) {
-      const objectUrl = URL.createObjectURL(file);
       const result = await addPhotoToRoute(file, this._routeId, this._photoRepo, this._points);
 
       if (result) {
-        // Refresh photos with the new objectUrl
+        // Refresh photos — filePath now contains blob URL
         this._photos = (await this._photoRepo.getByRouteId(this._routeId)).map((p) => ({
           ...p,
           objectUrl: p.filePath,
         }));
-        // Override the last photo's URL with the actual blob URL
-        if (this._photos.length > 0) {
-          this._photos[this._photos.length - 1]!.objectUrl = objectUrl;
-        }
         this.rerenderPhotosSection();
-      } else {
-        URL.revokeObjectURL(objectUrl);
       }
     }
   }
