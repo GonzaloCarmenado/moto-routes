@@ -225,6 +225,7 @@
 }
 
 .control-btn .icon-record-dot { width: 22px; height: 22px; border-radius: 50%; background: var(--bezel); }
+.control-btn .icon-pause { display: flex; gap: 6px; }
 .control-btn .icon-pause-bar { width: 7px; height: 26px; border-radius: 3px; background: var(--ink); }
 .control-btn .icon-play {
   width: 0; height: 0;

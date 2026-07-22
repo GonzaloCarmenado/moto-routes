@@ -139,7 +139,7 @@ export function buildPauseButton(isActive: boolean, isPaused: boolean, onPauseRe
   btn.setAttribute('aria-label', isPaused ? 'Reanudar ruta' : 'Pausar ruta');
   btn.innerHTML = isPaused
     ? '<span class="icon-play"></span>'
-    : '<span style="display:flex; gap:6px;"><span class="icon-pause-bar"></span><span class="icon-pause-bar"></span></span>';
+    : '<span class="icon-pause"><span class="icon-pause-bar"></span><span class="icon-pause-bar"></span></span>';
   if (isActive) {
     btn.addEventListener('click', onPauseResume);
   } else {

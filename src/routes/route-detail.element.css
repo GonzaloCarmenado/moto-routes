@@ -30,6 +30,10 @@
   color: var(--amber);
 }
 
+.back-btn__arrow {
+  font-size: 18px;
+}
+
 /* Content */
 .detail-content {
   padding: 18px 22px 0;
@@ -179,4 +183,8 @@
   color: var(--ink-soft);
   font-size: 15px;
   padding: var(--space-7) var(--space-4);
+}
+.detail-photo-capture {
+  display: block;
+  margin-bottom: 12px;
 }

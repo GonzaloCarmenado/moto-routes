@@ -95,8 +95,12 @@
 
   /* Estados */
   --danger:       oklch(55% 0.18 30);
+  --danger-soft:  oklch(28% 0.05 30);     /* fondo tenue de error (toast) */
   --success:      oklch(65% 0.13 140);
   --warning:      oklch(75% 0.14 80);
+
+  /* Velo oscuro para overlays a pantalla completa (visor de fotos, etc.) */
+  --scrim:        oklch(14% 0.01 50 / 0.95);
 
   /* Tipografía */
   --font-display: "Roboto Slab", "Georgia", serif;               /* titulares, marca */
