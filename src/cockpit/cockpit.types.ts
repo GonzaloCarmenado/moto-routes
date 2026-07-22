@@ -31,6 +31,10 @@ export interface RouteMetadata {
 }
 
 export interface CockpitState {
+  /** ID pre-generado de la ruta en curso, asignado al iniciar la grabación.
+   * Permite asociar fotos capturadas durante la grabación a la ruta antes
+   * de que esta se persista al finalizar (stopRecording). */
+  routeId: string;
   status: RecordingStatus;
   currentSpeed: number;
   avgSpeed: number;

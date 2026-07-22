@@ -113,10 +113,10 @@ memory/                       # Sistema de memoria persistente
 - **Build**: tsc sin errores + cargo build exitoso + vite build exitoso + tauri build exitoso
 
 ## Estado Actual del Proyecto
-- **Fase**: Inicial - APK Android compilado
-- **Feature activo**: Persistencia de rutas (modelos, repositorio SQLite, almacenamiento)
-- **Último hito completado**: APK debug generado y funcional en dispositivo Android
-- **Próximo hito**: Visualización de datos guardados en BBDD
+- **Fase**: APK Android compilado y funcional, con persistencia de rutas y fotos verificada en dispositivo real
+- **Feature activo**: Fotos de ruta (`specs/features/fotos-ruta.md`) — 27 de 33 AC cumplidos y testeados (210 tests). Ver [[fotos-ruta-review]] para el detalle de revisión (`specs/features/fotos-ruta.review.md`, veredicto APPROVED WITH MINOR ISSUES).
+- **Último hito completado** (2026-07-22): Cierre de la ronda de `fotos-ruta` — ver [[ADR-021]]. Se arreglaron tres quality gates que estaban rotos sin que nadie se diera cuenta (ESLint fallaba en fatal parsing error sobre todos los `.spec.ts`, Clippy no compilaba por `clippy.toml` inválido, `cargo build`/`test` no arrancaban por un `icon.ico` corrupto), se subió el gate de cobertura de 70% a los 80% ya documentados (real: 85.71%), y se creó `CLAUDE.md` + `.claude/agents/` + `.claude/commands/` como equivalente nativo de Claude Code al setup de `.clinerules`/`agents/` para Cline+DeepSeek — ambos conviven sobre el mismo SDD.
+- **Próximo hito**: Issues abiertos de `fotos-ruta` (ver review): popup de foto en marcador individual del mapa (AC-015), desagrupación de clusters al hacer zoom (AC-018), swipe en el visor de fotos (AC-020), test del camino con GPS en EXIF real (AC-005/006)
 
 ## Desarrollo Web (Vite)
 Para lanzar el proyecto en modo web (sin Tauri), usar:

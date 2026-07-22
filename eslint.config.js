@@ -2,7 +2,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist/', 'node_modules/', 'coverage/', 'src-tauri/', 'cypress/', 'scripts/'],
+    ignores: ['dist/', 'node_modules/', 'coverage/', 'src-tauri/', 'cypress/', 'scripts/', '**/*.d.ts'],
   },
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylistic,
@@ -38,6 +38,16 @@ export default tseslint.config(
       'max-depth': ['warn', { max: 3 }],
       'max-params': ['warn', { max: 4 }],
       'max-statements': ['warn', { max: 25 }],
+    },
+  },
+  {
+    // Los ficheros de test agrupan muchos `it()` en un mismo `describe`, y `expect(obj.method)`
+    // es un patrón idiomático de Vitest — ninguno de los dos indica complejidad real de producción.
+    files: ['**/*.spec.ts'],
+    rules: {
+      'max-lines': 'off',
+      'max-lines-per-function': 'off',
+      '@typescript-eslint/unbound-method': 'off',
     },
   },
 );

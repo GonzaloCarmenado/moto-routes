@@ -1,12 +1,20 @@
 import { BaseElement } from '../shared/base-element.js';
-import { createCockpitService, type CockpitService, type GpsProvider, type StorageProvider } from './cockpit.service.js';
-import { formatSpeed, formatDuration } from './cockpit.transform.js';
+import { createCockpitService, createBrowserGpsProvider, type CockpitService, type StorageProvider } from './cockpit.service.js';
+import { getCockpitDisplayValues, getStatusChipClass, getStatusChipLabel } from './cockpit.transform.js';
 import type { CockpitState } from './cockpit.types.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
+import type { IPhotoRepository } from '../shared/models/photo.repository.js';
+import { createPhotoRepository } from '../shared/services/photo-storage.service.js';
+import '../photos/photo-capture.element.js';
+import type { PhotoCaptureElement } from '../photos/photo-capture.element.js';
+import { PHOTO_CAPTURE_EVENT, type PhotoCaptureEventDetail } from '../photos/photo-capture.types.js';
+import { captureFromCamera, pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
+import { processPhotoCapture } from './cockpit-photo.service.js';
+import { toErrorMessage } from '../shared/utils/errors.js';
+import { showToast } from '../shared/utils/toast.js';
 import { SqliteRouteRepository } from '../shared/repositories/sqlite-route.repository.js';
 import { createSqliteDb } from '../shared/repositories/sqlite-route.factory.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
-import { simulateRecording } from '../shared/services/route-simulator.js';
 import {
   buildHeader,
   buildSpeedDisplay,
@@ -16,18 +24,10 @@ import {
   buildControls,
   buildInvisibleToggle,
   buildGpsOverlay,
-  buildSimulateButton,
+  updateLiveDisplay,
   type ProgressArc,
 } from './cockpit.render.js';
 import styles from './cockpit.element.css?inline';
-
-interface CockpitDisplayValues {
-  speed: string;
-  avgSpeed: string;
-  dist: string;
-  time: string;
-  alt: string;
-}
 
 class CockpitView extends BaseElement {
   private service: CockpitService | null = null;
@@ -35,6 +35,15 @@ class CockpitView extends BaseElement {
   private arcCircle: SVGCircleElement | null = null;
   private readonly LONG_PRESS_MS = 1500;
   private readonly ARC_CIRC = 377;
+  private photoRepo: IPhotoRepository | null = null;
+  private photoCaptureEl: PhotoCaptureElement | null = null;
+  private lastStatus: CockpitState['status'] | null = null;
+  private lastInvisibleMode: boolean | null = null;
+
+  private async getPhotoRepo(): Promise<IPhotoRepository> {
+    this.photoRepo ??= await createPhotoRepository();
+    return this.photoRepo;
+  }
 
   constructor() {
     super();
@@ -48,7 +57,17 @@ class CockpitView extends BaseElement {
   private async initAndRender(): Promise<void> {
     await this.initService();
     this.render();
+    this.syncRenderSignature();
     void this.service?.checkGpsPermission();
+  }
+
+  /** Recuerda los campos "estructurales" del último render completo, para que el
+   * listener de estado sepa si un cambio necesita reconstruir el DOM o solo
+   * actualizar los números en sitio (ver updateLiveValues). */
+  private syncRenderSignature(): void {
+    const state = this.service?.getCurrentState();
+    this.lastStatus = state?.status ?? null;
+    this.lastInvisibleMode = state?.invisibleMode ?? null;
   }
 
   disconnectedCallback(): void {
@@ -65,7 +84,7 @@ class CockpitView extends BaseElement {
   }
 
   private async initService(): Promise<void> {
-    const gps = this.createGpsProvider();
+    const gps = createBrowserGpsProvider();
     const storage: StorageProvider = {
       save: (_path: string, _data: string): Promise<void> => {
         return Promise.resolve();
@@ -81,50 +100,27 @@ class CockpitView extends BaseElement {
       }
     }
     this.service = createCockpitService(gps, storage, this.repo);
-    this.service.subscribe(() => {
-      this.render();
+    this.service.subscribe((state) => {
+      // El tick del cronómetro y cada punto GPS notifican una vez por segundo aprox.
+      // Reconstruir todo el DOM en cada uno de esos eventos destruía <photo-capture>
+      // con su menú Cámara/Galería recién abierto. Solo hace falta un render completo
+      // cuando cambia algo "estructural" (status/invisibleMode); el resto son solo
+      // números que se actualizan in-place.
+      const structuralChange = state.status !== this.lastStatus || state.invisibleMode !== this.lastInvisibleMode;
+      this.lastStatus = state.status;
+      this.lastInvisibleMode = state.invisibleMode;
+      if (structuralChange) {
+        this.render();
+      } else {
+        this.updateLiveValues(state);
+      }
     });
   }
 
-  // TODO: Botón temporal de simulación — ELIMINAR cuando se valide la persistencia
-  private async handleSimulate(): Promise<void> {
-    const btn = this.shadowRoot?.getElementById('simulate-btn');
-    if (btn) btn.textContent = 'Guardando...';
-    try {
-      const result = await simulateRecording(this.repo);
-      const all = await this.repo.getAll();
-      if (btn) btn.textContent = `✅ ${String(result.pointCount)} pts — ${String(all.length)} rutas`;
-      setTimeout(() => {
-        if (btn) btn.textContent = '🎲 Simular grabación';
-      }, 3000);
-    } catch {
-      if (btn) btn.textContent = '❌ Error al guardar';
-    }
-  }
-
-  private createGpsProvider(): GpsProvider {
-    return {
-      getCurrentPosition: () =>
-        new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject);
-        }),
-      watchPosition: (callback) => {
-        const id = navigator.geolocation.watchPosition(callback, () => { /* GPS error silently ignored */ });
-        return (): void => { navigator.geolocation.clearWatch(id); };
-      },
-      checkPermissions: (): Promise<boolean> => {
-        return Promise.resolve(navigator.geolocation !== null);
-      },
-      requestPermissions: (): Promise<boolean> => {
-        if (!navigator.geolocation) return Promise.resolve(false);
-        return new Promise((resolve) => {
-          navigator.geolocation.getCurrentPosition(
-            () => { resolve(true); },
-            () => { resolve(false); },
-          );
-        });
-      },
-    };
+  private updateLiveValues(state: CockpitState): void {
+    const root = this.shadowRoot;
+    if (!root) return;
+    updateLiveDisplay(root, getCockpitDisplayValues(state));
   }
 
   private handleStartStop(): void {
@@ -218,47 +214,25 @@ class CockpitView extends BaseElement {
     });
   }
 
-  private getChipClass(): string {
-    if (!this.service) return 'chip-neutral';
-    const status = this.service.getCurrentState().status;
-    if (status === 'recording') return 'chip-recording';
-    if (status === 'paused') return 'chip-paused';
-    return 'chip-neutral';
+  private buildPhotoCaptureButton(): PhotoCaptureElement {
+    const photoCapture = document.createElement('photo-capture') as PhotoCaptureElement;
+    photoCapture.setAttribute('data-cy', 'cockpit-photo-capture');
+    photoCapture.addEventListener(PHOTO_CAPTURE_EVENT, ((event: CustomEvent<PhotoCaptureEventDetail>) => {
+      void this.handlePhotoCapture(event.detail.source);
+    }) as EventListener);
+    return photoCapture;
   }
 
-  private getChipLabel(): string {
-    if (!this.service) return 'Listo';
-    const status = this.service.getCurrentState().status;
-    if (status === 'recording') return 'En ruta';
-    if (status === 'paused') return 'Pausada';
-    return 'Listo';
-  }
-
-  private getDisplayValues(state: CockpitState | undefined): CockpitDisplayValues {
-    if (!state) return { speed: '0', avgSpeed: '--', dist: '--', time: '--:--', alt: '--' };
-    return {
-      speed: formatSpeed(state.currentSpeed),
-      avgSpeed: state.avgSpeed.toFixed(0),
-      dist: state.totalDistance.toFixed(1),
-      time: formatDuration(state.elapsedTime),
-      alt: state.altitude.toFixed(0),
-    };
-  }
-
-  protected render(): void {
-    const root = this.shadowRoot;
-    if (!root) return;
-    const state = this.service?.getCurrentState();
-    const isActive = state?.status === 'recording' || state?.status === 'paused';
-    const isPaused = state?.status === 'paused';
-    const { speed, avgSpeed, dist, time, alt } = this.getDisplayValues(state);
-    const arc = isActive ? this.buildArc() : null;
-
-    const style = document.createElement('style');
-    style.textContent = styles;
+  private buildScreen(
+    state: CockpitState | undefined,
+    isActive: boolean,
+    isPaused: boolean,
+    arc: ProgressArc | null,
+  ): HTMLElement {
+    const { speed, avgSpeed, dist, time, alt } = getCockpitDisplayValues(state);
     const screen = document.createElement('div');
     screen.className = 'cockpit-screen';
-    screen.appendChild(buildHeader(time, this.getChipClass(), this.getChipLabel()));
+    screen.appendChild(buildHeader(time, getStatusChipClass(state?.status), getStatusChipLabel(state?.status)));
     screen.appendChild(buildSpeedDisplay(speed));
     screen.appendChild(buildStatGrid(dist, time, alt));
     screen.appendChild(buildAvgSpeedBanner(avgSpeed));
@@ -275,6 +249,24 @@ class CockpitView extends BaseElement {
     }));
     screen.appendChild(buildInvisibleToggle(state?.invisibleMode ?? false, () => { this.handleInvisibleToggle(); }));
 
+    this.photoCaptureEl = isActive ? this.buildPhotoCaptureButton() : null;
+    if (this.photoCaptureEl) screen.appendChild(this.photoCaptureEl);
+
+    return screen;
+  }
+
+  protected render(): void {
+    const root = this.shadowRoot;
+    if (!root) return;
+    const state = this.service?.getCurrentState();
+    const isActive = state?.status === 'recording' || state?.status === 'paused';
+    const isPaused = state?.status === 'paused';
+    const arc = isActive ? this.buildArc() : null;
+
+    const style = document.createElement('style');
+    style.textContent = styles;
+    const screen = this.buildScreen(state, isActive, isPaused, arc);
+
     const wrapper = document.createElement('div');
     wrapper.className = 'app-wrapper';
     wrapper.appendChild(screen);
@@ -283,7 +275,60 @@ class CockpitView extends BaseElement {
     root.appendChild(style);
     root.appendChild(wrapper);
     root.appendChild(buildGpsOverlay(() => { this.handleRequestGps(); }));
-    root.appendChild(buildSimulateButton(() => { void this.handleSimulate(); }));
+  }
+
+  private async handlePhotoCapture(source: 'camera' | 'gallery'): Promise<void> {
+    if (!this.service) return;
+    const state = this.service.getCurrentState();
+    if (state.status !== 'recording' && state.status !== 'paused') return;
+
+    // 1. Capturar imagen según fuente seleccionada
+    const file = source === 'camera'
+      ? await captureFromCamera()
+      : await pickFromGallery();
+
+    // 2. routeId pre-generado al iniciar la grabación (ver CockpitState.routeId):
+    // es el mismo id con el que la ruta se persistirá al llamar a stopRecording(),
+    // así las fotos capturadas en pleno directo quedan correctamente asociadas.
+    const routeId = state.routeId;
+
+    // 3. Obtener el último punto GPS
+    const lastPoint = state.points.length > 0
+      ? state.points[state.points.length - 1]!
+      : null;
+
+    // 4. Procesar la foto (con feedback de carga: guardar en appDataDir puede tardar
+    // un momento y sin indicador parece que la subida no ha hecho nada)
+    if (file && this.photoCaptureEl) this.photoCaptureEl.loading = true;
+    try {
+      const photoRepo = await this.getPhotoRepo();
+      await processPhotoCapture({
+        file,
+        routeId,
+        photoRepo,
+        lastPoint,
+        routePoints: state.points.map((p) => ({ lat: p.lat, lng: p.lng })),
+        callbacks: {
+          onSuccess: () => {
+            showToast('📷 Foto añadida', 'success');
+          },
+          onError: (error: string) => {
+            showToast(`⚠️ No se pudo guardar la foto: ${error}`, 'error');
+          },
+          onCancel: () => {
+            // User cancelled, nothing to do
+          },
+        },
+      });
+    } catch (err) {
+      // Red de seguridad: cualquier fallo no cubierto por los callbacks de arriba
+      // (p.ej. un error al abrir la cámara/galería) también debe ser visible,
+      // nunca desaparecer como un unhandled promise rejection silencioso.
+      const message = toErrorMessage(err, 'Error inesperado al añadir la foto');
+      showToast(`⚠️ ${message}`, 'error');
+    } finally {
+      if (this.photoCaptureEl) this.photoCaptureEl.loading = false;
+    }
   }
 
   private buildArc(): ProgressArc {

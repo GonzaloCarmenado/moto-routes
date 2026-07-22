@@ -53,6 +53,9 @@ export interface RouteStop {
 /* ------------------------------------------------------------------ */
 
 export interface CreateRoute {
+  /** ID pre-generado (ej. asignado al iniciar grabación para poder asociar fotos capturadas
+   * en pleno directo antes de que la ruta se persista). Si se omite, el repositorio genera uno. */
+  id?: string;
   duration: number;
   totalDistance: number;
   avgSpeed: number;

@@ -62,9 +62,53 @@ function registerPersistenceTests(getRepo: () => IRouteRepository): void {
     expect(stops).toHaveLength(1);
   });
 
+  it('should use a pre-generated id when provided (allows linking photos captured before the route is saved)', async () => {
+    const pregeneratedId = crypto.randomUUID();
+    const saved = await getRepo().save({ ...sampleRoute, id: pregeneratedId }, [], []);
+    expect(saved.id).toBe(pregeneratedId);
+
+    const fetched = await getRepo().getById(pregeneratedId);
+    expect(fetched).not.toBeNull();
+    expect(fetched!.id).toBe(pregeneratedId);
+  });
+
   it('should return null for non-existent route', async () => {
     const result = await getRepo().getById('nonexistent');
     expect(result).toBeNull();
+  });
+
+  it('should update (not duplicate) an existing route when saved again with the same id, preserving createdAt', async () => {
+    const routeId = crypto.randomUUID();
+    const first = await getRepo().save({ ...sampleRoute, id: routeId, status: 'active', duration: 0 }, [], []);
+    expect(first.status).toBe('active');
+
+    await getRepo().save({ ...sampleRoute, id: routeId, status: 'completed', duration: 900 }, [], []);
+
+    // Re-fetch instead of trusting save()'s return value — this must reflect what
+    // actually got persisted (UPDATE), not just echo back the input we passed in.
+    const refetched = await getRepo().getById(routeId);
+    expect(refetched).not.toBeNull();
+    expect(refetched!.status).toBe('completed');
+    expect(refetched!.duration).toBe(900);
+    expect(refetched!.createdAt).toBe(first.createdAt);
+
+    const all = await getRepo().getAll();
+    expect(all.filter((r) => r.id === routeId)).toHaveLength(1);
+  });
+
+  it('should accumulate points/stops across multiple save() calls for the same route id (recording flow: insert active route at start, add points at stop)', async () => {
+    const routeId = crypto.randomUUID();
+    await getRepo().save({ ...sampleRoute, id: routeId, status: 'active' }, [], []);
+    await getRepo().save(
+      { ...sampleRoute, id: routeId, status: 'completed' },
+      [samplePoint(routeId, 0), samplePoint(routeId, 1)],
+      [sampleStop(routeId)],
+    );
+
+    const points = await getRepo().getPointsByRouteId(routeId);
+    expect(points).toHaveLength(2);
+    const stops = await getRepo().getStopsByRouteId(routeId);
+    expect(stops).toHaveLength(1);
   });
 }
 
