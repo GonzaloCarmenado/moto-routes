@@ -1,4 +1,5 @@
 @import './shared/styles/tokens.css';
+@import './shared/styles/overlays.css';
 
 *,
 *::before,
@@ -34,4 +35,26 @@ input,
 select,
 textarea {
   touch-action: manipulation;
+}
+
+/* ─── Layout del shell de la app (app-root usa DOM ligero) ──────── */
+app-root {
+  display: block;
+  height: 100dvh;
+  overflow: hidden;
+  position: relative;
+}
+
+app-root > .app-view {
+  position: absolute;
+  inset: 0;
+  bottom: var(--nav-height);
+}
+
+app-root > nav-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
 }

@@ -1,6 +1,8 @@
 import styles from './nav-bar.element.css?inline';
+import { BaseElement } from '../../shared/base-element.js';
+import { APP_EVENTS, dispatchAppEvent } from '../../shared/app-events.js';
 
-class NavBar extends HTMLElement {
+class NavBar extends BaseElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
@@ -10,11 +12,11 @@ class NavBar extends HTMLElement {
     this.render();
   }
   private handleGrabarClick(): void {
-    window.dispatchEvent(new CustomEvent('nav-grabar'));
+    dispatchAppEvent(APP_EVENTS.NAV_GRABAR);
   }
 
   private handleRutasClick(): void {
-    window.dispatchEvent(new CustomEvent('nav-rutas'));
+    dispatchAppEvent(APP_EVENTS.NAV_RUTAS);
   }
 
   private buildRutasBtn(): HTMLButtonElement {
@@ -44,33 +46,26 @@ class NavBar extends HTMLElement {
     return btn;
   }
 
-  private render(): void {
-    const style = document.createElement('style');
-    style.textContent = styles;
-
+  protected render(): void {
     const nav = document.createElement('nav');
     nav.className = 'bottom-nav';
     nav.appendChild(this.buildRutasBtn());
     nav.appendChild(this.buildGrabarBtn());
     nav.appendChild(this.buildPerfilBtn());
 
-    const root = this.shadowRoot;
-    if (!root) return;
-    root.innerHTML = '';
-    root.appendChild(style);
-    root.appendChild(nav);
+    this.renderShadow(styles, nav);
   }
 
   private buildListIcon(): string {
-    return `<span style="display:flex;flex-direction:column;gap:3px;align-items:center;">
-      <span style="display:block;width:22px;height:3px;border-radius:2px;background:currentColor;"></span>
-      <span style="display:block;width:22px;height:3px;border-radius:2px;background:currentColor;"></span>
-      <span style="display:block;width:16px;height:3px;border-radius:2px;background:currentColor;"></span>
+    return `<span class="nav-icon-list">
+      <span class="nav-icon-list__bar"></span>
+      <span class="nav-icon-list__bar"></span>
+      <span class="nav-icon-list__bar nav-icon-list__bar--short"></span>
     </span>`;
   }
 
   private buildProfileIcon(): string {
-    return `<span style="width:22px;height:22px;border-radius:50%;border:3px solid currentColor;display:block;"></span>`;
+    return `<span class="nav-icon-profile"></span>`;
   }
 }
 

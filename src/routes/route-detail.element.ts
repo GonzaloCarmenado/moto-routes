@@ -14,6 +14,8 @@ import { addPhotoToRoute } from './route-detail-photo.service.js';
 import { getPhotoUrl } from '../shared/services/photo-storage.service.js';
 import { toErrorMessage } from '../shared/utils/errors.js';
 import { showToast } from '../shared/utils/toast.js';
+import { BaseElement } from '../shared/base-element.js';
+import { APP_EVENTS, dispatchAppEvent } from '../shared/app-events.js';
 
 /**
  * Tipo que asocia una foto con su URL de objeto para mostrar en UI.
@@ -22,9 +24,10 @@ interface PhotoWithUrl extends Photo {
   objectUrl: string;
 }
 
-class RouteDetail extends HTMLElement {
+class RouteDetail extends BaseElement {
   private _repository: IRouteRepository | null = null;
   private _routeId: string | null = null;
+  private _route: Route | null = null;
   private _photoRepo: IPhotoRepository | null = null;
   private _photos: PhotoWithUrl[] = [];
   private _points: { lat: number; lng: number }[] = [];
@@ -81,6 +84,7 @@ class RouteDetail extends HTMLElement {
       this._repository.getPointsByRouteId(this._routeId),
       photoRepo.getByRouteId(this._routeId),
     ]);
+    this._route = route;
     this._points = points.map((p) => ({ lat: p.lat, lng: p.lng }));
     this.revokePhotoUrls();
     // Convert file paths to accessible URLs (handles Tauri convertFileSrc)
@@ -88,30 +92,24 @@ class RouteDetail extends HTMLElement {
       ...p,
       objectUrl: await getPhotoUrl(p.filePath),
     })));
-    this.render(route, this._points);
+    this.render();
   }
 
-  private render(route: Route | null, points: { lat: number; lng: number }[]): void {
-    const style = document.createElement('style');
-    style.textContent = styles;
+  protected render(): void {
+    if (!this.shadowRoot) return;
 
-    const root = this.shadowRoot;
-    if (!root) return;
-    root.innerHTML = '';
-    root.appendChild(style);
-
-    if (!route) {
-      root.appendChild(this.buildEmptyMessage());
+    if (!this._route) {
+      this.renderShadow(styles, this.buildEmptyMessage());
       return;
     }
 
     const detail = document.createElement('div');
     detail.className = 'route-detail';
     detail.appendChild(this.buildBackButton());
-    detail.appendChild(this.buildMap(points));
-    detail.appendChild(this.buildContent(route));
+    detail.appendChild(this.buildMap(this._points));
+    detail.appendChild(this.buildContent(this._route));
 
-    root.appendChild(detail);
+    this.renderShadow(styles, detail);
   }
 
   private buildEmptyMessage(): HTMLElement {
@@ -124,9 +122,9 @@ class RouteDetail extends HTMLElement {
   private buildBackButton(): HTMLElement {
     const backBtn = document.createElement('button');
     backBtn.className = 'back-btn';
-    backBtn.innerHTML = '<span style="font-size:18px;">&larr;</span> Volver';
+    backBtn.innerHTML = '<span class="back-btn__arrow">&larr;</span> Volver';
     backBtn.addEventListener('click', () => {
-      window.dispatchEvent(new CustomEvent('back-to-list'));
+      dispatchAppEvent(APP_EVENTS.BACK_TO_LIST);
     });
     return backBtn;
   }
@@ -189,7 +187,7 @@ class RouteDetail extends HTMLElement {
   private buildAddPhotoButton(): PhotoCaptureElement {
     const photoCapture = document.createElement('photo-capture') as PhotoCaptureElement;
     photoCapture.setAttribute('data-cy', 'detail-photo-capture');
-    photoCapture.setAttribute('style', 'margin-bottom: 12px;');
+    photoCapture.classList.add('detail-photo-capture');
     photoCapture.addEventListener(PHOTO_CAPTURE_EVENT, ((event: CustomEvent<PhotoCaptureEventDetail>) => {
       void this.handleAddPhoto(event.detail.source);
     }) as EventListener);
@@ -213,11 +211,6 @@ class RouteDetail extends HTMLElement {
     const img = document.createElement('img');
     img.src = photo.objectUrl;
     img.alt = `Foto ${String(index + 1)}`;
-    img.style.cssText = `
-      width: 100%; height: 100%; object-fit: cover;
-      border-radius: var(--r-sm, 8px);
-      cursor: pointer;
-    `;
     img.loading = 'lazy';
     img.addEventListener('click', () => { this.openViewer(index); });
     // Also handle click on the container for fallback
@@ -310,41 +303,26 @@ class RouteDetail extends HTMLElement {
   }
 
   private openViewer(index: number): void {
-    const viewer = document.createElement('div');
-    viewer.className = 'photo-viewer-overlay';
-    viewer.setAttribute('data-cy', 'photo-viewer');
-    viewer.style.cssText = `
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.95); z-index: 9999;
-      display: flex; align-items: center; justify-content: center;
-    `;
-
-    const closeBtn = document.createElement('button');
-    closeBtn.setAttribute('data-cy', 'photo-viewer-close');
-    closeBtn.textContent = '✕';
-    closeBtn.style.cssText = `
-      position: absolute; top: 16px; right: 16px; z-index: 10;
-      width: 56px; height: 56px; background: transparent; border: none;
-      color: white; font-size: 28px; cursor: pointer;
-    `;
-    closeBtn.addEventListener('click', () => { viewer.remove(); });
-
     const photo = this._photos[index];
     if (!photo) return;
 
+    const viewer = document.createElement('div');
+    viewer.className = 'photo-viewer-overlay';
+    viewer.setAttribute('data-cy', 'photo-viewer');
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'photo-viewer-close';
+    closeBtn.setAttribute('data-cy', 'photo-viewer-close');
+    closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', () => { viewer.remove(); });
+
     const img = document.createElement('img');
+    img.className = 'photo-viewer-img';
     img.src = photo.objectUrl;
     img.alt = `Foto ${String(index + 1)}`;
-    img.style.cssText = `
-      max-width: 95%; max-height: 85%; object-fit: contain;
-      border-radius: 4px;
-    `;
 
     const counter = document.createElement('div');
-    counter.style.cssText = `
-      position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%);
-      color: #888; font-size: 14px; font-family: var(--font-ui, Barlow, sans-serif);
-    `;
+    counter.className = 'photo-viewer-counter';
     counter.textContent = `${String(index + 1)} de ${String(this._photos.length)}`;
 
     viewer.appendChild(closeBtn);

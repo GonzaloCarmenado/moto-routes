@@ -2,9 +2,12 @@ import styles from './route-list.element.css?inline';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { Route } from '../shared/models/route.types.js';
 import { formatDuration } from '../cockpit/cockpit.transform.js';
+import { BaseElement } from '../shared/base-element.js';
+import { APP_EVENTS, dispatchAppEvent } from '../shared/app-events.js';
 
-class RouteList extends HTMLElement {
+class RouteList extends BaseElement {
   private _repository: IRouteRepository | null = null;
+  private _routes: Route[] = [];
 
   set repository(repo: IRouteRepository | null) {
     this._repository = repo;
@@ -23,36 +26,29 @@ class RouteList extends HTMLElement {
   }
 
   connectedCallback(): void {
-    window.addEventListener('nav-rutas', this.onNavRutas);
+    window.addEventListener(APP_EVENTS.NAV_RUTAS, this.onNavRutas);
     if (this._repository) {
       void this.fetchAndRender();
     }
   }
 
   disconnectedCallback(): void {
-    window.removeEventListener('nav-rutas', this.onNavRutas);
+    window.removeEventListener(APP_EVENTS.NAV_RUTAS, this.onNavRutas);
   }
 
   private async fetchAndRender(): Promise<void> {
     if (!this._repository) return;
-    const routes = await this._repository.getAll();
-    this.render(routes);
+    this._routes = await this._repository.getAll();
+    this.render();
   }
 
-  private render(routes: Route[]): void {
-    const style = document.createElement('style');
-    style.textContent = styles;
-
+  protected render(): void {
     const screen = document.createElement('div');
     screen.className = 'route-list';
-    screen.appendChild(this.buildHeader(routes));
-    screen.appendChild(this.buildBody(routes));
+    screen.appendChild(this.buildHeader(this._routes));
+    screen.appendChild(this.buildBody(this._routes));
 
-    const root = this.shadowRoot;
-    if (!root) return;
-    root.innerHTML = '';
-    root.appendChild(style);
-    root.appendChild(screen);
+    this.renderShadow(styles, screen);
   }
 
   private buildHeader(routes: Route[]): DocumentFragment {
@@ -92,7 +88,7 @@ class RouteList extends HTMLElement {
     const card = document.createElement('div');
     card.className = 'route-card';
     card.addEventListener('click', () => {
-      window.dispatchEvent(new CustomEvent('view-route', { detail: { routeId: route.id } }));
+      dispatchAppEvent(APP_EVENTS.VIEW_ROUTE, { routeId: route.id });
     });
 
     const thumb = document.createElement('div');

@@ -6,8 +6,10 @@ import type { IRouteRepository } from '../shared/models/route.repository.js';
 import { SqliteRouteRepository } from '../shared/repositories/sqlite-route.repository.js';
 import { createSqliteDb } from '../shared/repositories/sqlite-route.factory.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
+import { BaseElement } from '../shared/base-element.js';
+import { APP_EVENTS, type AppEventDetailMap } from '../shared/app-events.js';
 
-class AppRoot extends HTMLElement {
+class AppRoot extends BaseElement {
   private repo: IRouteRepository = new MemoryRouteRepository();
   private cockpitEl: HTMLElement | null = null;
   private routeListEl: HTMLElement | null = null;
@@ -16,7 +18,7 @@ class AppRoot extends HTMLElement {
   private readonly onGrabar = (): void => { this.showView('cockpit'); };
   private readonly onRutas = (): void => { this.showView('routes'); };
   private readonly onViewRoute = (e: Event): void => {
-    const routeId = (e as CustomEvent<{ routeId: string }>).detail.routeId;
+    const routeId = (e as CustomEvent<AppEventDetailMap['view-route']>).detail.routeId;
     if (this.routeDetailEl) {
       (this.routeDetailEl as HTMLElement & { routeId: string }).routeId = routeId;
       this.showView('detail');
@@ -25,18 +27,18 @@ class AppRoot extends HTMLElement {
   private readonly onBackToList = (): void => { this.showView('routes'); };
 
   connectedCallback(): void {
-    window.addEventListener('nav-grabar', this.onGrabar);
-    window.addEventListener('nav-rutas', this.onRutas);
-    window.addEventListener('view-route', this.onViewRoute);
-    window.addEventListener('back-to-list', this.onBackToList);
+    window.addEventListener(APP_EVENTS.NAV_GRABAR, this.onGrabar);
+    window.addEventListener(APP_EVENTS.NAV_RUTAS, this.onRutas);
+    window.addEventListener(APP_EVENTS.VIEW_ROUTE, this.onViewRoute);
+    window.addEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
     void this.init();
   }
 
   disconnectedCallback(): void {
-    window.removeEventListener('nav-grabar', this.onGrabar);
-    window.removeEventListener('nav-rutas', this.onRutas);
-    window.removeEventListener('view-route', this.onViewRoute);
-    window.removeEventListener('back-to-list', this.onBackToList);
+    window.removeEventListener(APP_EVENTS.NAV_GRABAR, this.onGrabar);
+    window.removeEventListener(APP_EVENTS.NAV_RUTAS, this.onRutas);
+    window.removeEventListener(APP_EVENTS.VIEW_ROUTE, this.onViewRoute);
+    window.removeEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
   }
 
   private async init(): Promise<void> {
@@ -46,35 +48,39 @@ class AppRoot extends HTMLElement {
     } catch {
       this.repo = new MemoryRouteRepository();
     }
-    this.buildUI();
+    this.render();
   }
 
-  private buildUI(): void {
-    this.style.cssText = 'display:block;height:100dvh;overflow:hidden;position:relative;';
-
+  // app-root monta las vistas en su DOM ligero (no usa Shadow DOM). El layout
+  // (posición y visibilidad de las vistas) vive en index.css: `app-root`,
+  // `app-root > .app-view` y `app-root > nav-bar`.
+  protected render(): void {
     const cockpit = document.createElement('cockpit-view') as HTMLElement & { repository: IRouteRepository };
     cockpit.repository = this.repo;
-    cockpit.style.cssText = 'position:absolute;inset:0;bottom:var(--nav-height);';
+    cockpit.className = 'app-view';
     this.cockpitEl = cockpit;
     this.appendChild(cockpit);
 
     const routeList = document.createElement('route-list') as HTMLElement & { repository: IRouteRepository };
     routeList.repository = this.repo;
-    routeList.style.cssText = 'position:absolute;inset:0;bottom:var(--nav-height);display:none;';
+    routeList.className = 'app-view';
     this.routeListEl = routeList;
     this.appendChild(routeList);
 
     const routeDetail = document.createElement('route-detail') as HTMLElement & { repository: IRouteRepository; routeId: string };
     routeDetail.repository = this.repo;
-    routeDetail.style.cssText = 'position:absolute;inset:0;bottom:var(--nav-height);display:none;';
+    routeDetail.className = 'app-view';
     this.routeDetailEl = routeDetail;
     this.appendChild(routeDetail);
 
-    const navBar = document.createElement('nav-bar');
-    navBar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:100;';
-    this.appendChild(navBar);
+    this.appendChild(document.createElement('nav-bar'));
+
+    // Estado inicial de visibilidad (cockpit visible, resto oculto).
+    this.showView('cockpit');
   }
 
+  // El toggle de `display` es dinámico (cambia en runtime al navegar), por eso
+  // se mantiene como estilo en línea y no como clase CSS.
   private showView(view: 'cockpit' | 'routes' | 'detail'): void {
     if (this.cockpitEl) this.cockpitEl.style.display = view === 'cockpit' ? '' : 'none';
     if (this.routeListEl) this.routeListEl.style.display = view === 'routes' ? '' : 'none';

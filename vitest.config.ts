@@ -26,7 +26,6 @@ export default defineConfig({
         'src/app/app.element.ts',
         'src/cockpit/cockpit.types.ts',
         'src/shared/tauri/commands.ts',
-        'src/shared/utils/dom.ts',
         'src/shared/models/route.repository.spec.ts',
         // Contratos puros (interfaces/tipos) — sin código ejecutable que cubrir,
         // igual que cockpit.types.ts arriba.
