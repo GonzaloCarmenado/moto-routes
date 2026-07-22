@@ -29,7 +29,11 @@ vi.mock('maplibre-gl', () => {
 
 async function waitRender(): Promise<void> {
   await new Promise<void>((resolve) => requestAnimationFrame(() => { resolve(); }));
-  await new Promise((r) => setTimeout(r, 0));
+  // 50ms (no 0ms): fetchAndRender() encadena varias promesas reales (repo.getById,
+  // getPointsByRouteId, photoRepo.getByRouteId, getPhotoUrl por foto) antes de
+  // llamar a render() — bajo carga (suite completa + cobertura v8) 0ms resultaba
+  // intermitente, igual que en cockpit.element.spec.ts.
+  await new Promise((r) => setTimeout(r, 50));
 }
 
 type RouteDetailEl = HTMLElement & { repository: IRouteRepository; routeId: string };
@@ -48,12 +52,28 @@ describe('route-detail - contenido básico', () => {
   let savedRoute: Route;
 
   beforeEach(async () => {
+    localStorage.clear();
     repo = new MemoryRouteRepository();
     savedRoute = await repo.save(
       { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
       [],
       [],
     );
+  });
+
+  it('renders the "Añadir foto" button when a route is loaded (AC-028)', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    expect(root.querySelector('[data-cy="detail-photo-capture"]')).not.toBeNull();
+    document.body.removeChild(el);
+  });
+
+  it('shows the "Sin fotos" placeholder when the route has no photos (AC-021, AC-032)', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const placeholder = root.querySelector('[data-cy="photo-placeholder"]');
+    expect(placeholder).not.toBeNull();
+    expect(placeholder?.textContent).toBe('Sin fotos');
+    expect(root.querySelector('[data-cy="photo-gallery"]')).toBeNull();
+    document.body.removeChild(el);
   });
 
   it('should show empty message when route does not exist', async () => {
@@ -82,6 +102,60 @@ describe('route-detail - contenido básico', () => {
 
     expect(handler).toHaveBeenCalledOnce();
     window.removeEventListener('back-to-list', handler);
+    document.body.removeChild(el);
+  });
+});
+
+describe('route-detail - galería y visor de fotos (AC-019, AC-020, AC-033)', () => {
+  let repo: IRouteRepository;
+  let savedRoute: Route;
+
+  beforeEach(async () => {
+    localStorage.clear();
+    repo = new MemoryRouteRepository();
+    savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+    // Seed directo del storage de MemoryPhotoRepository (misma forma que usa en runtime)
+    // para no depender del flujo completo de captura (input file + FileReader) en este test.
+    localStorage.setItem('moto-routes-photos', JSON.stringify([
+      {
+        id: 'photo-1', routeId: savedRoute.id, filePath: 'photo-1.jpg',
+        latitude: 40.4168, longitude: -3.7038,
+        capturedAt: '2026-07-20T10:00:00.000Z', createdAt: '2026-07-20T10:00:00.000Z',
+      },
+    ]));
+  });
+
+  it('renders a thumbnail for the existing photo instead of the placeholder', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    expect(root.querySelector('[data-cy="photo-placeholder"]')).toBeNull();
+    expect(root.querySelectorAll('[data-cy="photo-thumbnail"]')).toHaveLength(1);
+    document.body.removeChild(el);
+  });
+
+  it('opens the full-size viewer with a close button when a thumbnail is clicked', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const thumbnail = root.querySelector('[data-cy="photo-thumbnail"]') as HTMLElement;
+    thumbnail.click();
+
+    // El visor se monta como overlay en document.body, no dentro del shadow DOM del componente.
+    const viewer = document.body.querySelector('[data-cy="photo-viewer"]');
+    expect(viewer).not.toBeNull();
+    expect(viewer?.querySelector('img')?.getAttribute('src')).toBe('photo-1.jpg');
+    viewer?.remove();
+    document.body.removeChild(el);
+  });
+
+  it('closes the viewer when the close button is clicked', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    (root.querySelector('[data-cy="photo-thumbnail"]') as HTMLElement).click();
+    expect(document.body.querySelector('[data-cy="photo-viewer"]')).not.toBeNull();
+
+    (document.body.querySelector('[data-cy="photo-viewer-close"]') as HTMLElement).click();
+    expect(document.body.querySelector('[data-cy="photo-viewer"]')).toBeNull();
     document.body.removeChild(el);
   });
 });

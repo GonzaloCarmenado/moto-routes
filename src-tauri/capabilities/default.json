@@ -13,6 +13,22 @@
     "core:window:default",
     "core:window:allow-close",
     "core:window:allow-set-size",
-    "core:window:allow-set-position"
+    "core:window:allow-set-position",
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [{ "path": "$APPDATA/photos" }, { "path": "$APPDATA/photos/**" }]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [{ "path": "$APPDATA/photos" }, { "path": "$APPDATA/photos/**" }]
+    },
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [{ "path": "$APPDATA/photos/**" }]
+    },
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [{ "path": "$APPDATA/photos/**" }]
+    }
   ]
 }

@@ -6,79 +6,86 @@
 
 import type { IPhotoRepository } from '../models/photo.repository.js';
 import type { CreatePhoto } from '../models/photo.types.js';
+import { isTauri } from './photo-capture-adapter.service.js';
 
 const PHOTOS_DIR = 'photos';
 
 /**
- * Detecta si estamos en Tauri.
+ * Convierte un File a base64 data URL para persistencia duradera (localStorage).
  */
-function isTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (): void => { resolve(reader.result as string); };
+    reader.onerror = (): void => { reject(new Error('Error leyendo el archivo de imagen')); };
+    reader.readAsDataURL(file);
+  });
 }
 
 /**
  * Guarda un archivo File en el directorio de fotos de la app.
- * En Tauri (Android), copia a appDataDir/photos/ usando el plugin fs.
- * En navegador, devuelve la ruta como blob URL.
+ * En Tauri (Android), copia a appDataDir/photos/ usando el plugin fs — devuelve una ruta persistente.
+ * En navegador, devuelve un data URL base64 persistente (localStorage no admite blob: entre sesiones).
  */
 export async function savePhotoFile(file: File): Promise<string> {
   if (isTauri()) {
     return savePhotoFileTauri(file);
   }
-  // En navegador, crear blob URL para visualización inmediata
-  return URL.createObjectURL(file);
+  return fileToBase64(file);
 }
 
 /**
  * En Tauri Android: copia el archivo a appDataDir/photos/<uuid>.jpg
  */
 async function savePhotoFileTauri(file: File): Promise<string> {
-  try {
-    const { appDataDir } = await import('@tauri-apps/api/path');
-    const { writeFile, exists, mkdir } = await import('@tauri-apps/plugin-fs');
+  const { appDataDir, join } = await import('@tauri-apps/api/path');
+  const { writeFile, exists, mkdir } = await import('@tauri-apps/plugin-fs');
 
-    const appDir = await appDataDir();
-    const photosDir = `${appDir}${PHOTOS_DIR}`;
+  const appDir = await appDataDir();
+  const photosDir = await join(appDir, PHOTOS_DIR);
 
-    // Ensure photos directory exists
-    const dirExists = await exists(photosDir);
-    if (!dirExists) {
-      await mkdir(photosDir, { recursive: true });
-    }
-
-    // Generate unique filename
-    const ext = file.name.split('.').pop() ?? 'jpg';
-    const filename = `${crypto.randomUUID()}.${ext}`;
-    const filePath = `${photosDir}/${filename}`;
-
-    // Read file as Uint8Array and write to appDataDir
-    const buffer = await file.arrayBuffer();
-    await writeFile(filePath, new Uint8Array(buffer));
-
-    return filePath;
-  } catch (err) {
-    console.error('Error saving photo to appDataDir:', err);
-    // Fallback: return blob URL (no persistente, solo para esta sesión)
-    return URL.createObjectURL(file);
+  // Ensure photos directory exists
+  const dirExists = await exists(photosDir);
+  if (!dirExists) {
+    await mkdir(photosDir, { recursive: true });
   }
+
+  // Generate unique filename
+  const ext = file.name.split('.').pop() ?? 'jpg';
+  const filename = `${crypto.randomUUID()}.${ext}`;
+  const filePath = await join(photosDir, filename);
+
+  // Read file as Uint8Array and write to appDataDir
+  const buffer = await file.arrayBuffer();
+  await writeFile(filePath, new Uint8Array(buffer));
+
+  return filePath;
+}
+
+function mimeTypeFromPath(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+  return ext === 'png' ? 'image/png' : 'image/jpeg';
 }
 
 /**
  * Obtiene la URL accesible para una foto guardada.
- * En Tauri, convierte la ruta del appDataDir a URL accesible por el WebView usando convertFileSrc.
- * En navegador, devuelve la misma URL (ya es blob:).
+ * En Tauri, lee los bytes del archivo con el plugin fs y construye un blob: URL — evita
+ * depender del protocolo asset:// / convertFileSrc, que en Android no sirve el fichero
+ * aunque el asset-protocol scope y el CSP estén correctamente configurados.
+ * En navegador, devuelve la misma URL (ya es data: o blob:).
  */
 export async function getPhotoUrl(filePath: string): Promise<string> {
-  if (filePath.startsWith('blob:')) return filePath;
+  if (filePath.startsWith('blob:') || filePath.startsWith('data:')) return filePath;
   if (filePath.startsWith('photos/')) return filePath; // placeholder
 
-  // En Tauri, convertir ruta del appDataDir a asset URL
   if (isTauri()) {
     try {
-      const { convertFileSrc } = await import('@tauri-apps/api/core');
-      return convertFileSrc(filePath);
+      const { readFile } = await import('@tauri-apps/plugin-fs');
+      const bytes = await readFile(filePath);
+      const blob = new Blob([bytes], { type: mimeTypeFromPath(filePath) });
+      return URL.createObjectURL(blob);
     } catch {
-      // Ignorar
+      // Fallback silencioso: se devuelve filePath tal cual, ver return de abajo
     }
   }
 

@@ -20,6 +20,32 @@ export interface StorageProvider {
   save(path: string, data: string): Promise<void>;
 }
 
+/** GpsProvider basado en la Geolocation API del navegador (usable tanto en web como en el WebView de Tauri). */
+export function createBrowserGpsProvider(): GpsProvider {
+  return {
+    getCurrentPosition: () =>
+      new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject);
+      }),
+    watchPosition: (callback) => {
+      const id = navigator.geolocation.watchPosition(callback, () => { /* GPS error silently ignored */ });
+      return (): void => { navigator.geolocation.clearWatch(id); };
+    },
+    checkPermissions: (): Promise<boolean> => {
+      return Promise.resolve(navigator.geolocation !== null);
+    },
+    requestPermissions: (): Promise<boolean> => {
+      if (!navigator.geolocation) return Promise.resolve(false);
+      return new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          () => { resolve(true); },
+          () => { resolve(false); },
+        );
+      });
+    },
+  };
+}
+
 export type StateListener = (state: CockpitState) => void;
 
 export interface CockpitService {
@@ -38,6 +64,7 @@ const BACKUP_KEY = 'moto-routes-pending-backup';
 
 function createInitialState(): CockpitState {
   return {
+    routeId: crypto.randomUUID(),
     status: 'idle',
     currentSpeed: 0,
     avgSpeed: 0,
@@ -66,10 +93,24 @@ function buildMetadata(s: CockpitState): RouteMetadata {
 
 function buildCreateRoute(s: CockpitState): CreateRoute {
   return {
+    id: s.routeId,
     duration: s.elapsedTime,
     totalDistance: s.totalDistance,
     avgSpeed: s.avgSpeed,
     status: 'completed',
+    visibility: 'private',
+    origin: 'local',
+  };
+}
+
+/** Fila mínima para la ruta activa, insertada nada más empezar a grabar. */
+function buildActiveRoute(s: CockpitState): CreateRoute {
+  return {
+    id: s.routeId,
+    duration: 0,
+    totalDistance: 0,
+    avgSpeed: 0,
+    status: 'active',
     visibility: 'private',
     origin: 'local',
   };
@@ -107,6 +148,22 @@ function persistRouteOnStop(repository: IRouteRepository | undefined, state: Coc
   repository.save(route, points, stops).catch(() => {
     // Si falla, guardar backup en localStorage
     persistFallback(JSON.stringify({ route, points, stops }));
+  });
+}
+
+/**
+ * Inserta la fila de la ruta en cuanto empieza la grabación (estado 'active', sin
+ * puntos todavía). Necesario porque la tabla `photos` tiene FOREIGN KEY (route_id)
+ * REFERENCES routes(id): una foto capturada en pleno directo se guarda con el mismo
+ * routeId pre-generado (ver CockpitState.routeId), y sin esta fila previa el INSERT
+ * de la foto viola la clave foránea. `save()` hace upsert por id, así que el guardado
+ * final en persistRouteOnStop() actualiza esta misma fila en vez de duplicarla.
+ */
+function persistRouteOnStart(repository: IRouteRepository | undefined, state: CockpitState): void {
+  if (!repository) return;
+  repository.save(buildActiveRoute(state), [], []).catch(() => {
+    // Si falla, no bloqueamos la grabación: persistRouteOnStop() reintentará
+    // el guardado completo (INSERT, ya que esta fila nunca llegó a crearse).
   });
 }
 
@@ -215,7 +272,7 @@ function createRecordingLoop(gps: GpsProvider): RecordingLoop {
   };
 }
 
-function startRecordingAction(store: ServiceStore, loop: RecordingLoop): void {
+function startRecordingAction(store: ServiceStore, loop: RecordingLoop, repository: IRouteRepository | undefined): void {
   if (store.state.status !== 'idle') return;
   store.state = {
     ...store.state, status: 'recording', points: [], currentSpeed: 0, avgSpeed: 0,
@@ -224,6 +281,7 @@ function startRecordingAction(store: ServiceStore, loop: RecordingLoop): void {
   };
   store.lastPoint = null;
   notify(store);
+  persistRouteOnStart(repository, store.state);
   loop.startTick(() => {
     store.state = { ...store.state, elapsedTime: store.state.elapsedTime + 1 };
     notify(store);
@@ -271,7 +329,7 @@ export function createCockpitService(
   return {
     subscribe: (listener): (() => void) => subscribeAction(store, listener),
     getCurrentState: (): CockpitState => ({ ...store.state }),
-    startRecording: (): void => { startRecordingAction(store, loop); },
+    startRecording: (): void => { startRecordingAction(store, loop, repository); },
     stopRecording: (): RouteMetadata | null => stopRecordingAction(store, loop, repository),
     pauseRecording: (): void => { pauseRecordingAction(store, loop); },
     resumeRecording: (): void => { resumeRecordingAction(store, loop); },

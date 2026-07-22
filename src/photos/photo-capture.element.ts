@@ -26,10 +26,11 @@ const GALLERY_ICON = `
 
 export class PhotoCaptureElement extends BaseElement {
   static get observedAttributes(): string[] {
-    return ['disabled'];
+    return ['disabled', 'loading'];
   }
 
   private _disabled = false;
+  private _loading = false;
   private menuEl: HTMLElement | null = null;
   private button: HTMLElement | null = null;
 
@@ -45,7 +46,20 @@ export class PhotoCaptureElement extends BaseElement {
   set disabled(val: boolean) {
     this._disabled = val;
     this.toggleAttribute('disabled', val);
-    this.updateDisabledState();
+    this.updateButtonState();
+  }
+
+  /** Mientras es true, el botón queda deshabilitado y muestra un spinner en vez del
+   * icono de cámara — feedback de que la foto se está guardando (evita que parezca
+   * que la subida no ha hecho nada). */
+  get loading(): boolean {
+    return this._loading;
+  }
+
+  set loading(val: boolean) {
+    this._loading = val;
+    this.toggleAttribute('loading', val);
+    this.updateButtonState();
   }
 
   connectedCallback(): void {
@@ -66,7 +80,10 @@ export class PhotoCaptureElement extends BaseElement {
   attributeChangedCallback(name: string, _old: string | null, value: string | null): void {
     if (name === 'disabled') {
       this._disabled = value !== null;
-      this.updateDisabledState();
+      this.updateButtonState();
+    } else if (name === 'loading') {
+      this._loading = value !== null;
+      this.updateButtonState();
     }
   }
 
@@ -84,6 +101,7 @@ export class PhotoCaptureElement extends BaseElement {
         title="Añadir foto"
       >
         ${CAMERA_ICON}
+        <span class="spinner" aria-hidden="true"></span>
       </button>
       <div class="photo-menu" id="photo-menu" data-cy="photo-menu">
         <button
@@ -105,7 +123,7 @@ export class PhotoCaptureElement extends BaseElement {
   }
 
   private onButtonClick(event: Event): void {
-    if (this._disabled) return;
+    if (this._disabled || this._loading) return;
 
     event.stopPropagation();
     const menu = this.menuEl;
@@ -163,12 +181,14 @@ export class PhotoCaptureElement extends BaseElement {
     }
   }
 
-  private updateDisabledState(): void {
+  private updateButtonState(): void {
     const btn = this.shadowRoot?.querySelector('.photo-btn') as HTMLButtonElement | null;
     if (btn) {
-      btn.disabled = this._disabled;
+      btn.disabled = this._disabled || this._loading;
+      btn.classList.toggle('is-loading', this._loading);
+      btn.setAttribute('aria-busy', this._loading ? 'true' : 'false');
     }
-    if (this._disabled) {
+    if (this._disabled || this._loading) {
       this.closeMenu();
     }
   }

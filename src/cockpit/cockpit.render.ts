@@ -32,15 +32,15 @@ export function buildStatGrid(dist: string, time: string, alt: string): HTMLElem
   grid.innerHTML = `
     <div class="stat-tile">
       <span class="stat-label">Distancia</span>
-      <span class="stat-value">${dist}<span class="stat-unit"> km</span></span>
+      <span class="stat-value"><span data-live="dist">${dist}</span><span class="stat-unit"> km</span></span>
     </div>
     <div class="stat-tile">
       <span class="stat-label">Tiempo</span>
-      <span class="stat-value">${time}</span>
+      <span class="stat-value" data-live="time-tile">${time}</span>
     </div>
     <div class="stat-tile">
       <span class="stat-label">Altitud</span>
-      <span class="stat-value">${alt}<span class="stat-unit"> m</span></span>
+      <span class="stat-value"><span data-live="alt">${alt}</span><span class="stat-unit"> m</span></span>
     </div>`;
   return grid;
 }
@@ -48,8 +48,43 @@ export function buildStatGrid(dist: string, time: string, alt: string): HTMLElem
 export function buildAvgSpeedBanner(avgSpeed: string): HTMLElement {
   const banner = document.createElement('div');
   banner.className = 'avg-speed-banner';
-  banner.innerHTML = `Vel. media de la ruta: <strong>${avgSpeed} km/h</strong>`;
+  banner.innerHTML = `Vel. media de la ruta: <strong data-live="avg-speed">${avgSpeed} km/h</strong>`;
   return banner;
+}
+
+export interface LiveValues {
+  speed: string;
+  avgSpeed: string;
+  dist: string;
+  time: string;
+  alt: string;
+}
+
+/**
+ * Actualiza in-place los valores numéricos que cambian con cada tick del cronómetro
+ * o cada punto GPS, sin reconstruir el árbol DOM. Antes, cockpit.element.ts llamaba a
+ * render() (root.innerHTML = '') en cada uno de estos eventos — que ocurren cada
+ * segundo durante la grabación — destruyendo y recreando <photo-capture> constantemente
+ * y cerrando su menú "Cámara/Galería" casi al instante tras abrirlo.
+ */
+export function updateLiveDisplay(root: ShadowRoot, values: LiveValues): void {
+  const timeEl = root.querySelector('.app-header__time');
+  if (timeEl) timeEl.textContent = values.time;
+
+  const speedEl = root.querySelector('.speed-value');
+  if (speedEl) speedEl.textContent = values.speed;
+
+  const distEl = root.querySelector('[data-live="dist"]');
+  if (distEl) distEl.textContent = values.dist;
+
+  const timeTileEl = root.querySelector('[data-live="time-tile"]');
+  if (timeTileEl) timeTileEl.textContent = values.time;
+
+  const altEl = root.querySelector('[data-live="alt"]');
+  if (altEl) altEl.textContent = values.alt;
+
+  const avgEl = root.querySelector('[data-live="avg-speed"]');
+  if (avgEl) avgEl.textContent = `${values.avgSpeed} km/h`;
 }
 
 export interface ProgressArc {
@@ -163,12 +198,3 @@ export function buildGpsOverlay(onRequestGps: () => void): HTMLElement {
   return overlay;
 }
 
-export function buildSimulateButton(onSimulate: () => void): HTMLButtonElement {
-  const sb = document.createElement('button');
-  sb.id = 'simulate-btn';
-  sb.setAttribute('data-cy', 'simulate-btn');
-  sb.textContent = '\u{1F3B2} Simular grabación';
-  sb.style.cssText = 'display:block;width:100%;margin-top:16px;padding:10px;border:1px solid var(--amber);border-radius:var(--r-md,8px);background:var(--panel,oklch(24% 0.02 50));color:var(--ink,oklch(92% 0.01 60));font-family:var(--font-ui,sans-serif);font-size:14px;cursor:pointer;';
-  sb.addEventListener('click', onSimulate);
-  return sb;
-}

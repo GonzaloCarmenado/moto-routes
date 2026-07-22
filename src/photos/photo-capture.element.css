@@ -38,6 +38,28 @@
   fill: none;
 }
 
+.photo-btn .spinner {
+  display: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--amber-soft, rgba(232, 168, 56, 0.25));
+  border-top-color: var(--amber, #e8a838);
+  border-radius: 50%;
+  animation: photo-capture-spin 0.7s linear infinite;
+}
+
+.photo-btn.is-loading svg {
+  display: none;
+}
+
+.photo-btn.is-loading .spinner {
+  display: block;
+}
+
+@keyframes photo-capture-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Menu dropdown */
 .photo-menu {
   position: fixed;

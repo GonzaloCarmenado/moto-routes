@@ -1,5 +1,4 @@
 # Límites de tamaño para Rust
-max_fn_params = 4
 type-complexity-threshold = 250
 too-many-arguments-threshold = 4
 too-many-lines-threshold = 300
