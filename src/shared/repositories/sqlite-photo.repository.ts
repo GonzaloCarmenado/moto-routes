@@ -56,6 +56,9 @@ export class SqlitePhotoRepository implements IPhotoRepository {
 
   private async ensureSchema(): Promise<void> {
     if (this.initialized) return;
+    // Ver el mismo pragma en SqliteRouteRepository: `foreign_keys` es por conexión,
+    // no por fichero, y esta clase abre su propia conexión al mismo moto-routes.db.
+    await this.db.execute('PRAGMA foreign_keys = ON;');
     const statements = SCHEMA.split(';').filter((s) => s.trim().length > 0);
     for (const stmt of statements) {
       await this.db.execute(stmt);

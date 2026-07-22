@@ -52,7 +52,17 @@ export interface CockpitService {
   subscribe(listener: StateListener): () => void;
   getCurrentState(): CockpitState;
   startRecording(): void;
-  stopRecording(): RouteMetadata | null;
+  /**
+   * Detiene el tick del cronómetro y el watch de GPS (congela el estado) sin
+   * persistir ni resetear todavía — el estado sigue reflejando `recording`/`paused`
+   * con los datos finales, a la espera de que el llamador decida entre
+   * `confirmSaveRecording()` y `discardStop()`. Devuelve `null` si ya estaba `idle`.
+   */
+  prepareStop(): RouteMetadata | null;
+  /** Persiste el estado congelado por `prepareStop()` como 'completed' y resetea a `idle`. */
+  confirmSaveRecording(): void;
+  /** Resetea a `idle` sin persistir. El borrado de la fila 'active' y sus fotos es responsabilidad del llamador (ver deleteRouteAndPhotos). */
+  discardStop(): void;
   pauseRecording(): void;
   resumeRecording(): void;
   checkGpsPermission(): Promise<boolean>;
@@ -289,15 +299,22 @@ function startRecordingAction(store: ServiceStore, loop: RecordingLoop, reposito
   loop.startWatch((point) => { addPoint(store, point); });
 }
 
-function stopRecordingAction(store: ServiceStore, loop: RecordingLoop, repository: IRouteRepository | undefined): RouteMetadata | null {
+function prepareStopAction(store: ServiceStore, loop: RecordingLoop): RouteMetadata | null {
   if (store.state.status === 'idle') return null;
   loop.stopTick();
   loop.stopWatch();
-  const metadata = buildMetadata(store.state);
+  return buildMetadata(store.state);
+}
+
+function confirmSaveRecordingAction(store: ServiceStore, repository: IRouteRepository | undefined): void {
   persistRouteOnStop(repository, store.state);
   store.state = { ...createInitialState(), hasGpsPermission: store.state.hasGpsPermission };
   notify(store);
-  return metadata;
+}
+
+function discardStopAction(store: ServiceStore): void {
+  store.state = { ...createInitialState(), hasGpsPermission: store.state.hasGpsPermission };
+  notify(store);
 }
 
 function pauseRecordingAction(store: ServiceStore, loop: RecordingLoop): void {
@@ -330,7 +347,9 @@ export function createCockpitService(
     subscribe: (listener): (() => void) => subscribeAction(store, listener),
     getCurrentState: (): CockpitState => ({ ...store.state }),
     startRecording: (): void => { startRecordingAction(store, loop, repository); },
-    stopRecording: (): RouteMetadata | null => stopRecordingAction(store, loop, repository),
+    prepareStop: (): RouteMetadata | null => prepareStopAction(store, loop),
+    confirmSaveRecording: (): void => { confirmSaveRecordingAction(store, repository); },
+    discardStop: (): void => { discardStopAction(store); },
     pauseRecording: (): void => { pauseRecordingAction(store, loop); },
     resumeRecording: (): void => { resumeRecordingAction(store, loop); },
     checkGpsPermission: (): Promise<boolean> => checkGpsPermissionAction(store, gps),
