@@ -29,6 +29,10 @@
     {
       "identifier": "fs:allow-read-file",
       "allow": [{ "path": "$APPDATA/photos/**" }]
+    },
+    {
+      "identifier": "fs:allow-remove",
+      "allow": [{ "path": "$APPDATA/photos/**" }]
     }
   ]
 }

@@ -8,10 +8,13 @@ import { createPhotoRepository } from '../shared/services/photo-storage.service.
 import '../photos/photo-capture.element.js';
 import type { PhotoCaptureElement } from '../photos/photo-capture.element.js';
 import { PHOTO_CAPTURE_EVENT, type PhotoCaptureEventDetail } from '../photos/photo-capture.types.js';
+import { openPhotoViewer } from '../shared/photo-viewer/photo-viewer.element.js';
 import { captureFromCamera, pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
-import { processPhotoCapture } from './cockpit-photo.service.js';
+import { processPhotoCapture, fetchGalleryPhotos } from './cockpit-photo.service.js';
 import { toErrorMessage } from '../shared/utils/errors.js';
-import { showToast } from '../shared/utils/toast.js';
+import { showToast } from '../shared/feedback/toast.js';
+import { resolveStopDecision } from './cockpit-stop.service.js';
+import { createLongPressController, type LongPressController } from './cockpit-long-press.js';
 import { SqliteRouteRepository } from '../shared/repositories/sqlite-route.repository.js';
 import { createSqliteDb } from '../shared/repositories/sqlite-route.factory.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
@@ -24,19 +27,22 @@ import {
   buildControls,
   buildInvisibleToggle,
   buildGpsOverlay,
+  buildPhotoGalleryElement,
   updateLiveDisplay,
   type ProgressArc,
+  type PhotoGalleryElement,
 } from './cockpit.render.js';
 import styles from './cockpit.element.css?inline';
 
 class CockpitView extends BaseElement {
   private service: CockpitService | null = null;
-  private longPressTimer: ReturnType<typeof setTimeout> | null = null;
   private arcCircle: SVGCircleElement | null = null;
   private readonly LONG_PRESS_MS = 1500;
   private readonly ARC_CIRC = 377;
+  private readonly longPress: LongPressController;
   private photoRepo: IPhotoRepository | null = null;
   private photoCaptureEl: PhotoCaptureElement | null = null;
+  private galleryEl: PhotoGalleryElement | null = null;
   private lastStatus: CockpitState['status'] | null = null;
   private lastInvisibleMode: boolean | null = null;
 
@@ -48,6 +54,11 @@ class CockpitView extends BaseElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
+    this.longPress = createLongPressController(
+      this.LONG_PRESS_MS, this.ARC_CIRC,
+      () => this.arcCircle,
+      () => { void this.confirmStopRecording(); },
+    );
   }
 
   connectedCallback(): void {
@@ -71,7 +82,7 @@ class CockpitView extends BaseElement {
   }
 
   disconnectedCallback(): void {
-    this.cleanupLongPress();
+    this.longPress.cleanup();
   }
 
   private repo: IRouteRepository = new MemoryRouteRepository();
@@ -137,49 +148,27 @@ class CockpitView extends BaseElement {
 
   private handleStopPress(): void {
     if (!this.service) return;
-    this.longPressTimer = setTimeout(() => {
-      this.service?.stopRecording();
-      this.cleanupLongPress();
-    }, this.LONG_PRESS_MS);
-    this.animateArcProgress();
+    this.longPress.press();
+  }
+
+  /**
+   * Al completar el long-press de parada: congela la grabación (sin persistir
+   * ni resetear) y pregunta si guardar o descartar. El diálogo no es cerrable
+   * (ni ESC ni click fuera): parar una ruta obliga a decidir.
+   */
+  private async confirmStopRecording(): Promise<void> {
+    if (!this.service) return;
+    const metadata = this.service.prepareStop();
+    if (!metadata) return;
+    const routeId = this.service.getCurrentState().routeId;
+    await resolveStopDecision({
+      metadata, routeId, service: this.service, routeRepo: this.repo,
+      getPhotoRepo: () => this.getPhotoRepo(),
+    });
   }
 
   private handleStopRelease(): void {
-    if (this.longPressTimer) {
-      clearTimeout(this.longPressTimer);
-      this.longPressTimer = null;
-    }
-    this.resetArcProgress();
-  }
-
-  private animateArcProgress(): void {
-    const startTime = Date.now();
-    const animate = (): void => {
-      if (!this.arcCircle) return;
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / this.LONG_PRESS_MS, 1);
-      const dashLength = String(this.ARC_CIRC * progress);
-      const dashRemain = String(this.ARC_CIRC);
-      this.arcCircle.style.strokeDasharray = `${dashLength} ${dashRemain}`;
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    };
-    requestAnimationFrame(animate);
-  }
-
-  private resetArcProgress(): void {
-    if (this.arcCircle) {
-      this.arcCircle.style.strokeDasharray = '0 377';
-    }
-  }
-
-  private cleanupLongPress(): void {
-    if (this.longPressTimer) {
-      clearTimeout(this.longPressTimer);
-      this.longPressTimer = null;
-    }
-    this.resetArcProgress();
+    this.longPress.release();
   }
 
   private handlePauseResume(): void {
@@ -223,6 +212,20 @@ class CockpitView extends BaseElement {
     return photoCapture;
   }
 
+  private buildGalleryElement(): PhotoGalleryElement {
+    const gallery = buildPhotoGalleryElement((index) => {
+      openPhotoViewer({ photos: gallery.photos, startIndex: index });
+    });
+    this.galleryEl = gallery;
+    return gallery;
+  }
+
+  private async refreshGallery(routeId: string): Promise<void> {
+    const photoRepo = await this.getPhotoRepo();
+    const photos = await fetchGalleryPhotos(photoRepo, routeId);
+    if (this.galleryEl) this.galleryEl.photos = photos;
+  }
+
   private buildScreen(
     state: CockpitState | undefined,
     isActive: boolean,
@@ -251,6 +254,13 @@ class CockpitView extends BaseElement {
 
     this.photoCaptureEl = isActive ? this.buildPhotoCaptureButton() : null;
     if (this.photoCaptureEl) screen.appendChild(this.photoCaptureEl);
+
+    if (isActive && state) {
+      screen.appendChild(this.buildGalleryElement());
+      void this.refreshGallery(state.routeId);
+    } else {
+      this.galleryEl = null;
+    }
 
     return screen;
   }
@@ -311,6 +321,7 @@ class CockpitView extends BaseElement {
         callbacks: {
           onSuccess: () => {
             showToast('📷 Foto añadida', 'success');
+            void this.refreshGallery(routeId);
           },
           onError: (error: string) => {
             showToast(`⚠️ No se pudo guardar la foto: ${error}`, 'error');

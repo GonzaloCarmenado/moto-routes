@@ -23,7 +23,8 @@
   margin-bottom: var(--space-5);
 }
 
-.route-list__empty {
+.route-list__empty,
+.route-list__loading {
   text-align: center;
   color: var(--ink-soft);
   font-size: 15px;
@@ -38,12 +39,31 @@
 
 .route-card {
   display: flex;
+  align-items: center;
   gap: 14px;
   background: var(--panel);
   border-radius: var(--r-lg);
   padding: var(--space-4);
   cursor: pointer;
   transition: background var(--transition-fast);
+}
+
+.route-card__delete {
+  flex-shrink: 0;
+  width: var(--hitbox-min);
+  height: var(--hitbox-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.route-card__delete:hover {
+  background: var(--panel-sunken);
 }
 
 .route-card:active {

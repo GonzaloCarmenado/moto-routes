@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import './cockpit.element.js';
+import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
+import type { IRouteRepository } from '../shared/models/route.repository.js';
 
 beforeEach(() => {
   const mockGeolocation = {
@@ -58,6 +60,31 @@ async function mountCockpit(): Promise<{ cockpit: HTMLElement; shadowRoot: Shado
   document.body.appendChild(cockpit);
   await waitRender();
   return { cockpit, shadowRoot: cockpit.shadowRoot! };
+}
+
+async function mountCockpitWithRepo(
+  repo: IRouteRepository,
+): Promise<{ cockpit: HTMLElement; shadowRoot: ShadowRoot }> {
+  const cockpit = document.createElement('cockpit-view') as HTMLElement & { repository: IRouteRepository };
+  cockpit.repository = repo;
+  document.body.appendChild(cockpit);
+  await waitRender();
+  return { cockpit, shadowRoot: cockpit.shadowRoot! };
+}
+
+/** Empieza a grabar y mantiene pulsado el botón de parada hasta completar el long-press. */
+async function startAndLongPressStop(shadowRoot: ShadowRoot): Promise<void> {
+  const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
+  masterBtn.click(); // idle → recording, re-renderiza el botón como "stop"
+  const stopBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
+  stopBtn.dispatchEvent(new Event('pointerdown'));
+  await vi.advanceTimersByTimeAsync(1500);
+}
+
+function getConfirmDialog(): HTMLElement {
+  const dialog = document.body.querySelector('confirm-dialog');
+  expect(dialog).not.toBeNull();
+  return dialog as HTMLElement;
 }
 
 describe('CockpitView - controles principales', () => {
@@ -175,6 +202,24 @@ describe('CockpitView - foto durante grabación', () => {
     document.body.removeChild(cockpit);
   });
 
+  it('does not render the photo gallery while idle (AC-014)', async () => {
+    const { cockpit, shadowRoot } = await mountCockpit();
+    expect(shadowRoot.querySelector('photo-gallery')).toBeNull();
+    document.body.removeChild(cockpit);
+  });
+
+  it('renders the photo gallery (initially empty) once recording starts (AC-014)', async () => {
+    const { cockpit, shadowRoot } = await mountCockpit();
+    const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
+    masterBtn.click();
+    await waitRender();
+
+    const gallery = shadowRoot.querySelector('[data-cy="cockpit-photo-gallery"]');
+    expect(gallery).not.toBeNull();
+    expect(gallery!.shadowRoot!.querySelector('[data-cy="photo-placeholder"]')).not.toBeNull();
+    document.body.removeChild(cockpit);
+  });
+
   it('should keep the photo-capture menu open across a recording tick (regression: the DOM used to be torn down every second)', async () => {
     const { cockpit, shadowRoot } = await mountCockpit();
     const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
@@ -221,6 +266,98 @@ describe('CockpitView - foto durante grabación', () => {
       vi.useRealTimers();
     }
 
+    document.body.removeChild(cockpit);
+  });
+});
+
+describe('CockpitView - guardar/descartar al parar (AC-003 a AC-006)', () => {
+  afterEach(() => {
+    document.body.querySelector('confirm-dialog')?.remove();
+  });
+
+  it('opens a confirm dialog on completing the long-press stop, without persisting a completed route yet (AC-003)', async () => {
+    const repo = new MemoryRouteRepository();
+    const { cockpit, shadowRoot } = await mountCockpitWithRepo(repo);
+
+    vi.useFakeTimers();
+    try {
+      await startAndLongPressStop(shadowRoot);
+      getConfirmDialog();
+
+      const all = await repo.getAll();
+      expect(all.filter((r) => r.status === 'completed')).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+    document.body.removeChild(cockpit);
+  });
+
+  it('persists the route as completed and shows a success toast when the user chooses "Guardar" (AC-004)', async () => {
+    const repo = new MemoryRouteRepository();
+    const { cockpit, shadowRoot } = await mountCockpitWithRepo(repo);
+
+    vi.useFakeTimers();
+    try {
+      await startAndLongPressStop(shadowRoot);
+      const dialog = getConfirmDialog();
+      const saveBtn = dialog.shadowRoot!.querySelector('[data-cy="confirm-dialog-action-save"]') as HTMLButtonElement;
+      saveBtn.click();
+      await vi.advanceTimersByTimeAsync(50);
+
+      const all = await repo.getAll();
+      expect(all.filter((r) => r.status === 'completed')).toHaveLength(1);
+      expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('Ruta guardada');
+      expect(document.body.querySelector('confirm-dialog')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+    document.body.removeChild(cockpit);
+  });
+
+  it('deletes the route and shows a toast when the user chooses "Descartar" (AC-005)', async () => {
+    const repo = new MemoryRouteRepository();
+    const { cockpit, shadowRoot } = await mountCockpitWithRepo(repo);
+
+    vi.useFakeTimers();
+    let dialog: HTMLElement;
+    try {
+      await startAndLongPressStop(shadowRoot);
+      dialog = getConfirmDialog();
+    } finally {
+      // El descarte encadena un import() dinámico (getPhotoRepo → createPhotoRepository)
+      // que no resuelve de forma fiable solo avanzando fake timers; a partir de aquí,
+      // igual que el resto de flujos async del cockpit, se espera con timers reales.
+      vi.useRealTimers();
+    }
+
+    const discardBtn = dialog.shadowRoot!.querySelector('[data-cy="confirm-dialog-action-discard"]') as HTMLButtonElement;
+    discardBtn.click();
+    await waitRender();
+
+    const all = await repo.getAll();
+    expect(all).toHaveLength(0);
+    expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('Ruta descartada');
+    document.body.removeChild(cockpit);
+  });
+
+  it('cannot be dismissed with ESC or by clicking outside — parar obliga a decidir (AC-006)', async () => {
+    const repo = new MemoryRouteRepository();
+    const { cockpit, shadowRoot } = await mountCockpitWithRepo(repo);
+
+    vi.useFakeTimers();
+    try {
+      await startAndLongPressStop(shadowRoot);
+      const dialog = getConfirmDialog();
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(document.body.querySelector('confirm-dialog')).not.toBeNull();
+
+      const overlay = dialog.shadowRoot!.querySelector('[data-cy="confirm-dialog-overlay"]') as HTMLElement;
+      overlay.click();
+      expect(document.body.querySelector('confirm-dialog')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
     document.body.removeChild(cockpit);
   });
 });
