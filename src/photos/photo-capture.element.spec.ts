@@ -107,4 +107,45 @@ describe('<photo-capture>', () => {
     const menu = el.shadowRoot?.querySelector('.photo-menu');
     expect(menu?.classList.contains('menu-open')).toBe(false);
   });
+
+  it('should accept loading property and disable the button with a spinner while loading', async () => {
+    el.setAttribute('loading', '');
+    await new Promise((r) => setTimeout(r, 0));
+
+    const btn = el.shadowRoot?.querySelector('button') as HTMLButtonElement | null;
+    expect(btn?.disabled).toBe(true);
+    expect(btn?.classList.contains('is-loading')).toBe(true);
+    expect(btn?.getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('should not show menu when loading and button is clicked', () => {
+    el.setAttribute('loading', '');
+    const btn = el.shadowRoot?.querySelector('button') as HTMLButtonElement | null;
+
+    btn?.click();
+
+    const menu = el.shadowRoot?.querySelector('.photo-menu');
+    expect(menu?.classList.contains('menu-open')).toBe(false);
+  });
+
+  it('should close an already-open menu as soon as loading starts', () => {
+    const btn = el.shadowRoot?.querySelector('button') as HTMLButtonElement | null;
+    btn?.click();
+    expect(el.shadowRoot?.querySelector('.photo-menu')?.classList.contains('menu-open')).toBe(true);
+
+    el.setAttribute('loading', '');
+
+    expect(el.shadowRoot?.querySelector('.photo-menu')?.classList.contains('menu-open')).toBe(false);
+  });
+
+  it('should re-enable the button once loading finishes', async () => {
+    el.setAttribute('loading', '');
+    await new Promise((r) => setTimeout(r, 0));
+    el.removeAttribute('loading');
+    await new Promise((r) => setTimeout(r, 0));
+
+    const btn = el.shadowRoot?.querySelector('button') as HTMLButtonElement | null;
+    expect(btn?.disabled).toBe(false);
+    expect(btn?.classList.contains('is-loading')).toBe(false);
+  });
 });

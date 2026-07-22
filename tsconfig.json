@@ -23,11 +23,9 @@
     "baseUrl": ".",
     "paths": {
       "@tauri-apps/plugin-camera": ["src/shared/tauri-plugins/plugin-camera"],
-      "@tauri-apps/plugin-dialog": ["src/shared/tauri-plugins/plugin-dialog"],
-      "@tauri-apps/plugin-fs": ["src/__mocks__/@tauri-apps/plugin-fs"],
-      "@tauri-apps/api/path": ["src/__mocks__/@tauri-apps/api/path"]
+      "@tauri-apps/plugin-dialog": ["src/shared/tauri-plugins/plugin-dialog"]
     }
   },
-  "include": ["src", "vite.config.ts", "vitest.config.ts", "eslint.config.js"],
-  "exclude": ["node_modules", "dist", "src-tauri", "**/*.spec.ts"]
+  "include": ["src", "vite.config.ts", "vitest.config.ts", "eslint.config.js", "cypress.config.ts"],
+  "exclude": ["node_modules", "dist", "src-tauri"]
 }

@@ -5,27 +5,9 @@
 import type { IPhotoRepository } from '../shared/models/photo.repository.js';
 import type { CreatePhoto } from '../shared/models/photo.types.js';
 import type { CaptureResult } from '../shared/services/photo-capture-adapter.service.js';
-import { validatePhoto } from '../shared/services/photo-capture-adapter.service.js';
+import { validatePhoto, isTauri } from '../shared/services/photo-capture-adapter.service.js';
 import { extractPhotoLocation } from '../shared/services/photo-geolocation.service.js';
-
-/**
- * Convierte un File a base64 data URL para persistencia duradera.
- */
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-/**
- * Detecta Tauri.
- */
-function isTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-}
+import { savePhotoFile } from '../shared/services/photo-storage.service.js';
 
 /**
  * Añade una foto a una ruta con persistencia real.
@@ -45,20 +27,11 @@ export async function addPhotoToRoute(
 
   const location = await extractPhotoLocation(file, undefined, routePoints);
 
-  let filePath: string;
-  let objectUrl: string;
-
-  if (isTauri()) {
-    // Android: guardar en appDataDir, obtener ruta del sistema de archivos
-    const { savePhotoFile } = await import('../shared/services/photo-storage.service.js');
-    filePath = await savePhotoFile(file);
-    // Blob URL temporal para visualización inmediata
-    objectUrl = URL.createObjectURL(file);
-  } else {
-    // Web: guardar como base64 data URL (persistente en localStorage)
-    filePath = await fileToBase64(file);
-    objectUrl = filePath; // data URL se puede usar directamente como src
-  }
+  // savePhotoFile ya persiste de forma duradera: appDataDir en Tauri, base64 en navegador
+  const filePath = await savePhotoFile(file);
+  // En Tauri usamos un blob URL solo para la vista previa inmediata (el dato persistido es filePath);
+  // en navegador filePath ya es un data URL directamente usable como src.
+  const objectUrl = isTauri() ? URL.createObjectURL(file) : filePath;
 
   const photo: CreatePhoto = {
     routeId,

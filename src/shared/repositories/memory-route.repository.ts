@@ -25,34 +25,42 @@ export class MemoryRouteRepository implements IRouteRepository {
     points: CreateRoutePoint[],
     stops: CreateRouteStop[],
   ): Promise<Route> {
-    const id = crypto.randomUUID();
-    const createdAt = new Date().toISOString();
+    const id = route.id ?? crypto.randomUUID();
+    // Upsert por id: la grabación inserta una fila 'active' nada más empezar (para que
+    // las fotos capturadas en pleno directo tengan una ruta padre a la que referenciar)
+    // y la actualiza al parar, en vez de duplicarla.
+    const existing = this.routes.get(id);
+    const createdAt = existing?.createdAt ?? new Date().toISOString();
 
-    const savedRoute: Route = { id, createdAt, ...route };
+    const savedRoute: Route = { ...route, id, createdAt };
     this.routes.set(id, savedRoute);
-    this.orderMap.set(id, this.insertOrder++);
+    if (!existing) this.orderMap.set(id, this.insertOrder++);
 
-    const savedPoints: RoutePoint[] = points.map((p) => ({
-      id: crypto.randomUUID(),
-      routeId: id,
-      timestamp: p.timestamp,
-      lat: p.lat,
-      lng: p.lng,
-      alt: p.alt,
-      speed: p.speed,
-    }));
-    this.points.set(id, savedPoints);
+    if (points.length > 0) {
+      const savedPoints: RoutePoint[] = points.map((p) => ({
+        id: crypto.randomUUID(),
+        routeId: id,
+        timestamp: p.timestamp,
+        lat: p.lat,
+        lng: p.lng,
+        alt: p.alt,
+        speed: p.speed,
+      }));
+      this.points.set(id, [...(this.points.get(id) ?? []), ...savedPoints]);
+    }
 
-    const savedStops: RouteStop[] = stops.map((s) => ({
-      id: crypto.randomUUID(),
-      routeId: id,
-      startTime: s.startTime,
-      endTime: s.endTime,
-      lat: s.lat,
-      lng: s.lng,
-      type: s.type,
-    }));
-    this.stops.set(id, savedStops);
+    if (stops.length > 0) {
+      const savedStops: RouteStop[] = stops.map((s) => ({
+        id: crypto.randomUUID(),
+        routeId: id,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        lat: s.lat,
+        lng: s.lng,
+        type: s.type,
+      }));
+      this.stops.set(id, [...(this.stops.get(id) ?? []), ...savedStops]);
+    }
 
     return Promise.resolve(savedRoute);
   }

@@ -6,55 +6,55 @@ Permite al motorista capturar fotos (desde cámara o galería) durante la grabac
 ## Criterios de Aceptación
 
 ### Captura de fotos — General
-- [ ] AC-001: Existe un botón "Añadir foto" visible tanto en la pantalla de grabación (`<cockpit-view>`) como en la pantalla de detalle de ruta (`<route-detail>`). El botón debe tener hitbox mínima de 56×56px.
-- [ ] AC-002: Al pulsar "Añadir foto", se despliega un menú con dos opciones: "Cámara" (abre la cámara del dispositivo) y "Galería" (abre el selector de imágenes del dispositivo). En navegador, ambas opciones usan un `<input type="file" accept="image/*">`, y "Cámara" añade el atributo `capture="environment"`.
-- [ ] AC-003: La foto seleccionada/capturada se almacena en el sistema de archivos local de la app (app data dir de Tauri, o en memoria/base64 para navegador). No se sube a ningún servidor externo.
-- [ ] AC-004: Si el usuario cancela la selección de cámara/galería, no se realiza ninguna acción y la app permanece en el estado anterior.
+- [x] AC-001: Existe un botón "Añadir foto" visible tanto en la pantalla de grabación (`<cockpit-view>`) como en la pantalla de detalle de ruta (`<route-detail>`). El botón debe tener hitbox mínima de 56×56px. _(`<photo-capture>`, `--hitbox-min: 56px`; test: cockpit.element.spec.ts, route-detail.element.spec.ts)_
+- [x] AC-002: Al pulsar "Añadir foto", se despliega un menú con dos opciones: "Cámara" (abre la cámara del dispositivo) y "Galería" (abre el selector de imágenes del dispositivo). En navegador, ambas opciones usan un `<input type="file" accept="image/*">`, y "Cámara" añade el atributo `capture="environment"`. _(test: photo-capture.element.spec.ts)_
+- [x] AC-003: La foto seleccionada/capturada se almacena en el sistema de archivos local de la app (app data dir de Tauri, o en memoria/base64 para navegador). No se sube a ningún servidor externo. _(Verificado en dispositivo 2026-07-20 — ver [[ADR-020]])_
+- [x] AC-004: Si el usuario cancela la selección de cámara/galería, no se realiza ninguna acción y la app permanece en el estado anterior. _(input `cancel` event → `null` → `onCancel`; test: cockpit-photo.service.spec.ts, route-detail-photo.service.spec.ts)_
 
 ### Geolocalización de fotos
-- [ ] AC-005: Al capturar una foto nueva con la cámara, si la imagen contiene metadatos EXIF con coordenadas GPS, se usan esas coordenadas como ubicación de la foto.
-- [ ] AC-006: Al seleccionar una foto de la galería, si la imagen contiene metadatos EXIF con coordenadas GPS, se usan esas coordenadas. Si no contiene GPS, se intenta vincular al punto GPS más cercano en el tiempo de la ruta activa.
-- [ ] AC-007: Si una foto no tiene GPS en EXIF y no hay ruta activa (ej: en detalle de ruta guardada sin grabación en curso), se usa la última ubicación GPS conocida de la ruta como ubicación de la foto.
+- [ ] AC-005: Al capturar una foto nueva con la cámara, si la imagen contiene metadatos EXIF con coordenadas GPS, se usan esas coordenadas como ubicación de la foto. _(`extractPhotoLocation` intenta EXIF vía `exifr` primero — implementado, pero sin test que mockee `exifr.parse` devolviendo GPS real; el camino "con EXIF" no está verificado, solo el fallback sin EXIF)_
+- [ ] AC-006: Al seleccionar una foto de la galería, si la imagen contiene metadatos EXIF con coordenadas GPS, se usan esas coordenadas. Si no contiene GPS, se intenta vincular al punto GPS más cercano en el tiempo de la ruta activa. _(mismo gap que AC-005: falta test del camino con EXIF)_
+- [ ] AC-007: Si una foto no tiene GPS en EXIF y no hay ruta activa (ej: en detalle de ruta guardada sin grabación en curso), se usa la última ubicación GPS conocida de la ruta como ubicación de la foto. _(Desviación: la implementación usa el **centroide** de todos los puntos de la ruta, no el último punto conocido — ver AC-013. Si se quiere literalmente "última ubicación conocida", hay que decidir y ajustar `route-detail-photo.service.ts` o esta AC)_
 
 ### Fotos durante la grabación (Cockpit)
-- [ ] AC-008: Durante la grabación activa o en pausa, el botón "Añadir foto" está habilitado y es accesible.
-- [ ] AC-009: Al añadir una foto durante la grabación, se asocia automáticamente a la ruta en curso, registrando: ruta de archivo, timestamp de captura, coordenadas (lat, lon) y un ID único.
-- [ ] AC-010: La foto se muestra brevemente como una miniatura de confirmación (toast o chip temporal de 2-3 segundos) en la pantalla de grabación, sin interrumpir la telemetría en tiempo real.
+- [x] AC-008: Durante la grabación activa o en pausa, el botón "Añadir foto" está habilitado y es accesible. _(test: cockpit.element.spec.ts — "renders the photo-capture button once recording starts")_
+- [x] AC-009: Al añadir una foto durante la grabación, se asocia automáticamente a la ruta en curso, registrando: ruta de archivo, timestamp de captura, coordenadas (lat, lon) y un ID único. _(Verificado en dispositivo 2026-07-20 — ver [[ADR-020]])_
+- [x] AC-010: La foto se muestra brevemente como una miniatura de confirmación (toast o chip temporal de 2-3 segundos) en la pantalla de grabación, sin interrumpir la telemetría en tiempo real. _(implementado como toast de texto — `src/shared/utils/toast.ts`, no una miniatura de imagen; test: toast.spec.ts)_
 
 ### Fotos en detalle de ruta guardada
-- [ ] AC-011: En la pantalla de detalle de una ruta ya guardada (`<route-detail>`), el botón "Añadir foto" permite asociar nuevas fotos a esa ruta.
-- [ ] AC-012: Las fotos añadidas desde el detalle de ruta quedan persistidas y asociadas a esa ruta, y se muestran inmediatamente en la galería de la ruta sin necesidad de recargar.
-- [ ] AC-013: Las fotos añadidas desde el detalle de ruta que no tengan GPS propio heredan las coordenadas del punto central de la ruta (promedio de lat/lon de todos los puntos).
+- [x] AC-011: En la pantalla de detalle de una ruta ya guardada (`<route-detail>`), el botón "Añadir foto" permite asociar nuevas fotos a esa ruta. _(Verificado en dispositivo 2026-07-20)_
+- [x] AC-012: Las fotos añadidas desde el detalle de ruta quedan persistidas y asociadas a esa ruta, y se muestran inmediatamente en la galería de la ruta sin necesidad de recargar. _(Verificado en dispositivo 2026-07-20 — ver [[ADR-020]])_
+- [x] AC-013: Las fotos añadidas desde el detalle de ruta que no tengan GPS propio heredan las coordenadas del punto central de la ruta (promedio de lat/lon de todos los puntos). _(test: route-detail-photo.service.spec.ts — "falls back to the route centroid")_
 
 ### Visualización de fotos en el mapa
-- [ ] AC-014: En el mapa de la pantalla de detalle de ruta, cada foto se representa como un marcador puntual de un color distintivo (diferente del trazado de la ruta y de los puntos de inicio/fin). El color debe ser diferenciable del ámbar y del verde de inicio/fin — se usará un tono cobre/terracota (`--rust-line` o similar) para mantener coherencia con la paleta "Asfalto Nocturno".
-- [ ] AC-015: Al pulsar un marcador de foto en el mapa, se muestra un popup/tooltip con la miniatura de la foto correspondiente.
-- [ ] AC-016: Las fotos cuyas coordenadas estén a menos de 50 metros entre sí se agrupan en un único marcador de cluster. El marcador de cluster muestra el número de fotos agrupadas (ej: "3").
-- [ ] AC-017: Al pulsar un marcador de cluster, se hace zoom al área o se despliega un carrusel/lista de las miniaturas de las fotos agrupadas.
-- [ ] AC-018: Al hacer zoom en el mapa, los clusters se desagrupan progresivamente mostrando los marcadores individuales cuando el nivel de zoom permite distinguirlos visualmente.
+- [x] AC-014: En el mapa de la pantalla de detalle de ruta, cada foto se representa como un marcador puntual de un color distintivo (diferente del trazado de la ruta y de los puntos de inicio/fin). El color debe ser diferenciable del ámbar y del verde de inicio/fin — se usará un tono cobre/terracota (`--rust-line` o similar) para mantener coherencia con la paleta "Asfalto Nocturno". _(`route-map-photos.ts`, `#B8653A`)_
+- [ ] AC-015: Al pulsar un marcador de foto en el mapa, se muestra un popup/tooltip con la miniatura de la foto correspondiente. _(Gap real: `addPhotoMarkers()` acepta un callback `onPhotoClick` pero `route-map.element.ts` no lo conecta a ningún popup — el click en un marcador individual actualmente no hace nada)_
+- [x] AC-016: Las fotos cuyas coordenadas estén a menos de 50 metros entre sí se agrupan en un único marcador de cluster. El marcador de cluster muestra el número de fotos agrupadas (ej: "3"). _(`clusterPhotos()`; test: route-map-photos.spec.ts)_
+- [x] AC-017: Al pulsar un marcador de cluster, se hace zoom al área o se despliega un carrusel/lista de las miniaturas de las fotos agrupadas. _(implementada la opción de zoom vía `map.flyTo()`; no hay carrusel, pero la AC solo exige una de las dos)_
+- [ ] AC-018: Al hacer zoom en el mapa, los clusters se desagrupan progresivamente mostrando los marcadores individuales cuando el nivel de zoom permite distinguirlos visualmente. _(Gap real: los marcadores se calculan una única vez al asignar `photos`, no hay listener de `zoom`/`zoomend` que recalcule `clusterPhotos()`)_
 
 ### Galería de fotos en detalle de ruta
-- [ ] AC-019: La sección de fotos en `<route-detail>` muestra una galería horizontal (scroll lateral) con todas las miniaturas de las fotos asociadas a la ruta, ordenadas por timestamp.
-- [ ] AC-020: Al pulsar una miniatura en la galería, se abre la foto a tamaño completo en un visor/lightbox que ocupa la pantalla, con botón de cierre (X) y soporte para swipe entre fotos en móvil.
-- [ ] AC-021: Si la ruta no tiene fotos asociadas, la sección muestra el placeholder existente (franjas diagonales + "Sin fotos").
+- [x] AC-019: La sección de fotos en `<route-detail>` muestra una galería horizontal (scroll lateral) con todas las miniaturas de las fotos asociadas a la ruta, ordenadas por timestamp. _(`.photo-gallery` con `overflow-x:auto` + `scroll-snap-type:x mandatory`; test: route-detail.element.spec.ts)_
+- [ ] AC-020: Al pulsar una miniatura en la galería, se abre la foto a tamaño completo en un visor/lightbox que ocupa la pantalla, con botón de cierre (X) y soporte para swipe entre fotos en móvil. _(Parcialmente implementado y testeado: abre a tamaño completo con botón de cierre funcional — ver AC-033. Falta el soporte de swipe/navegación entre fotos dentro del visor, que hoy no existe)_
+- [x] AC-021: Si la ruta no tiene fotos asociadas, la sección muestra el placeholder existente (franjas diagonales + "Sin fotos"). _(test: route-detail.element.spec.ts)_
 
 ### Adaptabilidad navegador / Tauri
-- [ ] AC-022: En entorno Tauri (Android), "Cámara" usa el plugin `@tauri-apps/plugin-camera` (o intent nativo de cámara) y "Galería" usa `@tauri-apps/plugin-file-opener` o intent nativo de galería.
-- [ ] AC-023: En entorno navegador (Vite dev), tanto "Cámara" como "Galería" usan `<input type="file" accept="image/*">` como fallback, y "Cámara" añade `capture="environment"`.
-- [ ] AC-024: La detección de entorno (Tauri vs navegador) es automática y no requiere configuración manual del usuario.
+- [x] AC-022: En entorno Tauri (Android), "Cámara" usa el plugin `@tauri-apps/plugin-camera` (o intent nativo de cámara) y "Galería" usa `@tauri-apps/plugin-file-opener` o intent nativo de galería. _(Desviación deliberada respecto al texto original: `@tauri-apps/plugin-camera` y `@tauri-apps/plugin-dialog` no existen en el registro de npm. En su lugar, tanto Tauri/Android como navegador usan `<input type="file" accept="image/*">` — que en el WebView de Android abre igualmente la cámara/galería nativas — ver `photo-capture-adapter.service.ts`)_
+- [x] AC-023: En entorno navegador (Vite dev), tanto "Cámara" como "Galería" usan `<input type="file" accept="image/*">` como fallback, y "Cámara" añade `capture="environment"`. _(test: photo-capture-adapter.service.spec.ts)_
+- [x] AC-024: La detección de entorno (Tauri vs navegador) es automática y no requiere configuración manual del usuario. _(`isTauri()` vía `__TAURI_INTERNALS__`; test: photo-capture-adapter.service.spec.ts)_
 
 ### Persistencia
-- [ ] AC-025: Las fotos se guardan como archivos en el sistema de archivos local (app data dir). La ruta de archivo y metadatos (ruta_id, lat, lon, timestamp) se persisten en SQLite en una tabla `photos`.
-- [ ] AC-026: La tabla `photos` permite recuperar todas las fotos de una ruta mediante `route_id`, ordenadas por timestamp.
+- [x] AC-025: Las fotos se guardan como archivos en el sistema de archivos local (app data dir). La ruta de archivo y metadatos (ruta_id, lat, lon, timestamp) se persisten en SQLite en una tabla `photos`. _(Verificado en dispositivo 2026-07-20 — ver [[ADR-020]])_
+- [x] AC-026: La tabla `photos` permite recuperar todas las fotos de una ruta mediante `route_id`, ordenadas por timestamp. _(Verificado en dispositivo 2026-07-20)_
 
 ### Tests
-- [ ] AC-027: Test unitario: el botón "Añadir foto" se renderiza en `<cockpit-view>` solo cuando hay grabación activa o en pausa.
-- [ ] AC-028: Test unitario: el botón "Añadir foto" se renderiza en `<route-detail>` siempre que haya una ruta cargada.
-- [ ] AC-029: Test unitario: el menú de opciones (Cámara/Galería) se muestra al pulsar "Añadir foto" y se oculta al cancelar.
-- [ ] AC-030: Test unitario: las fotos sin GPS en EXIF heredan correctamente las coordenadas según el contexto (ruta activa vs ruta guardada).
-- [ ] AC-031: Test unitario: el clustering agrupa correctamente marcadores a < 50m y los separa a >= 50m.
-- [ ] AC-032: Test unitario: la galería muestra "Sin fotos" cuando no hay fotos asociadas a la ruta.
-- [ ] AC-033: Test unitario: el visor/lightbox se abre con la foto correcta al pulsar una miniatura y se cierra con el botón X.
+- [x] AC-027: Test unitario: el botón "Añadir foto" se renderiza en `<cockpit-view>` solo cuando hay grabación activa o en pausa. _(cockpit.element.spec.ts)_
+- [x] AC-028: Test unitario: el botón "Añadir foto" se renderiza en `<route-detail>` siempre que haya una ruta cargada. _(route-detail.element.spec.ts)_
+- [x] AC-029: Test unitario: el menú de opciones (Cámara/Galería) se muestra al pulsar "Añadir foto" y se oculta al cancelar. _(photo-capture.element.spec.ts)_
+- [x] AC-030: Test unitario: las fotos sin GPS en EXIF heredan correctamente las coordenadas según el contexto (ruta activa vs ruta guardada). _(cockpit-photo.service.spec.ts, route-detail-photo.service.spec.ts — cubre el fallback; el camino "con EXIF" queda pendiente, ver AC-005/006)_
+- [x] AC-031: Test unitario: el clustering agrupa correctamente marcadores a < 50m y los separa a >= 50m. _(route-map-photos.spec.ts)_
+- [x] AC-032: Test unitario: la galería muestra "Sin fotos" cuando no hay fotos asociadas a la ruta. _(route-detail.element.spec.ts)_
+- [x] AC-033: Test unitario: el visor/lightbox se abre con la foto correcta al pulsar una miniatura y se cierra con el botón X. _(route-detail.element.spec.ts)_
 
 ## Comportamiento Esperado
 

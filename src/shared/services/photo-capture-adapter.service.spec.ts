@@ -10,7 +10,7 @@ import { isTauri, captureFromCamera, pickFromGallery, validatePhoto } from './ph
 describe('isTauri', () => {
   beforeEach(() => {
     // Clean any Tauri internals before each test
-    delete (window as Record<string, unknown>).__TAURI_INTERNALS__;
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
   });
 
   it('should return false in browser environment', () => {
@@ -18,7 +18,7 @@ describe('isTauri', () => {
   });
 
   it('should return true when __TAURI_INTERNALS__ exists', () => {
-    (window as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
     expect(isTauri()).toBe(true);
   });
 });
@@ -54,7 +54,7 @@ describe('validatePhoto', () => {
 
 describe('captureFromCamera (browser)', () => {
   beforeEach(() => {
-    delete (window as Record<string, unknown>).__TAURI_INTERNALS__;
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
   });
 
   it('should create an input with type file and capture=environment', async () => {
@@ -84,7 +84,7 @@ describe('captureFromCamera (browser)', () => {
 
 describe('pickFromGallery (browser)', () => {
   beforeEach(() => {
-    delete (window as Record<string, unknown>).__TAURI_INTERNALS__;
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
   });
 
   it('should create an input with type file without capture', async () => {

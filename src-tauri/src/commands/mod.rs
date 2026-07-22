@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tracing::{error, info, warn};
 use thiserror::Error;
+use tracing::{error, info, warn};
 
 // ─── Error types ────────────────────────────────────────
 

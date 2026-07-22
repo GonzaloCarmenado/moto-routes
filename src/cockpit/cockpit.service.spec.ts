@@ -55,6 +55,8 @@ describe('createCockpitService - estado de grabación', () => {
     expect(state.points).toEqual([]);
     expect(state.hasGpsPermission).toBe(false);
     expect(state.invisibleMode).toBe(false);
+    expect(typeof state.routeId).toBe('string');
+    expect(state.routeId.length).toBeGreaterThan(0);
   });
 
   it('should start recording', () => {
@@ -337,6 +339,31 @@ describe('createCockpitService with repository', () => {
     expect(all[0]!.duration).toBeGreaterThanOrEqual(0);
   });
 
+  it('should persist an active route row immediately when recording starts, before it is stopped (regression: photos captured mid-recording violated the photos.route_id FOREIGN KEY because no route row existed yet)', async () => {
+    const service = createCockpitService(gps, createMockStorage(), repo);
+    service.startRecording();
+    await Promise.resolve();
+
+    const routeIdDuringRecording = service.getCurrentState().routeId;
+    const saved = await repo.getById(routeIdDuringRecording);
+    expect(saved).not.toBeNull();
+    expect(saved!.status).toBe('active');
+  });
+
+  it('should update the same row (not create a second one) when the route is later stopped and saved', async () => {
+    const service = createCockpitService(gps, createMockStorage(), repo);
+    service.startRecording();
+    await Promise.resolve();
+    const routeId = service.getCurrentState().routeId;
+
+    service.stopRecording();
+
+    const all = await repo.getAll();
+    expect(all.filter((r) => r.id === routeId)).toHaveLength(1);
+    const finalRoute = await repo.getById(routeId);
+    expect(finalRoute!.status).toBe('completed');
+  });
+
   it('should still return metadata even if repository is provided', () => {
     const service = createCockpitService(gps, createMockStorage(), repo);
     service.startRecording();
@@ -349,5 +376,26 @@ describe('createCockpitService with repository', () => {
     service.startRecording();
     const metadata = service.stopRecording();
     expect(metadata).not.toBeNull();
+  });
+
+  it('should persist the route using the routeId pre-generated in state (photos taken mid-recording stay linked)', async () => {
+    const service = createCockpitService(gps, createMockStorage(), repo);
+    service.startRecording();
+    const routeIdDuringRecording = service.getCurrentState().routeId;
+
+    service.stopRecording();
+
+    const saved = await repo.getById(routeIdDuringRecording);
+    expect(saved).not.toBeNull();
+    expect(saved!.id).toBe(routeIdDuringRecording);
+  });
+
+  it('should generate a fresh routeId for the next recording after stopping', () => {
+    const service = createCockpitService(gps, createMockStorage(), repo);
+    service.startRecording();
+    const firstRouteId = service.getCurrentState().routeId;
+    service.stopRecording();
+    const nextRouteId = service.getCurrentState().routeId;
+    expect(nextRouteId).not.toBe(firstRouteId);
   });
 });

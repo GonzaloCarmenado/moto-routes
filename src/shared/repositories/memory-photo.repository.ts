@@ -28,7 +28,7 @@ function savePhotos(photos: Photo[]): void {
 export class MemoryPhotoRepository implements IPhotoRepository {
   private photos: Photo[] = loadPhotos();
 
-  async add(photo: CreatePhoto): Promise<Photo> {
+  add(photo: CreatePhoto): Promise<Photo> {
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
     const newPhoto: Photo = {
@@ -38,28 +38,31 @@ export class MemoryPhotoRepository implements IPhotoRepository {
     };
     this.photos.push(newPhoto);
     savePhotos(this.photos);
-    return newPhoto;
+    return Promise.resolve(newPhoto);
   }
 
-  async getByRouteId(routeId: string): Promise<Photo[]> {
+  getByRouteId(routeId: string): Promise<Photo[]> {
     this.photos = loadPhotos();
-    return this.photos
-      .filter((p) => p.routeId === routeId)
-      .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
+    return Promise.resolve(
+      this.photos
+        .filter((p) => p.routeId === routeId)
+        .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt)),
+    );
   }
 
-  async getById(id: string): Promise<Photo | null> {
+  getById(id: string): Promise<Photo | null> {
     this.photos = loadPhotos();
-    return this.photos.find((p) => p.id === id) ?? null;
+    return Promise.resolve(this.photos.find((p) => p.id === id) ?? null);
   }
 
-  async delete(id: string): Promise<void> {
+  delete(id: string): Promise<void> {
     this.photos = this.photos.filter((p) => p.id !== id);
     savePhotos(this.photos);
+    return Promise.resolve();
   }
 
-  async countByRouteId(routeId: string): Promise<number> {
+  countByRouteId(routeId: string): Promise<number> {
     this.photos = loadPhotos();
-    return this.photos.filter((p) => p.routeId === routeId).length;
+    return Promise.resolve(this.photos.filter((p) => p.routeId === routeId).length);
   }
 }
