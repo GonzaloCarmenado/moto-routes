@@ -6,10 +6,11 @@ import * as maplibregl from 'maplibre-gl';
 import type { Photo } from '../models/photo.types.js';
 
 const PHOTO_CLUSTER_RADIUS_METERS = 50;
-const PHOTO_MARKER_COLOR = '#B8653A'; // cobre/terracota
 
 /**
  * Añade marcadores de fotos al mapa MapLibre con clustering simple.
+ * Los estilos de los marcadores viven en `route-map.element.css`
+ * (`.route-map-marker--photo` / `--cluster`).
  */
 export function addPhotoMarkers(
   map: maplibregl.Map,
@@ -23,38 +24,24 @@ export function addPhotoMarkers(
   const clusters = clusterPhotos(withCoords, PHOTO_CLUSTER_RADIUS_METERS);
 
   for (const cluster of clusters) {
+    const isCluster = cluster.photos.length > 1;
     const el = document.createElement('div');
-    el.className = 'route-map-marker route-map-marker--photo';
-    el.setAttribute('data-cy', cluster.photos.length > 1 ? 'photo-cluster' : 'photo-marker');
+    el.className = isCluster
+      ? 'route-map-marker route-map-marker--photo route-map-marker--cluster'
+      : 'route-map-marker route-map-marker--photo';
+    el.setAttribute('data-cy', isCluster ? 'photo-cluster' : 'photo-marker');
 
-    if (cluster.photos.length === 1) {
-      // Single marker
-      el.style.cssText = `
-        width: 16px; height: 16px; border-radius: 50%;
-        background: ${PHOTO_MARKER_COLOR};
-        border: 2px solid #fff;
-        cursor: pointer;
-      `;
-      el.addEventListener('click', () => onPhotoClick?.(cluster.photos[0]!));
-    } else {
-      // Cluster marker
-      el.style.cssText = `
-        width: 32px; height: 32px; border-radius: 50%;
-        background: ${PHOTO_MARKER_COLOR};
-        border: 2px solid #fff;
-        color: #fff;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 12px; font-weight: bold;
-        cursor: pointer;
-      `;
+    if (isCluster) {
       el.textContent = String(cluster.photos.length);
       el.addEventListener('click', () => {
-        // Zoom to cluster area
+        // Zoom hacia la zona del cluster
         map.flyTo({
           center: [cluster.centerLng, cluster.centerLat],
           zoom: map.getZoom() + 2,
         });
       });
+    } else {
+      el.addEventListener('click', () => onPhotoClick?.(cluster.photos[0]!));
     }
 
     new maplibregl.Marker({ element: el })

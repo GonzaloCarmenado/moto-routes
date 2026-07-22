@@ -48,3 +48,25 @@
 .route-map-marker--end {
   background: var(--amber);
 }
+
+/* Marcador de foto — cobre/terracota, diferenciable del ámbar y del verde */
+.route-map-marker--photo {
+  width: 16px;
+  height: 16px;
+  background: var(--rust-line);
+  border-color: var(--ink);
+  cursor: pointer;
+}
+
+/* Marcador de cluster — más grande y con el nº de fotos agrupadas */
+.route-map-marker--cluster {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+}
