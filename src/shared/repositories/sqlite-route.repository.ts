@@ -77,14 +77,25 @@ export class SqliteRouteRepository implements IRouteRepository {
   ): Promise<Route> {
     await this.ensureSchema();
 
-    const id = crypto.randomUUID();
-    const createdAt = new Date().toISOString();
+    const id = route.id ?? crypto.randomUUID();
+    // Upsert por id: la grabación inserta una fila 'active' nada más empezar (para que
+    // las fotos capturadas en pleno directo tengan una ruta padre a la que referenciar
+    // vía FOREIGN KEY) y la actualiza al parar, en vez de duplicarla.
+    const existing = await this.getById(id);
+    const createdAt = existing?.createdAt ?? new Date().toISOString();
 
-    await this.db.execute(
-      `INSERT INTO routes (id, created_at, duration, total_distance, avg_speed, status, visibility, origin)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, createdAt, route.duration, route.totalDistance, route.avgSpeed, route.status, route.visibility, route.origin],
-    );
+    if (existing) {
+      await this.db.execute(
+        `UPDATE routes SET duration = ?, total_distance = ?, avg_speed = ?, status = ?, visibility = ?, origin = ? WHERE id = ?`,
+        [route.duration, route.totalDistance, route.avgSpeed, route.status, route.visibility, route.origin, id],
+      );
+    } else {
+      await this.db.execute(
+        `INSERT INTO routes (id, created_at, duration, total_distance, avg_speed, status, visibility, origin)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, createdAt, route.duration, route.totalDistance, route.avgSpeed, route.status, route.visibility, route.origin],
+      );
+    }
 
     if (points.length > 0) {
       const placeholders = points.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
@@ -110,7 +121,7 @@ export class SqliteRouteRepository implements IRouteRepository {
       );
     }
 
-    return { id, createdAt, ...route };
+    return { ...route, id, createdAt };
   }
 
   async getById(id: string): Promise<Route | null> {

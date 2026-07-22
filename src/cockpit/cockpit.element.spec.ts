@@ -47,7 +47,10 @@ afterEach(() => {
 });
 
 async function waitRender(): Promise<void> {
-  await new Promise((r) => setTimeout(r, 10));
+  // 50ms (no 10ms): connectedCallback encadena varios await reales (initService()
+  // intenta createSqliteDb() antes de caer a MemoryRouteRepository) y bajo carga
+  // (suite completa + cobertura v8) 10ms resultaba intermitente.
+  await new Promise((r) => setTimeout(r, 50));
 }
 
 async function mountCockpit(): Promise<{ cockpit: HTMLElement; shadowRoot: ShadowRoot }> {
@@ -153,6 +156,71 @@ describe('CockpitView - GPS', () => {
     const { cockpit, shadowRoot } = await mountCockpit();
     const btn = shadowRoot.getElementById('cockpit-master-btn');
     expect(btn).not.toBeNull();
+    document.body.removeChild(cockpit);
+  });
+});
+
+describe('CockpitView - foto durante grabación', () => {
+  it('does not render the photo-capture button while idle (AC-027)', async () => {
+    const { cockpit, shadowRoot } = await mountCockpit();
+    expect(shadowRoot.querySelector('[data-cy="cockpit-photo-capture"]')).toBeNull();
+    document.body.removeChild(cockpit);
+  });
+
+  it('renders the photo-capture button once recording starts (AC-027)', async () => {
+    const { cockpit, shadowRoot } = await mountCockpit();
+    const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
+    masterBtn.click();
+    expect(shadowRoot.querySelector('[data-cy="cockpit-photo-capture"]')).not.toBeNull();
+    document.body.removeChild(cockpit);
+  });
+
+  it('should keep the photo-capture menu open across a recording tick (regression: the DOM used to be torn down every second)', async () => {
+    const { cockpit, shadowRoot } = await mountCockpit();
+    const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
+
+    // Fake timers must be active *before* starting the recording, so the setInterval
+    // it registers (the 1s cronómetro tick) is one vi.advanceTimersByTimeAsync can drive.
+    vi.useFakeTimers();
+    try {
+      masterBtn.click();
+
+      const photoCapture = shadowRoot.querySelector('[data-cy="cockpit-photo-capture"]');
+      expect(photoCapture).not.toBeNull();
+
+      const innerBtn = photoCapture!.shadowRoot!.querySelector('.photo-btn') as HTMLButtonElement;
+      innerBtn.click();
+      expect(photoCapture!.shadowRoot!.querySelector('.photo-menu')?.classList.contains('menu-open')).toBe(true);
+
+      // Simulate the 1s cronómetro tick that used to call render() (root.innerHTML = '')
+      // and silently destroy <photo-capture> together with its just-opened menu.
+      await vi.advanceTimersByTimeAsync(1000);
+
+      const photoCaptureAfterTick = shadowRoot.querySelector('[data-cy="cockpit-photo-capture"]');
+      expect(photoCaptureAfterTick).toBe(photoCapture);
+      expect(photoCaptureAfterTick!.shadowRoot!.querySelector('.photo-menu')?.classList.contains('menu-open')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    document.body.removeChild(cockpit);
+  });
+
+  it('should still update the live time/speed display while the menu is open', async () => {
+    const { cockpit, shadowRoot } = await mountCockpit();
+    const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
+
+    vi.useFakeTimers();
+    try {
+      masterBtn.click();
+      await vi.advanceTimersByTimeAsync(3000);
+
+      const time = shadowRoot.querySelector('.app-header__time');
+      expect(time?.textContent).toBe('00:03');
+    } finally {
+      vi.useRealTimers();
+    }
+
     document.body.removeChild(cockpit);
   });
 });

@@ -3,7 +3,7 @@
  * Son funciones puras, sin efectos secundarios, fácilmente testeables.
  */
 
-import type { StopDetectionState } from './cockpit.types.js';
+import type { StopDetectionState, CockpitState } from './cockpit.types.js';
 
 const EARTH_RADIUS_KM = 6371;
 
@@ -62,6 +62,40 @@ export function calculateAvgSpeed(distanceKm: number, timeSeconds: number): numb
  */
 export function formatSpeed(speedKmh: number): string {
   return String(Math.round(speedKmh));
+}
+
+export interface CockpitDisplayValues {
+  speed: string;
+  avgSpeed: string;
+  dist: string;
+  time: string;
+  alt: string;
+}
+
+/** Formatea los valores en bruto del estado del cockpit para mostrarlos en pantalla. */
+export function getCockpitDisplayValues(state: CockpitState | undefined): CockpitDisplayValues {
+  if (!state) return { speed: '0', avgSpeed: '--', dist: '--', time: '--:--', alt: '--' };
+  return {
+    speed: formatSpeed(state.currentSpeed),
+    avgSpeed: state.avgSpeed.toFixed(0),
+    dist: state.totalDistance.toFixed(1),
+    time: formatDuration(state.elapsedTime),
+    alt: state.altitude.toFixed(0),
+  };
+}
+
+/** Clase CSS del chip de estado según el status de grabación. */
+export function getStatusChipClass(status: CockpitState['status'] | undefined): string {
+  if (status === 'recording') return 'chip-recording';
+  if (status === 'paused') return 'chip-paused';
+  return 'chip-neutral';
+}
+
+/** Etiqueta del chip de estado según el status de grabación. */
+export function getStatusChipLabel(status: CockpitState['status'] | undefined): string {
+  if (status === 'recording') return 'En ruta';
+  if (status === 'paused') return 'Pausada';
+  return 'Listo';
 }
 
 /**

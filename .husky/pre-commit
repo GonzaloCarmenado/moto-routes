@@ -6,4 +6,13 @@ npx eslint src/ --max-warnings 0 || exit 1
 echo "🧪 Ejecutando tests frontend..."
 npx vitest run --coverage --silent || exit 1
 
+echo "🦀 Comprobando formato Rust..."
+(cd src-tauri && cargo fmt --check) || exit 1
+
+echo "🦀 Ejecutando Clippy (backend)..."
+(cd src-tauri && cargo clippy -- -D warnings) || exit 1
+
+echo "🦀 Ejecutando tests backend..."
+(cd src-tauri && cargo test) || exit 1
+
 echo "✅ Pre-commit checks superados"

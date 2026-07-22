@@ -42,6 +42,14 @@ function insertStops(rows: DbRow[], params: unknown[]): { rowsAffected: number }
   return { rowsAffected: params.length / 7 };
 }
 
+function updateRoute(rows: DbRow[], params: unknown[]): { rowsAffected: number } {
+  const [duration, totalDistance, avgSpeed, status, visibility, origin, id] = params;
+  const row = rows.find((r) => r.table === 'routes' && r.data['id'] === id);
+  if (!row) return { rowsAffected: 0 };
+  row.data = { ...row.data, duration, total_distance: totalDistance, avg_speed: avgSpeed, status, visibility, origin };
+  return { rowsAffected: 1 };
+}
+
 function deleteRows(rows: DbRow[], id: string): { rowsAffected: number } {
   let count = 0;
   for (let i = rows.length - 1; i >= 0; i--) {
@@ -61,6 +69,7 @@ function queryMock(rows: DbRow[], orderState: { value: number }, sql: string, pa
   if (upper.startsWith('INSERT INTO ROUTES') && params) return Promise.resolve(insertRoute(rows, orderState, params));
   if (upper.startsWith('INSERT INTO ROUTE_POINTS') && params) return Promise.resolve(insertPoints(rows, params));
   if (upper.startsWith('INSERT INTO ROUTE_STOPS') && params) return Promise.resolve(insertStops(rows, params));
+  if (upper.startsWith('UPDATE ROUTES') && params) return Promise.resolve(updateRoute(rows, params));
   if (upper.startsWith('DELETE') && params) return Promise.resolve(deleteRows(rows, params[0] as string));
   return Promise.resolve({ rowsAffected: 0 });
 }
