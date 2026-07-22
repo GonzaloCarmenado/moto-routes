@@ -11,8 +11,9 @@ const AMBER_FALLBACK = '#d4880f';
 
 import type { Photo } from '../models/photo.types.js';
 import { addPhotoMarkers } from './route-map-photos.js';
+import { BaseElement } from '../base-element.js';
 
-class RouteMap extends HTMLElement {
+class RouteMap extends BaseElement {
   private _points: RouteMapPoint[] = [];
   private _photos: Photo[] = [];
   private mapInstance: maplibregl.Map | null = null;
@@ -58,33 +59,28 @@ class RouteMap extends HTMLElement {
     }
   }
 
-  private render(): void {
+  protected render(): void {
     this.destroyMap();
+    if (!this.shadowRoot) return;
 
-    const root = this.shadowRoot;
-    if (!root) return;
-    root.innerHTML = '';
-
-    const style = document.createElement('style');
-    style.textContent = `${maplibreStyles}\n${styles}`;
-    root.appendChild(style);
-
+    const sheet = `${maplibreStyles}\n${styles}`;
     const container = document.createElement('div');
     container.className = 'route-map-container';
     container.setAttribute('data-cy', 'route-map-container');
-    root.appendChild(container);
 
     if (this._points.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'map-empty';
       empty.textContent = 'Sin datos de GPS';
       container.appendChild(empty);
+      this.renderShadow(sheet, container);
       return;
     }
 
     const mapRoot = document.createElement('div');
     mapRoot.className = 'maplibre-root';
     container.appendChild(mapRoot);
+    this.renderShadow(sheet, container);
 
     requestAnimationFrame(() => {
       this.initMap(mapRoot, this._points);

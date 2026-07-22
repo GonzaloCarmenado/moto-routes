@@ -1,0 +1,72 @@
+/*
+ * Estilos de overlays montados en el DOM ligero (document.body), no dentro de
+ * un Shadow DOM: el toast de feedback y el visor de fotos a pantalla completa.
+ * Se cargan a nivel documento vía index.css, por eso ven los tokens de :root.
+ */
+
+/* ─── Toast ─────────────────────────────────────────────────────── */
+.photo-toast {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 90vw;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  text-align: center;
+  z-index: 1000;
+}
+
+.photo-toast--success {
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.photo-toast--error {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* ─── Visor de fotos a pantalla completa ────────────────────────── */
+.photo-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--scrim);
+}
+
+.photo-viewer-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  width: var(--hitbox-min);
+  height: var(--hitbox-min);
+  background: transparent;
+  border: none;
+  color: var(--ink);
+  font-size: 28px;
+  cursor: pointer;
+}
+
+.photo-viewer-img {
+  max-width: 95%;
+  max-height: 85%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.photo-viewer-counter {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--ink-faint);
+  font-size: 14px;
+  font-family: var(--font-ui);
+}
