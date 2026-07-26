@@ -15,7 +15,7 @@
 
 ---
 
-## Paso 1: Componente compartido `<tab-bar>`
+## Paso 1: Componente compartido `<tab-bar>` — ✅ Completado
 - **Objetivo**: Crear el componente de pestañas agnóstico de dominio en `src/shared/`, con contenido de panel vía `<slot name="{id}">` (API ya decidida con el usuario, ver "Notas de Implementación" de la spec) y lista de pestañas (`{id, label}`) como propiedad JS.
 - **AC cubiertos**: AC-001, AC-002, AC-003, AC-004, AC-026
 - **Tests a escribir** (primero, en `tab-bar.element.spec.ts`):

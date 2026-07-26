@@ -6,10 +6,10 @@ Mejora la integración visual entre las fotos de una ruta y su mapa/listado, apo
 ## Criterios de Aceptación
 
 ### Componente compartido de pestañas (`<tab-bar>`)
-- [ ] AC-001: Existe un componente compartido `<tab-bar>` en `src/shared/tab-bar/` que recibe una lista de pestañas (`{id, label}`) vía propiedad JS, y el contenido de cada panel vía `<slot name="{id}">` (cada llamador coloca sus nodos como hijos ligeros de `<tab-bar>` marcados con el atributo `slot` correspondiente al `id` de la pestaña). Renderiza: una fila de botones de pestaña (cada uno con hitbox mínima 56×56px y `data-cy="tab-bar-btn-<id>"`) y el panel correspondiente a la pestaña activa.
-- [ ] AC-002: Al pulsar una pestaña distinta de la activa, esta se marca visualmente como activa (acento `--amber`/`--amber-strong`) y se muestra su panel; los paneles no activos quedan ocultos pero no se destruyen del DOM (no se pierde su estado interno, ej. scroll).
-- [ ] AC-003: El tab-bar es accesible: usa `role="tablist"` en el contenedor y `role="tab"` + `aria-selected` en cada botón; cada botón es un `<button>` real, operable con teclado (Tab para llegar, Enter/Espacio para activar).
-- [ ] AC-004: El tab-bar es agnóstico del dominio — no conoce fotos, rutas ni ningún dato de negocio concreto — y queda listo para reutilizarse en features futuras además de `<route-detail>`.
+- [x] AC-001: Existe un componente compartido `<tab-bar>` en `src/shared/tab-bar/` que recibe una lista de pestañas (`{id, label}`) vía propiedad JS, y el contenido de cada panel vía `<slot name="{id}">` (cada llamador coloca sus nodos como hijos ligeros de `<tab-bar>` marcados con el atributo `slot` correspondiente al `id` de la pestaña). Renderiza: una fila de botones de pestaña (cada uno con hitbox mínima 56×56px y `data-cy="tab-bar-btn-<id>"`) y el panel correspondiente a la pestaña activa. _(test: tab-bar.element.spec.ts)_
+- [x] AC-002: Al pulsar una pestaña distinta de la activa, esta se marca visualmente como activa (acento `--amber`/`--amber-strong`) y se muestra su panel; los paneles no activos quedan ocultos pero no se destruyen del DOM (no se pierde su estado interno, ej. scroll). _(test: tab-bar.element.spec.ts)_
+- [x] AC-003: El tab-bar es accesible: usa `role="tablist"` en el contenedor y `role="tab"` + `aria-selected` en cada botón; cada botón es un `<button>` real, operable con teclado (Tab para llegar, Enter/Espacio para activar). _(test: tab-bar.element.spec.ts)_
+- [x] AC-004: El tab-bar es agnóstico del dominio — no conoce fotos, rutas ni ningún dato de negocio concreto — y queda listo para reutilizarse en features futuras además de `<route-detail>`. _(por construcción: cero imports de dominio en tab-bar.element.ts; test: tab-bar.element.spec.ts)_
 
 ### Redesign de `<route-detail>` con pestañas
 - [ ] AC-005: `<route-detail>` mantiene el mapa y el bloque de cabecera (título, fecha, grid de estadísticas) fuera de las pestañas, siempre visibles; debajo se monta un `<tab-bar>` con al menos 3 pestañas: "Fotos", "Estadísticas" y "Notas".
@@ -41,7 +41,7 @@ Mejora la integración visual entre las fotos de una ruta y su mapa/listado, apo
 - [ ] AC-025: La columna `preview_polyline` se añade de forma segura para instalaciones existentes: `ensureSchema()` comprueba si la columna ya existe (vía `PRAGMA table_info(routes)` o equivalente) y, si no, ejecuta `ALTER TABLE routes ADD COLUMN preview_polyline TEXT` — porque `CREATE TABLE IF NOT EXISTS` (patrón ya usado en `SqliteRouteRepository`) no modifica una tabla que ya existía antes de esta feature.
 
 ### Tests
-- [ ] AC-026: Test unitario: `<tab-bar>` cambia el panel visible al pulsar cada botón de pestaña, y en todo momento solo un panel está visible.
+- [x] AC-026: Test unitario: `<tab-bar>` cambia el panel visible al pulsar cada botón de pestaña, y en todo momento solo un panel está visible. _(test: tab-bar.element.spec.ts)_
 - [ ] AC-027: Test unitario: `<route-detail>` renderiza las 3 pestañas ("Fotos", "Estadísticas", "Notas") y "Fotos" es la activa por defecto.
 - [ ] AC-028: Test unitario: `<photo-gallery layout="grid">` renderiza las miniaturas en cuadrícula y emite `photo-gallery:select` con el mismo contrato que `layout="strip"`.
 - [ ] AC-029: Test unitario: al pulsar la miniatura del popup de un marcador individual en `<route-map>`, se dispara la apertura del visor con el `startIndex` correspondiente a esa foto dentro de la lista completa.
