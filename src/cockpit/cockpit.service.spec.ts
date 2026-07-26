@@ -448,4 +448,67 @@ describe('createCockpitService with repository', () => {
     const nextRouteId = service.getCurrentState().routeId;
     expect(nextRouteId).not.toBe(firstRouteId);
   });
+
+  it('should persist a simplified previewPolyline (max ~40 points, matching first/last recorded GPS point) on confirmSaveRecording (AC-019)', async () => {
+    const service = createCockpitService(gps, createMockStorage(), repo);
+    const fireWatch = mockWatchCallback(gps);
+    service.startRecording();
+    const routeId = service.getCurrentState().routeId;
+
+    const firstPos = {
+      coords: { latitude: 40.0, longitude: -3.0, altitude: 10, speed: 5, accuracy: 10, altitudeAccuracy: 10, heading: 0 },
+      timestamp: 1000,
+    } as GeolocationPosition;
+    fireWatch(firstPos);
+
+    for (let i = 1; i < 49; i++) {
+      fireWatch({
+        coords: {
+          latitude: 40.0 + i * 0.001,
+          longitude: -3.0 + i * 0.001,
+          altitude: 10,
+          speed: 5,
+          accuracy: 10,
+          altitudeAccuracy: 10,
+          heading: 0,
+        },
+        timestamp: 1000 + i * 1000,
+      } as GeolocationPosition);
+    }
+    const lastPos = {
+      coords: { latitude: 41.0, longitude: -2.0, altitude: 10, speed: 5, accuracy: 10, altitudeAccuracy: 10, heading: 0 },
+      timestamp: 60000,
+    } as GeolocationPosition;
+    fireWatch(lastPos);
+
+    const recordedPoints = service.getCurrentState().points;
+    expect(recordedPoints.length).toBe(50);
+
+    service.prepareStop();
+    service.confirmSaveRecording();
+
+    const saved = await repo.getById(routeId);
+    expect(saved).not.toBeNull();
+    expect(saved!.previewPolyline).not.toBeNull();
+    expect(saved!.previewPolyline!.length).toBeLessThanOrEqual(40);
+    expect(saved!.previewPolyline![0]).toEqual([recordedPoints[0]!.lat, recordedPoints[0]!.lng]);
+    expect(saved!.previewPolyline![saved!.previewPolyline!.length - 1]).toEqual([
+      recordedPoints[recordedPoints.length - 1]!.lat,
+      recordedPoints[recordedPoints.length - 1]!.lng,
+    ]);
+  });
+
+  it('should persist an empty previewPolyline without breaking the rest of the save when no GPS point was recorded', async () => {
+    const service = createCockpitService(gps, createMockStorage(), repo);
+    service.startRecording();
+    const routeId = service.getCurrentState().routeId;
+
+    service.prepareStop();
+    service.confirmSaveRecording();
+
+    const saved = await repo.getById(routeId);
+    expect(saved).not.toBeNull();
+    expect(saved!.status).toBe('completed');
+    expect(saved!.previewPolyline).toEqual([]);
+  });
 });
