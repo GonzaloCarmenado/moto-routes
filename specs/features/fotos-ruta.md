@@ -35,7 +35,7 @@ Permite al motorista capturar fotos (desde cámara o galería) durante la grabac
 
 ### Galería de fotos en detalle de ruta
 - [x] AC-019: La sección de fotos en `<route-detail>` muestra una galería horizontal (scroll lateral) con todas las miniaturas de las fotos asociadas a la ruta, ordenadas por timestamp. _(`.photo-gallery` con `overflow-x:auto` + `scroll-snap-type:x mandatory`; test: route-detail.element.spec.ts)_
-- [ ] AC-020: Al pulsar una miniatura en la galería, se abre la foto a tamaño completo en un visor/lightbox que ocupa la pantalla, con botón de cierre (X) y soporte para swipe entre fotos en móvil. _(Parcialmente implementado y testeado: abre a tamaño completo con botón de cierre funcional — ver AC-033. Falta el soporte de swipe/navegación entre fotos dentro del visor, que hoy no existe)_
+- [x] AC-020: Al pulsar una miniatura en la galería, se abre la foto a tamaño completo en un visor/lightbox que ocupa la pantalla, con botón de cierre (X) y soporte para swipe entre fotos en móvil. _(Corregido el gap: el checklist no reflejaba que `<photo-viewer>` ya soporta swipe táctil — `onTouchStart`/`onTouchEnd` con umbral `SWIPE_THRESHOLD_PX`, añadido junto al resto del visor compartido en `mejoras-usabilidad`. Test: photo-viewer.element.spec.ts — "navigates on a horizontal swipe gesture")_
 - [x] AC-021: Si la ruta no tiene fotos asociadas, la sección muestra el placeholder existente (franjas diagonales + "Sin fotos"). _(test: route-detail.element.spec.ts)_
 
 ### Adaptabilidad navegador / Tauri
