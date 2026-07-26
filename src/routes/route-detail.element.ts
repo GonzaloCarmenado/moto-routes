@@ -19,7 +19,7 @@ import { showToast } from '../shared/feedback/toast.js';
 import { BaseElement } from '../shared/base-element.js';
 import { APP_EVENTS, dispatchAppEvent } from '../shared/app-events.js';
 import '../shared/photo-gallery/photo-gallery.element.js';
-import { PHOTO_GALLERY_SELECT_EVENT, type PhotoGallerySelectDetail, type GalleryPhoto } from '../shared/photo-gallery/photo-gallery.element.js';
+import { PHOTO_GALLERY_SELECT_EVENT, type PhotoGallerySelectDetail, type GalleryPhoto, type PhotoGalleryLayout } from '../shared/photo-gallery/photo-gallery.element.js';
 import { openPhotoViewer } from '../shared/photo-viewer/photo-viewer.element.js';
 import '../shared/tab-bar/tab-bar.element.js';
 import type { TabBarTab } from '../shared/tab-bar/tab-bar.element.js';
@@ -268,7 +268,8 @@ class RouteDetail extends BaseElement {
   }
 
   private buildGalleryElement(): HTMLElement {
-    const gallery = document.createElement('photo-gallery') as HTMLElement & { photos: GalleryPhoto[] };
+    const gallery = document.createElement('photo-gallery') as HTMLElement & { photos: GalleryPhoto[]; layout: PhotoGalleryLayout };
+    gallery.layout = 'grid';
     gallery.photos = this.toGalleryPhotos();
     gallery.addEventListener(PHOTO_GALLERY_SELECT_EVENT, ((event: CustomEvent<PhotoGallerySelectDetail>) => {
       openPhotoViewer({
