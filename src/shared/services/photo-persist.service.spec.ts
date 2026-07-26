@@ -1,4 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Sin mockear, el `import('exifr')` real de extractPhotoLocation() intenta parsear
+// los File de prueba (que no son JPEGs válidos) y falla en silencio, cayendo al
+// fallback — lo que dejaba el camino "con GPS en EXIF" sin verificar a través del
+// pipeline completo de persistencia (solo se testeaba la función pura en
+// photo-geolocation.service.spec.ts, no que persistCapturedPhoto la usara de verdad).
+const mockParse = vi.fn();
+vi.mock('exifr', () => ({ parse: mockParse }));
+
 import { persistCapturedPhoto } from './photo-persist.service.js';
 import type { IPhotoRepository } from '../models/photo.repository.js';
 import type { CreatePhoto } from '../models/photo.types.js';
@@ -22,6 +31,20 @@ describe('persistCapturedPhoto', () => {
 
   beforeEach(() => {
     photoRepo = createMockRepo();
+    mockParse.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('persists the EXIF GPS coordinates (not the fallback) when the image has them (AC-005, AC-006)', async () => {
+    mockParse.mockResolvedValue({ latitude: 40.416775, longitude: -3.70379 });
+
+    const photo = await persistCapturedPhoto({
+      file: mockFile, routeId, photoRepo,
+      fallbackPoint: { lat: 0, lng: 0 },
+      routePoints: [{ lat: 10, lng: 10 }],
+    });
+
+    expect(photo.latitude).toBe(40.416775);
+    expect(photo.longitude).toBe(-3.70379);
   });
 
   it('throws on an unsupported format and does not persist', async () => {

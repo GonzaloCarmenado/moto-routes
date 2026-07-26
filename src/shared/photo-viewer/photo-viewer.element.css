@@ -1,0 +1,87 @@
+@import '../styles/tokens.css';
+
+:host {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+}
+
+.close,
+.delete {
+  position: absolute;
+  top: 16px;
+  z-index: 10;
+  width: var(--hitbox-min);
+  height: var(--hitbox-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.close {
+  right: 16px;
+  color: var(--ink);
+  font-size: 28px;
+}
+
+.delete {
+  left: 16px;
+  color: var(--danger);
+  font-size: 22px;
+}
+
+.nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: var(--hitbox-min);
+  height: var(--hitbox-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--ink);
+  font-size: 32px;
+  cursor: pointer;
+}
+
+.nav--prev {
+  left: 4px;
+}
+
+.nav--next {
+  right: 4px;
+}
+
+.img {
+  position: relative;
+  z-index: 1;
+  max-width: 95%;
+  max-height: 85%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.counter {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--ink-faint);
+  font-size: 14px;
+  font-family: var(--font-ui);
+}

@@ -63,6 +63,10 @@ export class SqliteRouteRepository implements IRouteRepository {
 
   private async ensureSchema(): Promise<void> {
     if (this.initialized) return;
+    // SQLite tiene `foreign_keys` en OFF por defecto (por conexión, no por fichero):
+    // sin esto, el ON DELETE CASCADE de route_points/route_stops/photos no se
+    // aplica y delete() dejaría huérfanos. Debe ejecutarse antes de cualquier DELETE.
+    await this.db.execute('PRAGMA foreign_keys = ON;');
     const statements = SCHEMA.split(';').filter((s) => s.trim().length > 0);
     for (const stmt of statements) {
       await this.db.execute(stmt);

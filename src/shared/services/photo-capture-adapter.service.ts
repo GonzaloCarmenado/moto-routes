@@ -23,15 +23,18 @@ export function isTauri(): boolean {
  * Siempre usa <input type="file" accept="image/*" capture="environment">.
  */
 export async function captureFromCamera(): Promise<CaptureResult> {
-  return captureFromInput(true);
+  const files = await captureFromInput({ useCamera: true, multiple: false });
+  return files[0] ?? null;
 }
 
 /**
- * Abre la galería del dispositivo y devuelve la foto seleccionada.
- * Siempre usa <input type="file" accept="image/*">.
+ * Abre la galería del dispositivo y devuelve las fotos seleccionadas (puede
+ * ser más de una — el input admite selección múltiple). Array vacío si el
+ * usuario cancela.
+ * Siempre usa <input type="file" accept="image/*" multiple>.
  */
-export async function pickFromGallery(): Promise<CaptureResult> {
-  return captureFromInput(false);
+export async function pickFromGallery(): Promise<File[]> {
+  return captureFromInput({ useCamera: false, multiple: true });
 }
 
 /**
@@ -55,24 +58,27 @@ export function validatePhoto(file: File): string | null {
 
 /**
  * Captura desde navegador/Tauri usando input file.
- * @param useCamera - Si es true, añade capture="environment" para abrir la cámara.
+ * @param options.useCamera - Si es true, añade capture="environment" para abrir la cámara.
+ * @param options.multiple - Si es true, permite seleccionar más de un archivo (galería).
  */
-function captureFromInput(useCamera: boolean): Promise<CaptureResult> {
+function captureFromInput(options: { useCamera: boolean; multiple: boolean }): Promise<File[]> {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    if (useCamera) {
+    if (options.useCamera) {
       input.setAttribute('capture', 'environment');
+    }
+    if (options.multiple) {
+      input.multiple = true;
     }
 
     input.addEventListener('change', () => {
-      const file = input.files?.[0] ?? null;
-      resolve(file);
+      resolve(Array.from(input.files ?? []));
     });
 
     input.addEventListener('cancel', () => {
-      resolve(null);
+      resolve([]);
     });
 
     input.click();

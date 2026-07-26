@@ -1,13 +1,26 @@
 import styles from './route-list.element.css?inline';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
+import type { IPhotoRepository } from '../shared/models/photo.repository.js';
 import type { Route } from '../shared/models/route.types.js';
 import { formatDuration } from '../cockpit/cockpit.transform.js';
 import { BaseElement } from '../shared/base-element.js';
 import { APP_EVENTS, dispatchAppEvent } from '../shared/app-events.js';
+import { createPhotoRepository } from '../shared/services/photo-storage.service.js';
+import { deleteRouteAndPhotos } from '../shared/services/route-deletion.service.js';
+import { confirmDialog } from '../shared/feedback/confirm-dialog.element.js';
+import { showToast } from '../shared/feedback/toast.js';
+import { toErrorMessage } from '../shared/utils/errors.js';
 
 class RouteList extends BaseElement {
   private _repository: IRouteRepository | null = null;
   private _routes: Route[] = [];
+  private _loading = false;
+  private photoRepo: IPhotoRepository | null = null;
+
+  private async getPhotoRepo(): Promise<IPhotoRepository> {
+    this.photoRepo ??= await createPhotoRepository();
+    return this.photoRepo;
+  }
 
   set repository(repo: IRouteRepository | null) {
     this._repository = repo;
@@ -38,15 +51,30 @@ class RouteList extends BaseElement {
 
   private async fetchAndRender(): Promise<void> {
     if (!this._repository) return;
-    this._routes = await this._repository.getAll();
+    this._loading = true;
     this.render();
+    this._routes = await this._repository.getAll();
+    this._loading = false;
+    this.render();
+  }
+
+  private buildLoadingState(): HTMLElement {
+    const el = document.createElement('div');
+    el.className = 'route-list__loading';
+    el.setAttribute('data-cy', 'route-list-loading');
+    el.textContent = 'Cargando rutas…';
+    return el;
   }
 
   protected render(): void {
     const screen = document.createElement('div');
     screen.className = 'route-list';
-    screen.appendChild(this.buildHeader(this._routes));
-    screen.appendChild(this.buildBody(this._routes));
+    if (this._loading) {
+      screen.appendChild(this.buildLoadingState());
+    } else {
+      screen.appendChild(this.buildHeader(this._routes));
+      screen.appendChild(this.buildBody(this._routes));
+    }
 
     this.renderShadow(styles, screen);
   }
@@ -114,7 +142,46 @@ class RouteList extends BaseElement {
     info.appendChild(badges);
 
     card.appendChild(info);
+    card.appendChild(this.buildDeleteButton(route));
     return card;
+  }
+
+  private buildDeleteButton(route: Route): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.className = 'route-card__delete';
+    btn.setAttribute('data-cy', 'route-card-btn-eliminar');
+    btn.setAttribute('aria-label', 'Eliminar ruta');
+    btn.textContent = '🗑';
+    btn.addEventListener('click', (event) => {
+      // La tarjeta entera navega al detalle al pulsarla — evitar que el click
+      // de "eliminar" también dispare esa navegación.
+      event.stopPropagation();
+      void this.handleDeleteRoute(route);
+    });
+    return btn;
+  }
+
+  private async handleDeleteRoute(route: Route): Promise<void> {
+    const choice = await confirmDialog({
+      title: 'Eliminar ruta',
+      message: `Se eliminará esta ruta de ${route.totalDistance.toFixed(1)} km y todas sus fotos. Esta acción no se puede deshacer.`,
+      actions: [
+        { id: 'cancel', label: 'Cancelar', variant: 'neutral' },
+        { id: 'confirm', label: 'Eliminar', variant: 'danger' },
+      ],
+    });
+    if (choice !== 'confirm' || !this._repository) return;
+
+    try {
+      const photoRepo = await this.getPhotoRepo();
+      await deleteRouteAndPhotos(this._repository, photoRepo, route.id);
+    } catch (err) {
+      showToast(`⚠️ ${toErrorMessage(err, 'Error al eliminar la ruta')}`, 'error');
+      return;
+    }
+    this._routes = this._routes.filter((r) => r.id !== route.id);
+    this.render();
+    showToast('Ruta eliminada', 'success');
   }
 }
 

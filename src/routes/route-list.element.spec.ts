@@ -4,7 +4,10 @@ import type { IRouteRepository } from '../shared/models/route.repository.js';
 import './route-list.element.js';
 
 async function waitRender(): Promise<void> {
-  await new Promise((r) => setTimeout(r, 10));
+  // 50ms: el borrado de ruta encadena confirmDialog + un import() dinámico
+  // (getPhotoRepo) antes de refrescar — bajo carga (suite completa + cobertura
+  // v8) un margen menor resultaba intermitente en otros specs similares.
+  await new Promise((r) => setTimeout(r, 50));
 }
 
 async function createList(repo: IRouteRepository): Promise<HTMLElement> {
@@ -20,6 +23,25 @@ describe('route-list - listado y tarjetas', () => {
 
   beforeEach(() => {
     repo = new MemoryRouteRepository();
+  });
+
+  it('shows a loading state synchronously while the initial fetch is in flight (AC-010)', () => {
+    const list = document.createElement('route-list') as HTMLElement & { repository: IRouteRepository };
+    list.repository = repo;
+    document.body.appendChild(list);
+
+    // fetchAndRender hace su primer render (loading) antes del primer await —
+    // se puede observar sin esperar ningún microtask.
+    expect(list.shadowRoot!.querySelector('[data-cy="route-list-loading"]')).not.toBeNull();
+    document.body.removeChild(list);
+  });
+
+  it('replaces the loading state with the routes once the fetch resolves', async () => {
+    const list = await createList(repo);
+    const root = list.shadowRoot!;
+    expect(root.querySelector('[data-cy="route-list-loading"]')).toBeNull();
+    expect(root.querySelector('.route-list__empty')).not.toBeNull();
+    document.body.removeChild(list);
   });
 
   it('should show empty message when no routes', async () => {
@@ -125,6 +147,70 @@ describe('route-list - eventos e interacción', () => {
     expect(handler).toHaveBeenCalledOnce();
     expect((handler.mock.calls[0]![0] as CustomEvent<{ routeId: string }>).detail.routeId).toBeTypeOf('string');
     window.removeEventListener('view-route', handler);
+    document.body.removeChild(list);
+  });
+
+  it('shows a confirm dialog when the delete button is clicked, without also navigating to the route (AC-008)', async () => {
+    await repo.save(
+      { duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' },
+      [], [],
+    );
+    const list = await createList(repo);
+    const root = list.shadowRoot!;
+    const deleteBtn = root.querySelector('[data-cy="route-card-btn-eliminar"]') as HTMLButtonElement;
+    expect(deleteBtn).not.toBeNull();
+
+    const viewHandler = vi.fn();
+    window.addEventListener('view-route', viewHandler);
+    deleteBtn.click();
+    await waitRender();
+
+    expect(document.body.querySelector('confirm-dialog')).not.toBeNull();
+    expect(viewHandler).not.toHaveBeenCalled();
+
+    window.removeEventListener('view-route', viewHandler);
+    document.body.querySelector('confirm-dialog')?.remove();
+    document.body.removeChild(list);
+  });
+
+  it('deletes the route and shows a toast when the deletion is confirmed, without reloading the screen (AC-008)', async () => {
+    const saved = await repo.save(
+      { duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' },
+      [], [],
+    );
+    const list = await createList(repo);
+    const root = list.shadowRoot!;
+    (root.querySelector('[data-cy="route-card-btn-eliminar"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    const dialog = document.body.querySelector('confirm-dialog')!;
+    const confirmBtn = dialog.shadowRoot!.querySelector('[data-cy="confirm-dialog-action-confirm"]') as HTMLButtonElement;
+    confirmBtn.click();
+    await waitRender();
+
+    expect(await repo.getById(saved.id)).toBeNull();
+    expect(list.shadowRoot!.querySelectorAll('.route-card')).toHaveLength(0);
+    expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('Ruta eliminada');
+    document.body.removeChild(list);
+  });
+
+  it('does not delete the route when the deletion is cancelled', async () => {
+    const saved = await repo.save(
+      { duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' },
+      [], [],
+    );
+    const list = await createList(repo);
+    const root = list.shadowRoot!;
+    (root.querySelector('[data-cy="route-card-btn-eliminar"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    const dialog = document.body.querySelector('confirm-dialog')!;
+    const cancelBtn = dialog.shadowRoot!.querySelector('[data-cy="confirm-dialog-action-cancel"]') as HTMLButtonElement;
+    cancelBtn.click();
+    await waitRender();
+
+    expect(await repo.getById(saved.id)).not.toBeNull();
+    expect(list.shadowRoot!.querySelectorAll('.route-card')).toHaveLength(1);
     document.body.removeChild(list);
   });
 

@@ -70,3 +70,12 @@
   font-size: 12px;
   font-weight: 700;
 }
+
+/* Popup con la miniatura al pulsar un marcador de foto individual (AC-015) */
+.route-map-photo-popup img {
+  display: block;
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+}

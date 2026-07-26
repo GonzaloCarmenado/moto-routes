@@ -6,7 +6,7 @@ import type { Photo } from '../models/photo.types.js';
 // testear el algoritmo de clustering de forma aislada.
 vi.mock('maplibre-gl', () => ({ default: {}, Marker: vi.fn() }));
 
-const { clusterPhotos } = await import('./route-map-photos.js');
+const { clusterPhotos, photoClusterRadiusForZoom } = await import('./route-map-photos.js');
 
 function makePhoto(id: string, lat: number, lng: number): Photo {
   return {
@@ -66,5 +66,19 @@ describe('clusterPhotos (AC-031)', () => {
 
   it('returns no clusters for an empty photo list', () => {
     expect(clusterPhotos([], 50)).toEqual([]);
+  });
+});
+
+describe('photoClusterRadiusForZoom (AC-018)', () => {
+  it('returns the base 50m radius at the reference zoom (15)', () => {
+    expect(photoClusterRadiusForZoom(15)).toBeCloseTo(50, 5);
+  });
+
+  it('shrinks the radius when zooming in past the reference zoom', () => {
+    expect(photoClusterRadiusForZoom(19)).toBeCloseTo(3.125, 5);
+  });
+
+  it('grows the radius when zooming out past the reference zoom', () => {
+    expect(photoClusterRadiusForZoom(13)).toBeCloseTo(200, 5);
   });
 });

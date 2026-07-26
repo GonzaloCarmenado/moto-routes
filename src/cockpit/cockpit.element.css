@@ -14,8 +14,21 @@
   font-family: var(--font-ui);
 }
 
+/* Envuelve .cockpit-screen (ver cockpit.element.ts#render). Sin display:flex propio
+   aquí, este div no encogía dentro del :host flex — su min-height:auto por defecto lo
+   dejaba crecer con el contenido y :host{overflow:hidden} recortaba el resto sin scroll. */
+.app-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .cockpit-screen {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 24px 22px calc(var(--nav-height) + 40px);
 }
 
