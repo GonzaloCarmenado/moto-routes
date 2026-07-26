@@ -28,7 +28,6 @@ class RouteMap extends BaseElement {
   private _photos: MapPhoto[] = [];
   private mapInstance: maplibregl.Map | null = null;
   private photoMarkers: maplibregl.Marker[] = [];
-  private activePopup: maplibregl.Popup | null = null;
 
   set points(value: RouteMapPoint[]) {
     this._points = value;
@@ -62,8 +61,6 @@ class RouteMap extends BaseElement {
   }
 
   private destroyMap(): void {
-    this.activePopup?.remove();
-    this.activePopup = null;
     this.photoMarkers = [];
     if (this.mapInstance) {
       this.mapInstance.remove();
@@ -127,61 +124,15 @@ class RouteMap extends BaseElement {
     for (const marker of this.photoMarkers) marker.remove();
     const radius = photoClusterRadiusForZoom(map.getZoom());
     this.photoMarkers = addPhotoMarkers(map, this._photos, radius, (photo) => {
-      this.showPhotoPopup(photo);
+      // Marcador individual: abre directamente el visor a pantalla completa,
+      // sin popup ni overlay intermedio.
+      this.emitPhotoSelect(photo);
     });
   }
 
   /** Callback compartido para emitir el evento de selección de foto */
   private emitPhotoSelect(photo: MapPhoto): void {
     this.emit<RouteMapPhotoSelectDetail>(ROUTE_MAP_PHOTO_SELECT_EVENT, { photo });
-  }
-
-  private showPhotoPopup(photo: MapPhoto): void {
-    const map = this.mapInstance;
-    if (!map || photo.latitude == null || photo.longitude == null) return;
-
-    this.activePopup?.remove();
-
-    const content = document.createElement('div');
-    content.className = 'route-map-photo-popup';
-    content.setAttribute('data-cy', 'route-map-photo-popup');
-
-    if (photo.objectUrl) {
-      const img = document.createElement('img');
-      img.src = photo.objectUrl;
-      img.alt = 'Foto de la ruta';
-      img.style.cursor = 'pointer';
-      // Nota: en algunos dispositivos Android, MapLibre Popup no propaga
-      // correctamente eventos de clic en elementos hijo. Se añade un botón
-      // explícito como fallback adicional.
-      img.addEventListener('click', () => { this.emitPhotoSelect(photo); });
-      content.appendChild(img);
-    }
-
-    // Botón explícito como fallback para cuando el clic en la imagen
-    // no se propaga correctamente en Android (MapLibre Popup issue)
-    const viewBtn = document.createElement('button');
-    viewBtn.textContent = '🔍 Ver foto';
-    viewBtn.setAttribute('data-cy', 'route-map-popup-view-btn');
-    viewBtn.style.cssText = [
-      'display:block',
-      'width:100%',
-      'margin-top:4px',
-      'padding:6px 0',
-      'background:var(--amber,#d4880f)',
-      'color:#000',
-      'border:none',
-      'border-radius:4px',
-      'font-size:12px',
-      'cursor:pointer',
-    ].join(';');
-    viewBtn.addEventListener('click', () => { this.emitPhotoSelect(photo); });
-    content.appendChild(viewBtn);
-
-    this.activePopup = new maplibregl.Popup({ offset: 16 })
-      .setLngLat([photo.longitude, photo.latitude])
-      .setDOMContent(content)
-      .addTo(map);
   }
 
   private drawRoute(map: maplibregl.Map, points: RouteMapPoint[]): void {
