@@ -9,14 +9,15 @@ const ROUTE_SOURCE_ID = 'route-line';
 const ROUTE_LAYER_ID = 'route-line-layer';
 const AMBER_FALLBACK = '#d4880f';
 
-import type { Photo } from '../models/photo.types.js';
-import { addPhotoMarkers } from './route-map-photos.js';
+import { addPhotoMarkers, photoClusterRadiusForZoom, type MapPhoto } from './route-map-photos.js';
 import { BaseElement } from '../base-element.js';
 
 class RouteMap extends BaseElement {
   private _points: RouteMapPoint[] = [];
-  private _photos: Photo[] = [];
+  private _photos: MapPhoto[] = [];
   private mapInstance: maplibregl.Map | null = null;
+  private photoMarkers: maplibregl.Marker[] = [];
+  private activePopup: maplibregl.Popup | null = null;
 
   set points(value: RouteMapPoint[]) {
     this._points = value;
@@ -27,15 +28,12 @@ class RouteMap extends BaseElement {
     return this._points;
   }
 
-  set photos(value: Photo[]) {
+  set photos(value: MapPhoto[]) {
     this._photos = value;
-    if (this.isConnected && this.mapInstance) {
-      // Just add markers without re-initializing the map
-      addPhotoMarkers(this.mapInstance, this._photos);
-    }
+    if (this.mapInstance) this.renderPhotoMarkers();
   }
 
-  get photos(): Photo[] {
+  get photos(): MapPhoto[] {
     return this._photos;
   }
 
@@ -53,6 +51,9 @@ class RouteMap extends BaseElement {
   }
 
   private destroyMap(): void {
+    this.activePopup?.remove();
+    this.activePopup = null;
+    this.photoMarkers = [];
     if (this.mapInstance) {
       this.mapInstance.remove();
       this.mapInstance = null;
@@ -100,7 +101,45 @@ class RouteMap extends BaseElement {
 
     map.on('load', () => {
       this.drawRoute(map, points);
+      this.renderPhotoMarkers();
     });
+    // El radio de clustering escala con el zoom (ver photoClusterRadiusForZoom), así que
+    // hay que recalcularlo cuando el usuario hace zoom para que los clusters se desagrupen.
+    map.on('zoomend', () => {
+      this.renderPhotoMarkers();
+    });
+  }
+
+  private renderPhotoMarkers(): void {
+    const map = this.mapInstance;
+    if (!map) return;
+    for (const marker of this.photoMarkers) marker.remove();
+    const radius = photoClusterRadiusForZoom(map.getZoom());
+    this.photoMarkers = addPhotoMarkers(map, this._photos, radius, (photo) => {
+      this.showPhotoPopup(photo);
+    });
+  }
+
+  private showPhotoPopup(photo: MapPhoto): void {
+    const map = this.mapInstance;
+    if (!map || photo.latitude == null || photo.longitude == null) return;
+
+    this.activePopup?.remove();
+
+    const content = document.createElement('div');
+    content.className = 'route-map-photo-popup';
+    content.setAttribute('data-cy', 'route-map-photo-popup');
+    if (photo.objectUrl) {
+      const img = document.createElement('img');
+      img.src = photo.objectUrl;
+      img.alt = 'Foto de la ruta';
+      content.appendChild(img);
+    }
+
+    this.activePopup = new maplibregl.Popup({ offset: 16 })
+      .setLngLat([photo.longitude, photo.latitude])
+      .setDOMContent(content)
+      .addTo(map);
   }
 
   private drawRoute(map: maplibregl.Map, points: RouteMapPoint[]): void {

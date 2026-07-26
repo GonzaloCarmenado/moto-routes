@@ -5,6 +5,11 @@
  * tamaño (specs/ui/frontend-conventions.md).
  */
 
+import '../shared/photo-gallery/photo-gallery.element.js';
+import { PHOTO_GALLERY_SELECT_EVENT, type PhotoGallerySelectDetail, type GalleryPhoto } from '../shared/photo-gallery/photo-gallery.element.js';
+
+export type PhotoGalleryElement = HTMLElement & { photos: GalleryPhoto[] };
+
 export function buildHeader(time: string, chipClass: string, chipLabel: string): HTMLElement {
   const header = document.createElement('div');
   header.className = 'app-header';
@@ -183,6 +188,15 @@ export function buildInvisibleToggle(invisibleMode: boolean, onToggle: () => voi
   btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="${eyePath}"/></svg><span>Modo invisible</span>`;
   btn.addEventListener('click', onToggle);
   return btn;
+}
+
+export function buildPhotoGalleryElement(onSelect: (index: number) => void): PhotoGalleryElement {
+  const gallery = document.createElement('photo-gallery') as PhotoGalleryElement;
+  gallery.setAttribute('data-cy', 'cockpit-photo-gallery');
+  gallery.addEventListener(PHOTO_GALLERY_SELECT_EVENT, ((event: CustomEvent<PhotoGallerySelectDetail>) => {
+    onSelect(event.detail.index);
+  }) as EventListener);
+  return gallery;
 }
 
 export function buildGpsOverlay(onRequestGps: () => void): HTMLElement {

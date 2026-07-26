@@ -4,6 +4,7 @@ const writeFileMock = vi.fn().mockResolvedValue(undefined);
 const readFileMock = vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]));
 const existsMock = vi.fn().mockResolvedValue(false);
 const mkdirMock = vi.fn().mockResolvedValue(undefined);
+const removeMock = vi.fn().mockResolvedValue(undefined);
 const appDataDirMock = vi.fn().mockResolvedValue('/data/data/com.motoroutes.app/files');
 const joinMock = vi.fn((...parts: string[]) => Promise.resolve(parts.join('/')));
 
@@ -12,6 +13,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   readFile: readFileMock,
   exists: existsMock,
   mkdir: mkdirMock,
+  remove: removeMock,
 }));
 
 vi.mock('@tauri-apps/api/path', () => ({
@@ -19,7 +21,7 @@ vi.mock('@tauri-apps/api/path', () => ({
   join: joinMock,
 }));
 
-import { savePhotoFile, getPhotoUrl, createPhotoRepository } from './photo-storage.service.js';
+import { savePhotoFile, getPhotoUrl, deletePhotoFile, createPhotoRepository } from './photo-storage.service.js';
 
 /**
  * jsdom's File/Blob polyfill doesn't implement arrayBuffer() — patch it in for these tests.
@@ -125,6 +127,30 @@ describe('getPhotoUrl', () => {
     const result = await getPhotoUrl('/some/path.jpg');
     expect(result).toBe('/some/path.jpg');
     expect(readFileMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('deletePhotoFile', () => {
+  afterEach(() => {
+    setTauri(false);
+    vi.clearAllMocks();
+  });
+
+  it('is a safe no-op in browser (nothing on disk to delete — the data lives in the DB row)', async () => {
+    await expect(deletePhotoFile('data:image/jpeg;base64,AAAA')).resolves.toBeUndefined();
+    expect(removeMock).not.toHaveBeenCalled();
+  });
+
+  it('removes the file via plugin-fs when running in Tauri', async () => {
+    setTauri(true);
+    await deletePhotoFile('/data/data/com.motoroutes.app/files/photos/abc.jpg');
+    expect(removeMock).toHaveBeenCalledWith('/data/data/com.motoroutes.app/files/photos/abc.jpg');
+  });
+
+  it('does not throw if the file is already missing (delete is best-effort)', async () => {
+    setTauri(true);
+    removeMock.mockRejectedValueOnce(new Error('file not found'));
+    await expect(deletePhotoFile('/missing.jpg')).resolves.toBeUndefined();
   });
 });
 

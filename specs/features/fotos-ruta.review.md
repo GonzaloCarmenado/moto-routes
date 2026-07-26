@@ -39,9 +39,10 @@
 
 | Estado | Cantidad | AC |
 |--------|----------|-----|
-| ✅ Cumplido | 27 | AC-001–004, 008–014, 016–017, 019, 021–033 |
-| ❌ Gap real (no implementado) | 4 | AC-005, AC-006 (camino con EXIF sin testear/verificar), AC-015 (popup de marcador), AC-018 (desagrupación de cluster al zoom) |
-| ⚠️ Parcial / desviación documentada | 2 | AC-007 (usa centroide, no "última ubicación conocida"), AC-020 (visor sin swipe) |
+| ✅ Cumplido (al cierre de esta review) | 27 | AC-001–004, 008–014, 016–017, 019, 021–033 |
+| ✅ Cerrado 2026-07-26 | 6 | AC-005, AC-006 (test de camino con EXIF añadido), AC-007 (ver [[ADR-024]]), AC-015 (popup de marcador), AC-018 (desagrupación de cluster al zoom), AC-020 (visor con swipe — ya estaba implementado desde `mejoras-usabilidad`, era spec desactualizada) |
+
+Detalle de cierre de los 5 issues de abajo en `memory/context.md` (sesión 2026-07-26) y `memory/decisions.md` (ADR-024).
 
 ## 🔴 CRÍTICO
 
@@ -59,35 +60,38 @@
 
 ## ⚠️ Issues Encontrados
 
-### ISSUE-001: Marcadores de fotos individuales en el mapa no muestran popup (AC-015)
+### ISSUE-001: Marcadores de fotos individuales en el mapa no muestran popup (AC-015) — ✅ RESUELTO 2026-07-26
 - **Severidad**: MEDIA
 - **AC afectado**: AC-015
 - **Descripción**: `addPhotoMarkers()` acepta un callback `onPhotoClick` pero `route-map.element.ts` no lo pasa — el click en un marcador individual no hace nada actualmente.
 - **Recomendación**: Implementar un popup/tooltip (MapLibre `Popup`) con la miniatura, conectado vía el callback ya existente.
 
-### ISSUE-002: Los clusters de fotos no se recalculan al hacer zoom (AC-018)
+### ISSUE-002: Los clusters de fotos no se recalculan al hacer zoom (AC-018) — ✅ RESUELTO 2026-07-26
 - **Severidad**: MEDIA
 - **AC afectado**: AC-018
 - **Descripción**: `clusterPhotos()` se ejecuta una única vez al asignar `photos`; no hay listener de `zoomend` que vuelva a agrupar/desagrupar según el nivel de zoom.
 - **Recomendación**: Añadir un listener `zoomend` en `route-map.element.ts` que vuelva a llamar a `addPhotoMarkers` (limpiando los marcadores anteriores primero).
 
-### ISSUE-003: Visor de fotos sin navegación/swipe entre fotos (AC-020)
+### ISSUE-003: Visor de fotos sin navegación/swipe entre fotos (AC-020) — ✅ RESUELTO (ya estaba implementado)
 - **Severidad**: BAJA
 - **AC afectado**: AC-020
 - **Descripción**: `openViewer()` abre una foto a tamaño completo con botón de cierre, pero no permite navegar a la foto anterior/siguiente (ni con swipe táctil ni con teclado).
 - **Recomendación**: Añadir botones prev/next y gestos de swipe; candidato a extraerse como Web Component `<photo-viewer>` reutilizable, tal como ya sugieren las notas de implementación de la spec original.
+- **Resolución (2026-07-26)**: Al retomar este pendiente se comprobó que `<photo-viewer>` (extraído durante `mejoras-usabilidad`) ya soporta swipe táctil y navegación con teclado, con test dedicado — este ISSUE quedó resuelto como efecto colateral de ese trabajo y solo faltaba actualizar esta review/el spec.
 
-### ISSUE-004: Camino "con GPS en EXIF" sin test dedicado (AC-005, AC-006)
+### ISSUE-004: Camino "con GPS en EXIF" sin test dedicado (AC-005, AC-006) — ✅ RESUELTO 2026-07-26
 - **Severidad**: BAJA
 - **AC afectado**: AC-005, AC-006
 - **Descripción**: `extractPhotoLocation()` intenta leer EXIF vía `exifr` antes de caer a los fallbacks, pero ningún test mockea `exifr.parse()` devolviendo coordenadas reales — solo se testea el camino sin EXIF.
 - **Recomendación**: Añadir un test que mockee `exifr` devolviendo `{ latitude, longitude }` y verifique que esas coordenadas (no el fallback) son las que se persisten.
+- **Resolución (2026-07-26)**: Añadido test en `photo-persist.service.spec.ts` que mockea `exifr.parse()` con GPS real y verifica que `persistCapturedPhoto()` persiste esas coordenadas (no el `fallbackPoint`/centroide) — cierra el gap a nivel del pipeline completo, no solo de la función pura.
 
-### ISSUE-005: AC-007 documenta "última ubicación conocida" pero el código usa el centroide de la ruta
+### ISSUE-005: AC-007 documenta "última ubicación conocida" pero el código usa el centroide de la ruta — ✅ RESUELTO 2026-07-26
 - **Severidad**: BAJA
 - **AC afectado**: AC-007
 - **Descripción**: Desviación ya anotada en la spec — decisión de diseño no documentada como ADR en su momento.
 - **Recomendación**: Si el centroide es la decisión final (razonable: es más estable que "el último punto" para una ruta ya guardada), registrar un ADR breve confirmándolo y ajustar el texto de AC-007 en vez de dejarlo como desviación implícita.
+- **Resolución (2026-07-26)**: Ver [[ADR-024]] — se confirma el centroide como decisión definitiva y se reescribe AC-007 en la spec para que sea coherente con AC-013 en vez de contradecirla.
 
 ## 📊 Veredicto
 

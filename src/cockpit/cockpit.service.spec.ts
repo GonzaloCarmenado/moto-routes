@@ -70,15 +70,26 @@ describe('createCockpitService - estado de grabación', () => {
     expect(service.getCurrentState().status).toBe('recording');
   });
 
-  it('should stop recording and return metadata', () => {
+  it('should prepare stop (freeze) returning metadata, without resetting until confirmed', () => {
     service.startRecording();
-    const metadata = service.stopRecording();
+    const metadata = service.prepareStop();
     expect(metadata).not.toBeNull();
+    // Sigue "recording" — la decisión de guardar/descartar no se ha tomado todavía
+    expect(service.getCurrentState().status).toBe('recording');
+
+    service.confirmSaveRecording();
     expect(service.getCurrentState().status).toBe('idle');
   });
 
-  it('should return null on stop when idle', () => {
-    expect(service.stopRecording()).toBeNull();
+  it('should return null on prepareStop when idle', () => {
+    expect(service.prepareStop()).toBeNull();
+  });
+
+  it('should reset to idle without persisting when discarded', () => {
+    service.startRecording();
+    service.prepareStop();
+    service.discardStop();
+    expect(service.getCurrentState().status).toBe('idle');
   });
 
   it('should pause and resume recording', () => {
@@ -277,13 +288,13 @@ describe('createCockpitService - temporizador', () => {
     expect(service.getCurrentState().elapsedTime).toBe(3);
   });
 
-  it('should stop GPS watch and tick on stop', () => {
+  it('should stop GPS watch and tick as soon as prepareStop is called (before any save/discard decision)', () => {
     const cleanupWatch = vi.fn();
     (gps.watchPosition as Mock).mockReturnValue(cleanupWatch);
 
     service.startRecording();
     vi.advanceTimersByTime(2000);
-    service.stopRecording();
+    service.prepareStop();
 
     expect(cleanupWatch).toHaveBeenCalled();
     const elapsedAfterStop = service.getCurrentState().elapsedTime;
@@ -300,9 +311,9 @@ describe('createCockpitService - metadata al finalizar', () => {
     service = createCockpitService(createMockGps(), createMockStorage());
   });
 
-  it('should build metadata with route info after recording', () => {
+  it('should build metadata with route info on prepareStop', () => {
     service.startRecording();
-    const metadata = service.stopRecording();
+    const metadata = service.prepareStop();
     expect(metadata).not.toBeNull();
     if (metadata) {
       expect(typeof metadata.date).toBe('string');
@@ -312,10 +323,19 @@ describe('createCockpitService - metadata al finalizar', () => {
     }
   });
 
-  it('should preserve gps permission after stop', async () => {
+  it('should preserve gps permission after a full prepareStop+confirmSaveRecording cycle', async () => {
     await service.checkGpsPermission();
     service.startRecording();
-    service.stopRecording();
+    service.prepareStop();
+    service.confirmSaveRecording();
+    expect(service.getCurrentState().hasGpsPermission).toBe(true);
+  });
+
+  it('should preserve gps permission after discarding too', async () => {
+    await service.checkGpsPermission();
+    service.startRecording();
+    service.prepareStop();
+    service.discardStop();
     expect(service.getCurrentState().hasGpsPermission).toBe(true);
   });
 });
@@ -330,13 +350,29 @@ describe('createCockpitService with repository', () => {
     repo = new MemoryRouteRepository();
   });
 
-  it('should persist route on stopRecording when repository provided', async () => {
+  it('should persist route on confirmSaveRecording when repository provided', async () => {
     const service = createCockpitService(gps, createMockStorage(), repo);
     service.startRecording();
-    service.stopRecording();
+    service.prepareStop();
+    service.confirmSaveRecording();
     const all = await repo.getAll();
     expect(all).toHaveLength(1);
     expect(all[0]!.duration).toBeGreaterThanOrEqual(0);
+  });
+
+  it('should NOT persist a completed row when the recording is discarded instead of confirmed', async () => {
+    const service = createCockpitService(gps, createMockStorage(), repo);
+    service.startRecording();
+    const routeId = service.getCurrentState().routeId;
+    service.prepareStop();
+    service.discardStop();
+
+    // La fila 'active' pre-generada al arrancar sigue ahí (discardStop no la toca:
+    // borrarla es responsabilidad de deleteRouteAndPhotos, orquestado por el llamador),
+    // pero nunca se actualiza a 'completed'.
+    const saved = await repo.getById(routeId);
+    expect(saved).not.toBeNull();
+    expect(saved!.status).toBe('active');
   });
 
   it('should persist an active route row immediately when recording starts, before it is stopped (regression: photos captured mid-recording violated the photos.route_id FOREIGN KEY because no route row existed yet)', async () => {
@@ -350,13 +386,14 @@ describe('createCockpitService with repository', () => {
     expect(saved!.status).toBe('active');
   });
 
-  it('should update the same row (not create a second one) when the route is later stopped and saved', async () => {
+  it('should update the same row (not create a second one) when the route is later confirmed', async () => {
     const service = createCockpitService(gps, createMockStorage(), repo);
     service.startRecording();
     await Promise.resolve();
     const routeId = service.getCurrentState().routeId;
 
-    service.stopRecording();
+    service.prepareStop();
+    service.confirmSaveRecording();
 
     const all = await repo.getAll();
     expect(all.filter((r) => r.id === routeId)).toHaveLength(1);
@@ -364,18 +401,19 @@ describe('createCockpitService with repository', () => {
     expect(finalRoute!.status).toBe('completed');
   });
 
-  it('should still return metadata even if repository is provided', () => {
+  it('should still return metadata from prepareStop even if repository is provided', () => {
     const service = createCockpitService(gps, createMockStorage(), repo);
     service.startRecording();
-    const metadata = service.stopRecording();
+    const metadata = service.prepareStop();
     expect(metadata).not.toBeNull();
   });
 
   it('should work without repository (backwards compat)', () => {
     const service = createCockpitService(gps, createMockStorage());
     service.startRecording();
-    const metadata = service.stopRecording();
+    const metadata = service.prepareStop();
     expect(metadata).not.toBeNull();
+    expect(() => { service.confirmSaveRecording(); }).not.toThrow();
   });
 
   it('should persist the route using the routeId pre-generated in state (photos taken mid-recording stay linked)', async () => {
@@ -383,18 +421,30 @@ describe('createCockpitService with repository', () => {
     service.startRecording();
     const routeIdDuringRecording = service.getCurrentState().routeId;
 
-    service.stopRecording();
+    service.prepareStop();
+    service.confirmSaveRecording();
 
     const saved = await repo.getById(routeIdDuringRecording);
     expect(saved).not.toBeNull();
     expect(saved!.id).toBe(routeIdDuringRecording);
   });
 
-  it('should generate a fresh routeId for the next recording after stopping', () => {
+  it('should generate a fresh routeId for the next recording after confirming', () => {
     const service = createCockpitService(gps, createMockStorage(), repo);
     service.startRecording();
     const firstRouteId = service.getCurrentState().routeId;
-    service.stopRecording();
+    service.prepareStop();
+    service.confirmSaveRecording();
+    const nextRouteId = service.getCurrentState().routeId;
+    expect(nextRouteId).not.toBe(firstRouteId);
+  });
+
+  it('should also generate a fresh routeId for the next recording after discarding', () => {
+    const service = createCockpitService(gps, createMockStorage(), repo);
+    service.startRecording();
+    const firstRouteId = service.getCurrentState().routeId;
+    service.prepareStop();
+    service.discardStop();
     const nextRouteId = service.getCurrentState().routeId;
     expect(nextRouteId).not.toBe(firstRouteId);
   });

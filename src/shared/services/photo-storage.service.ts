@@ -93,6 +93,24 @@ export async function getPhotoUrl(filePath: string): Promise<string> {
 }
 
 /**
+ * Borra el archivo físico de una foto guardada.
+ * En Tauri, usa el plugin fs para borrar de appDataDir/photos/ — el borrado es
+ * best-effort (si el archivo ya no existe, no lanza: el objetivo es no dejar
+ * basura en disco, no bloquear el borrado de la fila en BBDD por su culpa).
+ * En navegador es un no-op: la foto vive como base64 en la propia fila.
+ */
+export async function deletePhotoFile(filePath: string): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    const { remove } = await import('@tauri-apps/plugin-fs');
+    await remove(filePath);
+  } catch {
+    // Best-effort: el archivo puede no existir ya, o el borrado fallar por otra
+    // razón — no debe impedir borrar el registro en BBDD.
+  }
+}
+
+/**
  * Crea el repositorio adecuado según el entorno:
  * - Tauri: SqlitePhotoRepository
  * - Navegador: MemoryPhotoRepository

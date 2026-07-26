@@ -8,10 +8,13 @@ import { createPhotoRepository } from '../shared/services/photo-storage.service.
 import '../photos/photo-capture.element.js';
 import type { PhotoCaptureElement } from '../photos/photo-capture.element.js';
 import { PHOTO_CAPTURE_EVENT, type PhotoCaptureEventDetail } from '../photos/photo-capture.types.js';
+import { openPhotoViewer } from '../shared/photo-viewer/photo-viewer.element.js';
 import { captureFromCamera, pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
-import { processPhotoCapture } from './cockpit-photo.service.js';
+import { processMultiplePhotos, fetchGalleryPhotos, deleteCockpitPhoto } from './cockpit-photo.service.js';
 import { toErrorMessage } from '../shared/utils/errors.js';
-import { showToast } from '../shared/utils/toast.js';
+import { showToast } from '../shared/feedback/toast.js';
+import { resolveStopDecision } from './cockpit-stop.service.js';
+import { createLongPressController, type LongPressController } from './cockpit-long-press.js';
 import { SqliteRouteRepository } from '../shared/repositories/sqlite-route.repository.js';
 import { createSqliteDb } from '../shared/repositories/sqlite-route.factory.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
@@ -24,19 +27,22 @@ import {
   buildControls,
   buildInvisibleToggle,
   buildGpsOverlay,
+  buildPhotoGalleryElement,
   updateLiveDisplay,
   type ProgressArc,
+  type PhotoGalleryElement,
 } from './cockpit.render.js';
 import styles from './cockpit.element.css?inline';
 
 class CockpitView extends BaseElement {
   private service: CockpitService | null = null;
-  private longPressTimer: ReturnType<typeof setTimeout> | null = null;
   private arcCircle: SVGCircleElement | null = null;
   private readonly LONG_PRESS_MS = 1500;
   private readonly ARC_CIRC = 377;
+  private readonly longPress: LongPressController;
   private photoRepo: IPhotoRepository | null = null;
   private photoCaptureEl: PhotoCaptureElement | null = null;
+  private galleryEl: PhotoGalleryElement | null = null;
   private lastStatus: CockpitState['status'] | null = null;
   private lastInvisibleMode: boolean | null = null;
 
@@ -48,6 +54,11 @@ class CockpitView extends BaseElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
+    this.longPress = createLongPressController(
+      this.LONG_PRESS_MS, this.ARC_CIRC,
+      () => this.arcCircle,
+      () => { void this.confirmStopRecording(); },
+    );
   }
 
   connectedCallback(): void {
@@ -71,7 +82,7 @@ class CockpitView extends BaseElement {
   }
 
   disconnectedCallback(): void {
-    this.cleanupLongPress();
+    this.longPress.cleanup();
   }
 
   private repo: IRouteRepository = new MemoryRouteRepository();
@@ -137,49 +148,27 @@ class CockpitView extends BaseElement {
 
   private handleStopPress(): void {
     if (!this.service) return;
-    this.longPressTimer = setTimeout(() => {
-      this.service?.stopRecording();
-      this.cleanupLongPress();
-    }, this.LONG_PRESS_MS);
-    this.animateArcProgress();
+    this.longPress.press();
+  }
+
+  /**
+   * Al completar el long-press de parada: congela la grabación (sin persistir
+   * ni resetear) y pregunta si guardar o descartar. El diálogo no es cerrable
+   * (ni ESC ni click fuera): parar una ruta obliga a decidir.
+   */
+  private async confirmStopRecording(): Promise<void> {
+    if (!this.service) return;
+    const metadata = this.service.prepareStop();
+    if (!metadata) return;
+    const routeId = this.service.getCurrentState().routeId;
+    await resolveStopDecision({
+      metadata, routeId, service: this.service, routeRepo: this.repo,
+      getPhotoRepo: () => this.getPhotoRepo(),
+    });
   }
 
   private handleStopRelease(): void {
-    if (this.longPressTimer) {
-      clearTimeout(this.longPressTimer);
-      this.longPressTimer = null;
-    }
-    this.resetArcProgress();
-  }
-
-  private animateArcProgress(): void {
-    const startTime = Date.now();
-    const animate = (): void => {
-      if (!this.arcCircle) return;
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / this.LONG_PRESS_MS, 1);
-      const dashLength = String(this.ARC_CIRC * progress);
-      const dashRemain = String(this.ARC_CIRC);
-      this.arcCircle.style.strokeDasharray = `${dashLength} ${dashRemain}`;
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    };
-    requestAnimationFrame(animate);
-  }
-
-  private resetArcProgress(): void {
-    if (this.arcCircle) {
-      this.arcCircle.style.strokeDasharray = '0 377';
-    }
-  }
-
-  private cleanupLongPress(): void {
-    if (this.longPressTimer) {
-      clearTimeout(this.longPressTimer);
-      this.longPressTimer = null;
-    }
-    this.resetArcProgress();
+    this.longPress.release();
   }
 
   private handlePauseResume(): void {
@@ -223,6 +212,34 @@ class CockpitView extends BaseElement {
     return photoCapture;
   }
 
+  private buildGalleryElement(): PhotoGalleryElement {
+    const gallery = buildPhotoGalleryElement((index) => {
+      openPhotoViewer({ photos: gallery.photos, startIndex: index, onDelete: (photo) => this.handleDeletePhoto(photo.id) });
+    });
+    this.galleryEl = gallery;
+    return gallery;
+  }
+
+  private async refreshGallery(routeId: string): Promise<void> {
+    const photoRepo = await this.getPhotoRepo();
+    const photos = await fetchGalleryPhotos(photoRepo, routeId);
+    if (this.galleryEl) this.galleryEl.photos = photos;
+  }
+
+  /** Devuelve si se borró de verdad, para que `<photo-viewer>` sepa si debe quitarla de su vista. */
+  private async handleDeletePhoto(photoId: string): Promise<boolean> {
+    try {
+      if (!(await deleteCockpitPhoto(photoId, await this.getPhotoRepo()))) return false;
+    } catch (err) {
+      showToast(`⚠️ ${toErrorMessage(err, 'Error al eliminar la foto')}`, 'error');
+      return false;
+    }
+
+    if (this.galleryEl) this.galleryEl.photos = this.galleryEl.photos.filter((p) => p.id !== photoId);
+    showToast('Foto eliminada', 'success');
+    return true;
+  }
+
   private buildScreen(
     state: CockpitState | undefined,
     isActive: boolean,
@@ -251,6 +268,13 @@ class CockpitView extends BaseElement {
 
     this.photoCaptureEl = isActive ? this.buildPhotoCaptureButton() : null;
     if (this.photoCaptureEl) screen.appendChild(this.photoCaptureEl);
+
+    if (isActive && state) {
+      screen.appendChild(this.buildGalleryElement());
+      void this.refreshGallery(state.routeId);
+    } else {
+      this.galleryEl = null;
+    }
 
     return screen;
   }
@@ -282,10 +306,12 @@ class CockpitView extends BaseElement {
     const state = this.service.getCurrentState();
     if (state.status !== 'recording' && state.status !== 'paused') return;
 
-    // 1. Capturar imagen según fuente seleccionada
-    const file = source === 'camera'
-      ? await captureFromCamera()
+    // 1. Capturar imagen(es) según fuente seleccionada. La galería permite
+    // seleccionar varias — hay que persistirlas todas, no solo la primera.
+    const files = source === 'camera'
+      ? await captureFromCamera().then((file) => (file ? [file] : []))
       : await pickFromGallery();
+    if (files.length === 0) return;
 
     // 2. routeId pre-generado al iniciar la grabación (ver CockpitState.routeId):
     // es el mismo id con el que la ruta se persistirá al llamar a stopRecording(),
@@ -296,30 +322,21 @@ class CockpitView extends BaseElement {
     const lastPoint = state.points.length > 0
       ? state.points[state.points.length - 1]!
       : null;
+    const routePoints = state.points.map((p) => ({ lat: p.lat, lng: p.lng }));
 
-    // 4. Procesar la foto (con feedback de carga: guardar en appDataDir puede tardar
+    // 4. Procesar cada foto (con feedback de carga: guardar en appDataDir puede tardar
     // un momento y sin indicador parece que la subida no ha hecho nada)
-    if (file && this.photoCaptureEl) this.photoCaptureEl.loading = true;
+    if (this.photoCaptureEl) this.photoCaptureEl.loading = true;
     try {
       const photoRepo = await this.getPhotoRepo();
-      await processPhotoCapture({
-        file,
-        routeId,
-        photoRepo,
-        lastPoint,
-        routePoints: state.points.map((p) => ({ lat: p.lat, lng: p.lng })),
-        callbacks: {
-          onSuccess: () => {
-            showToast('📷 Foto añadida', 'success');
-          },
-          onError: (error: string) => {
-            showToast(`⚠️ No se pudo guardar la foto: ${error}`, 'error');
-          },
-          onCancel: () => {
-            // User cancelled, nothing to do
-          },
-        },
+      const addedCount = await processMultiplePhotos({
+        files, routeId, photoRepo, lastPoint, routePoints,
+        onError: (error) => { showToast(`⚠️ No se pudo guardar la foto: ${error}`, 'error'); },
       });
+      if (addedCount > 0) {
+        showToast(addedCount === 1 ? '📷 Foto añadida' : `📷 ${String(addedCount)} fotos añadidas`, 'success');
+        void this.refreshGallery(routeId);
+      }
     } catch (err) {
       // Red de seguridad: cualquier fallo no cubierto por los callbacks de arriba
       // (p.ej. un error al abrir la cámara/galería) también debe ser visible,

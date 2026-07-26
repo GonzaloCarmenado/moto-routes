@@ -33,3 +33,6 @@ cypress/downloads/
 # OS
 Thumbs.db
 Desktop.ini
+
+# scripts/pull-db.ps1 export
+moto-routes-export.db

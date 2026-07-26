@@ -3,6 +3,13 @@ import { MemoryRouteRepository } from '../shared/repositories/memory-route.repos
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { Route } from '../shared/models/route.types.js';
 import './route-detail.element.js';
+import { pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
+import type * as PhotoCaptureAdapter from '../shared/services/photo-capture-adapter.service.js';
+
+vi.mock('../shared/services/photo-capture-adapter.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof PhotoCaptureAdapter>();
+  return { ...actual, pickFromGallery: vi.fn() };
+});
 
 // Mock MapLibre para tests (route-map.element.ts internamente instancia el mapa)
 vi.mock('maplibre-gl', () => {
@@ -11,6 +18,8 @@ vi.mock('maplibre-gl', () => {
     fitBounds: vi.fn(),
     addSource: vi.fn(),
     addLayer: vi.fn(),
+    getZoom: vi.fn(() => 12),
+    flyTo: vi.fn(),
     on: vi.fn((event: string, cb: () => void) => {
       if (event === 'load') cb();
     }),
@@ -19,11 +28,19 @@ vi.mock('maplibre-gl', () => {
   const markerFn = vi.fn(() => ({
     setLngLat: vi.fn().mockReturnThis(),
     addTo: vi.fn().mockReturnThis(),
+    remove: vi.fn(),
+  }));
+  const popupFn = vi.fn(() => ({
+    setLngLat: vi.fn().mockReturnThis(),
+    setDOMContent: vi.fn().mockReturnThis(),
+    addTo: vi.fn().mockReturnThis(),
+    remove: vi.fn(),
   }));
   return {
-    default: { Map: mapFn, Marker: markerFn },
+    default: { Map: mapFn, Marker: markerFn, Popup: popupFn },
     Map: mapFn,
     Marker: markerFn,
+    Popup: popupFn,
   };
 });
 
@@ -37,6 +54,11 @@ async function waitRender(): Promise<void> {
 }
 
 type RouteDetailEl = HTMLElement & { repository: IRouteRepository; routeId: string };
+
+/** La galería es un <photo-gallery> anidado con su propio shadow DOM. */
+function galleryRoot(root: ShadowRoot): ShadowRoot {
+  return root.querySelector('photo-gallery')!.shadowRoot!;
+}
 
 async function mountRouteDetail(repo: IRouteRepository, routeId: string): Promise<{ el: RouteDetailEl; root: ShadowRoot }> {
   const el = document.createElement('route-detail') as RouteDetailEl;
@@ -61,6 +83,25 @@ describe('route-detail - contenido básico', () => {
     );
   });
 
+  it('shows a loading state synchronously while the route/points/photos fetch is in flight (AC-010)', () => {
+    const el = document.createElement('route-detail') as RouteDetailEl;
+    el.repository = repo;
+    el.routeId = savedRoute.id;
+    document.body.appendChild(el);
+
+    // connectedCallback dispara fetchAndRender, que renderiza "loading" antes
+    // de su primer await — observable sin esperar ningún microtask.
+    expect(el.shadowRoot!.querySelector('[data-cy="route-detail-loading"]')).not.toBeNull();
+    document.body.removeChild(el);
+  });
+
+  it('replaces the loading state with the route content once the fetch resolves', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    expect(root.querySelector('[data-cy="route-detail-loading"]')).toBeNull();
+    expect(root.querySelector('.detail-title')).not.toBeNull();
+    document.body.removeChild(el);
+  });
+
   it('renders the "Añadir foto" button when a route is loaded (AC-028)', async () => {
     const { el, root } = await mountRouteDetail(repo, savedRoute.id);
     expect(root.querySelector('[data-cy="detail-photo-capture"]')).not.toBeNull();
@@ -69,10 +110,10 @@ describe('route-detail - contenido básico', () => {
 
   it('shows the "Sin fotos" placeholder when the route has no photos (AC-021, AC-032)', async () => {
     const { el, root } = await mountRouteDetail(repo, savedRoute.id);
-    const placeholder = root.querySelector('[data-cy="photo-placeholder"]');
+    const placeholder = galleryRoot(root).querySelector('[data-cy="photo-placeholder"]');
     expect(placeholder).not.toBeNull();
     expect(placeholder?.textContent).toBe('Sin fotos');
-    expect(root.querySelector('[data-cy="photo-gallery"]')).toBeNull();
+    expect(galleryRoot(root).querySelector('[data-cy="photo-gallery"]')).toBeNull();
     document.body.removeChild(el);
   });
 
@@ -131,31 +172,110 @@ describe('route-detail - galería y visor de fotos (AC-019, AC-020, AC-033)', ()
 
   it('renders a thumbnail for the existing photo instead of the placeholder', async () => {
     const { el, root } = await mountRouteDetail(repo, savedRoute.id);
-    expect(root.querySelector('[data-cy="photo-placeholder"]')).toBeNull();
-    expect(root.querySelectorAll('[data-cy="photo-thumbnail"]')).toHaveLength(1);
+    expect(galleryRoot(root).querySelector('[data-cy="photo-placeholder"]')).toBeNull();
+    expect(galleryRoot(root).querySelectorAll('[data-cy="photo-thumbnail"]')).toHaveLength(1);
     document.body.removeChild(el);
   });
 
   it('opens the full-size viewer with a close button when a thumbnail is clicked', async () => {
     const { el, root } = await mountRouteDetail(repo, savedRoute.id);
-    const thumbnail = root.querySelector('[data-cy="photo-thumbnail"]') as HTMLElement;
+    const thumbnail = galleryRoot(root).querySelector('[data-cy="photo-thumbnail"]') as HTMLElement;
     thumbnail.click();
 
-    // El visor se monta como overlay en document.body, no dentro del shadow DOM del componente.
-    const viewer = document.body.querySelector('[data-cy="photo-viewer"]');
+    // El visor es un <photo-viewer> montado en document.body, con su propio shadow DOM.
+    const viewer = document.body.querySelector('photo-viewer');
     expect(viewer).not.toBeNull();
-    expect(viewer?.querySelector('img')?.getAttribute('src')).toBe('photo-1.jpg');
+    expect(viewer?.shadowRoot!.querySelector('img')?.getAttribute('src')).toBe('photo-1.jpg');
     viewer?.remove();
     document.body.removeChild(el);
   });
 
   it('closes the viewer when the close button is clicked', async () => {
     const { el, root } = await mountRouteDetail(repo, savedRoute.id);
-    (root.querySelector('[data-cy="photo-thumbnail"]') as HTMLElement).click();
-    expect(document.body.querySelector('[data-cy="photo-viewer"]')).not.toBeNull();
+    (galleryRoot(root).querySelector('[data-cy="photo-thumbnail"]') as HTMLElement).click();
+    const viewer = document.body.querySelector('photo-viewer');
+    expect(viewer).not.toBeNull();
 
-    (document.body.querySelector('[data-cy="photo-viewer-close"]') as HTMLElement).click();
-    expect(document.body.querySelector('[data-cy="photo-viewer"]')).toBeNull();
+    (viewer!.shadowRoot!.querySelector('[data-cy="photo-viewer-close"]') as HTMLElement).click();
+    expect(document.body.querySelector('photo-viewer')).toBeNull();
+    document.body.removeChild(el);
+  });
+
+  it('shows a confirm dialog with a delete button in the viewer (AC-009)', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    (galleryRoot(root).querySelector('[data-cy="photo-thumbnail"]') as HTMLElement).click();
+
+    const viewer = document.body.querySelector('photo-viewer')!;
+    const deleteBtn = viewer.shadowRoot!.querySelector('[data-cy="photo-viewer-delete"]') as HTMLButtonElement;
+    expect(deleteBtn).not.toBeNull();
+    deleteBtn.click();
+    await waitRender();
+
+    expect(document.body.querySelector('confirm-dialog')).not.toBeNull();
+
+    document.body.querySelector('confirm-dialog')?.remove();
+    document.body.querySelector('photo-viewer')?.remove();
+    document.body.removeChild(el);
+  });
+
+  it('deletes the photo, closes the viewer and refreshes the gallery when confirmed (AC-009)', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    (galleryRoot(root).querySelector('[data-cy="photo-thumbnail"]') as HTMLElement).click();
+    const viewer = document.body.querySelector('photo-viewer')!;
+    (viewer.shadowRoot!.querySelector('[data-cy="photo-viewer-delete"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    const dialog = document.body.querySelector('confirm-dialog')!;
+    (dialog.shadowRoot!.querySelector('[data-cy="confirm-dialog-action-confirm"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    expect(document.body.querySelector('photo-viewer')).toBeNull();
+    expect(galleryRoot(root).querySelectorAll('[data-cy="photo-thumbnail"]')).toHaveLength(0);
+    expect(galleryRoot(root).querySelector('[data-cy="photo-placeholder"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('Foto eliminada');
+    document.body.removeChild(el);
+  });
+
+  it('keeps the photo when the deletion is cancelled', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    (galleryRoot(root).querySelector('[data-cy="photo-thumbnail"]') as HTMLElement).click();
+    const viewer = document.body.querySelector('photo-viewer')!;
+    (viewer.shadowRoot!.querySelector('[data-cy="photo-viewer-delete"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    const dialog = document.body.querySelector('confirm-dialog')!;
+    (dialog.shadowRoot!.querySelector('[data-cy="confirm-dialog-action-cancel"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    expect(galleryRoot(root).querySelectorAll('[data-cy="photo-thumbnail"]')).toHaveLength(1);
+    document.body.querySelector('photo-viewer')?.remove();
+    document.body.removeChild(el);
+  });
+});
+
+describe('route-detail - añadir varias fotos desde la galería (bug: solo se guardaba la última)', () => {
+  it('persists every file selected from the gallery, not just the last one', async () => {
+    localStorage.clear();
+    const repo = new MemoryRouteRepository();
+    const savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+
+    vi.mocked(pickFromGallery).mockResolvedValue([
+      new File([''], 'a.jpg', { type: 'image/jpeg' }),
+      new File([''], 'b.jpg', { type: 'image/jpeg' }),
+      new File([''], 'c.jpg', { type: 'image/jpeg' }),
+    ]);
+
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const photoCapture = root.querySelector('[data-cy="detail-photo-capture"]')!;
+    (photoCapture.shadowRoot!.querySelector('.photo-btn') as HTMLButtonElement).click();
+    (photoCapture.shadowRoot!.querySelector('[data-cy="photo-menu-gallery"]') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(galleryRoot(root).querySelectorAll('[data-cy="photo-thumbnail"]')).toHaveLength(3);
     document.body.removeChild(el);
   });
 });
