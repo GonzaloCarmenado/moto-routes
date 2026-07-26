@@ -112,6 +112,47 @@ function registerPersistenceTests(getRepo: () => IRouteRepository): void {
   });
 }
 
+function registerPreviewPolylineTests(getRepo: () => IRouteRepository): void {
+  it('should default previewPolyline to null on a freshly saved route (AC-020)', async () => {
+    const saved = await getRepo().save(sampleRoute, [], []);
+    expect(saved.previewPolyline).toBeNull();
+  });
+
+  it('should persist and retrieve previewPolyline via updatePreviewPolyline (AC-020)', async () => {
+    const saved = await getRepo().save(sampleRoute, [], []);
+    const polyline: [number, number][] = [
+      [40.4168, -3.7038],
+      [40.42, -3.71],
+    ];
+
+    await getRepo().updatePreviewPolyline(saved.id, polyline);
+
+    const fetched = await getRepo().getById(saved.id);
+    expect(fetched).not.toBeNull();
+    expect(fetched!.previewPolyline).toEqual(polyline);
+  });
+
+  it('should NOT wipe previewPolyline on a subsequent save() call for the same id (regression, ADR-020/ADR-023 upsert data-loss pattern — active -> completed recording flow)', async () => {
+    const routeId = crypto.randomUUID();
+    await getRepo().save({ ...sampleRoute, id: routeId, status: 'active' }, [], []);
+
+    const polyline: [number, number][] = [
+      [10, 20],
+      [11, 21],
+      [12, 22],
+    ];
+    await getRepo().updatePreviewPolyline(routeId, polyline);
+
+    // Mirrors the real recording flow: save() is called again with the same id
+    // once the route completes (see ADR-020, insert-active/update-on-stop pattern).
+    await getRepo().save({ ...sampleRoute, id: routeId, status: 'completed' }, [], []);
+
+    const fetched = await getRepo().getById(routeId);
+    expect(fetched).not.toBeNull();
+    expect(fetched!.previewPolyline).toEqual(polyline);
+  });
+}
+
 function registerQueryTests(getRepo: () => IRouteRepository): void {
   it('should return all routes ordered by date descending', async () => {
     const r1 = await getRepo().save({ ...sampleRoute, duration: 100 }, [], []);
@@ -179,5 +220,6 @@ export function createRouteSuite(name: string, factory: () => IRouteRepository):
     registerPersistenceTests(getRepo);
     registerQueryTests(getRepo);
     registerDeletionAndEmptyStateTests(getRepo);
+    registerPreviewPolylineTests(getRepo);
   });
 }

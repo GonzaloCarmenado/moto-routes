@@ -50,6 +50,14 @@ function updateRoute(rows: DbRow[], params: unknown[]): { rowsAffected: number }
   return { rowsAffected: 1 };
 }
 
+function updatePreviewPolyline(rows: DbRow[], params: unknown[]): { rowsAffected: number } {
+  const [previewPolyline, id] = params;
+  const row = rows.find((r) => r.table === 'routes' && r.data['id'] === id);
+  if (!row) return { rowsAffected: 0 };
+  row.data = { ...row.data, preview_polyline: previewPolyline };
+  return { rowsAffected: 1 };
+}
+
 function deleteRows(rows: DbRow[], id: string): { rowsAffected: number } {
   let count = 0;
   for (let i = rows.length - 1; i >= 0; i--) {
@@ -69,6 +77,9 @@ function queryMock(rows: DbRow[], orderState: { value: number }, sql: string, pa
   if (upper.startsWith('INSERT INTO ROUTES') && params) return Promise.resolve(insertRoute(rows, orderState, params));
   if (upper.startsWith('INSERT INTO ROUTE_POINTS') && params) return Promise.resolve(insertPoints(rows, params));
   if (upper.startsWith('INSERT INTO ROUTE_STOPS') && params) return Promise.resolve(insertStops(rows, params));
+  if (upper.startsWith('UPDATE ROUTES SET PREVIEW_POLYLINE') && params) {
+    return Promise.resolve(updatePreviewPolyline(rows, params));
+  }
   if (upper.startsWith('UPDATE ROUTES') && params) return Promise.resolve(updateRoute(rows, params));
   if (upper.startsWith('DELETE') && params) return Promise.resolve(deleteRows(rows, params[0] as string));
   return Promise.resolve({ rowsAffected: 0 });
@@ -120,6 +131,87 @@ function createMockDb(): SqlDb {
     select: vi.fn((sql: string, params?: unknown[]) => selectMock(rows, sql, params)),
   };
 }
+
+/**
+ * Mock dedicado para el mecanismo de migración de columna (AC-025/AC-032).
+ * El mock compartido `createMockDb()` no modela `PRAGMA table_info`, así que
+ * no sirve para verificar el check-y-ALTER TABLE — se necesita uno propio
+ * y más explícito, igual que ya advierte el plan de esta feature.
+ */
+function createMigrationMockDb(hasPreviewPolylineColumn: boolean): {
+  db: SqlDb;
+  alterTableCalls: string[];
+} {
+  const alterTableCalls: string[] = [];
+  const preexistingRow = {
+    id: 'legacy-route-1',
+    created_at: '2026-01-01T00:00:00.000Z',
+    duration: 1200,
+    total_distance: 42.5,
+    avg_speed: 65,
+    status: 'completed',
+    visibility: 'private',
+    origin: 'local',
+  };
+  const columnInfo = [
+    { name: 'id' },
+    { name: 'created_at' },
+    { name: 'duration' },
+    { name: 'total_distance' },
+    { name: 'avg_speed' },
+    { name: 'status' },
+    { name: 'visibility' },
+    { name: 'origin' },
+    ...(hasPreviewPolylineColumn ? [{ name: 'preview_polyline' }] : []),
+  ];
+
+  const db: SqlDb = {
+    execute: vi.fn((sql: string) => {
+      const upper = sql.trim().toUpperCase();
+      if (upper.startsWith('ALTER TABLE')) alterTableCalls.push(sql.trim());
+      return Promise.resolve({ rowsAffected: 0 });
+    }),
+    select: vi.fn((sql: string) => {
+      const upper = sql.trim().toUpperCase();
+      if (upper.startsWith('PRAGMA TABLE_INFO')) return Promise.resolve(columnInfo);
+      if (upper.startsWith('SELECT * FROM ROUTES')) return Promise.resolve([{ ...preexistingRow }]);
+      return Promise.resolve([]);
+    }),
+  };
+
+  return { db, alterTableCalls };
+}
+
+describe('preview_polyline column migration (AC-025, AC-032)', () => {
+  it('runs ALTER TABLE exactly once when preview_polyline is missing from a preexisting routes table, keeping the existing row intact', async () => {
+    const { db, alterTableCalls } = createMigrationMockDb(false);
+    const repo = new SqliteRouteRepository(db);
+
+    const all = await repo.getAll();
+
+    expect(alterTableCalls).toHaveLength(1);
+    expect(alterTableCalls[0]).toBe('ALTER TABLE routes ADD COLUMN preview_polyline TEXT;');
+
+    expect(all).toHaveLength(1);
+    expect(all[0]!.id).toBe('legacy-route-1');
+    expect(all[0]!.duration).toBe(1200);
+    expect(all[0]!.totalDistance).toBe(42.5);
+    expect(all[0]!.avgSpeed).toBe(65);
+    expect(all[0]!.status).toBe('completed');
+    expect(all[0]!.visibility).toBe('private');
+    expect(all[0]!.origin).toBe('local');
+    expect(all[0]!.previewPolyline).toBeNull();
+  });
+
+  it('does not run ALTER TABLE when preview_polyline already exists', async () => {
+    const { db, alterTableCalls } = createMigrationMockDb(true);
+    const repo = new SqliteRouteRepository(db);
+
+    await repo.getAll();
+
+    expect(alterTableCalls).toHaveLength(0);
+  });
+});
 
 describe('SqliteRouteRepository SQL injection safety', () => {
   it('should use parameterized queries', () => {

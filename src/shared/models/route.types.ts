@@ -26,6 +26,8 @@ export interface Route {
   status: RouteStatus;
   visibility: RouteVisibility;
   origin: RouteOrigin;
+  /** Trazado simplificado (pares [lat, lng]), dato derivado y recalculable — null si aún no se ha calculado/persistido. */
+  previewPolyline: [number, number][] | null;
 }
 
 export interface RoutePoint {
