@@ -1,10 +1,10 @@
 import styles from './route-detail.element.css?inline';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { IPhotoRepository } from '../shared/models/photo.repository.js';
-import type { Photo } from '../shared/models/photo.types.js';
 import type { Route } from '../shared/models/route.types.js';
 import { formatDuration } from '../cockpit/cockpit.transform.js';
 import '../shared/route-map/route-map.element.js';
+import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from '../shared/route-map/route-map.element.js';
 import type { MapPhoto } from '../shared/route-map/route-map-photos.js';
 import '../photos/photo-capture.element.js';
 import type { PhotoCaptureElement } from '../photos/photo-capture.element.js';
@@ -22,16 +22,7 @@ import '../shared/photo-gallery/photo-gallery.element.js';
 import { PHOTO_GALLERY_SELECT_EVENT, type PhotoGallerySelectDetail, type GalleryPhoto, type PhotoGalleryLayout } from '../shared/photo-gallery/photo-gallery.element.js';
 import { openPhotoViewer } from '../shared/photo-viewer/photo-viewer.element.js';
 import '../shared/tab-bar/tab-bar.element.js';
-import type { TabBarTab } from '../shared/tab-bar/tab-bar.element.js';
-
-type TabBarElement = HTMLElement & { tabs: TabBarTab[] };
-
-/**
- * Tipo que asocia una foto con su URL de objeto para mostrar en UI.
- */
-interface PhotoWithUrl extends Photo {
-  objectUrl: string;
-}
+import type { PhotoWithUrl, TabBarElement } from './route-detail.types.js';
 
 class RouteDetail extends BaseElement {
   private _repository: IRouteRepository | null = null;
@@ -163,7 +154,12 @@ class RouteDetail extends BaseElement {
       photos?: MapPhoto[];
     };
     routeMap.points = points.map((p) => ({ lat: p.lat, lng: p.lng }));
-    routeMap.photos = this._photos;
+    routeMap.photos = this._photos; // AC-016: objectUrl ya resuelto, igual que la galería
+    // AC-015/AC-017: solo el marcador individual dispara este evento, nunca un cluster.
+    routeMap.addEventListener(ROUTE_MAP_PHOTO_SELECT_EVENT, ((event: CustomEvent<RouteMapPhotoSelectDetail>) => {
+      const index = this.toGalleryPhotos().findIndex((p) => p.id === event.detail.photo.id);
+      if (index !== -1) this.openPhotoViewerAt(index);
+    }) as EventListener);
     return routeMap;
   }
 
@@ -272,13 +268,15 @@ class RouteDetail extends BaseElement {
     gallery.layout = 'grid';
     gallery.photos = this.toGalleryPhotos();
     gallery.addEventListener(PHOTO_GALLERY_SELECT_EVENT, ((event: CustomEvent<PhotoGallerySelectDetail>) => {
-      openPhotoViewer({
-        photos: this.toGalleryPhotos(),
-        startIndex: event.detail.index,
-        onDelete: (photo) => this.handleDeletePhoto(photo.id),
-      });
+      this.openPhotoViewerAt(event.detail.index);
     }) as EventListener);
     return gallery;
+  }
+
+  /** Único punto de apertura del visor: galería en cuadrícula y popup del mapa
+   * comparten esta misma llamada (AC-011, AC-015). */
+  private openPhotoViewerAt(index: number): void {
+    openPhotoViewer({ photos: this.toGalleryPhotos(), startIndex: index, onDelete: (photo) => this.handleDeletePhoto(photo.id) });
   }
 
   /** Panel de la pestaña "Fotos" (AC-006). Un `<div slot="fotos">` — no un

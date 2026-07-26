@@ -6,6 +6,8 @@ import type { Route } from '../shared/models/route.types.js';
 import './route-detail.element.js';
 import { pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
 import type * as PhotoCaptureAdapter from '../shared/services/photo-capture-adapter.service.js';
+import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from '../shared/route-map/route-map.element.js';
+import type { MapPhoto } from '../shared/route-map/route-map-photos.js';
 
 vi.mock('../shared/services/photo-capture-adapter.service.js', async (importOriginal) => {
   const actual = await importOriginal<typeof PhotoCaptureAdapter>();
@@ -13,20 +15,23 @@ vi.mock('../shared/services/photo-capture-adapter.service.js', async (importOrig
 });
 
 // mapCtor se expone vía vi.hoisted para poder comprobar en los tests de pestañas
-// (AC-008) que cambiar de pestaña no vuelve a instanciar maplibregl.Map.
-const { mapCtor } = vi.hoisted(() => {
+// (AC-008) que cambiar de pestaña no vuelve a instanciar maplibregl.Map; fitBounds/flyTo
+// se exponen aparte para el test de AC-018 (abrir/cerrar el visor no toca el mapa).
+const { mapCtor, mapFitBounds, mapFlyTo } = vi.hoisted(() => {
+  const fitBoundsFn = vi.fn();
+  const flyToFn = vi.fn();
   const mockMap = {
     remove: vi.fn(),
-    fitBounds: vi.fn(),
+    fitBounds: fitBoundsFn,
     addSource: vi.fn(),
     addLayer: vi.fn(),
     getZoom: vi.fn(() => 12),
-    flyTo: vi.fn(),
+    flyTo: flyToFn,
     on: vi.fn((event: string, cb: () => void) => {
       if (event === 'load') cb();
     }),
   };
-  return { mapCtor: vi.fn(() => mockMap) };
+  return { mapCtor: vi.fn(() => mockMap), mapFitBounds: fitBoundsFn, mapFlyTo: flyToFn };
 });
 
 // Mock MapLibre para tests (route-map.element.ts internamente instancia el mapa)
@@ -408,6 +413,93 @@ describe('route-detail - pestañas (AC-005 a AC-008, AC-027)', () => {
     clickTab(root, 'fotos');
 
     expect(mapCtor.mock.calls.length).toBe(mapCallsBefore);
+    document.body.removeChild(el);
+  });
+});
+
+describe('route-detail - integración mapa → visor de fotos (AC-014 a AC-018, AC-029)', () => {
+  let repo: IRouteRepository;
+  let savedRoute: Route;
+
+  beforeEach(async () => {
+    localStorage.clear();
+    repo = new MemoryRouteRepository();
+    savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+    // Dos fotos geolocalizadas, para poder comprobar un startIndex != 0 (AC-015, AC-029).
+    localStorage.setItem('moto-routes-photos', JSON.stringify([
+      {
+        id: 'photo-1', routeId: savedRoute.id, filePath: 'photo-1.jpg',
+        latitude: 40.4168, longitude: -3.7038,
+        capturedAt: '2026-07-20T10:00:00.000Z', createdAt: '2026-07-20T10:00:00.000Z',
+      },
+      {
+        id: 'photo-2', routeId: savedRoute.id, filePath: 'photo-2.jpg',
+        latitude: 40.4170, longitude: -3.7035,
+        capturedAt: '2026-07-20T10:05:00.000Z', createdAt: '2026-07-20T10:05:00.000Z',
+      },
+    ]));
+  });
+
+  function getRouteMap(root: ShadowRoot): HTMLElement & { photos: MapPhoto[] } {
+    return root.querySelector('route-map') as HTMLElement & { photos: MapPhoto[] };
+  }
+
+  function dispatchPhotoSelect(routeMap: HTMLElement, photo: MapPhoto): void {
+    routeMap.dispatchEvent(new CustomEvent<RouteMapPhotoSelectDetail>(ROUTE_MAP_PHOTO_SELECT_EVENT, {
+      detail: { photo },
+      bubbles: true,
+      composed: true,
+    }));
+  }
+
+  it('passes the full list of photos with objectUrl already resolved to <route-map> (AC-016, verificación sin cambio de código)', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const routeMap = getRouteMap(root);
+
+    expect(routeMap.photos).toHaveLength(2);
+    expect(routeMap.photos.map((p) => p.id).sort()).toEqual(['photo-1', 'photo-2']);
+    expect(routeMap.photos.every((p) => typeof p.objectUrl === 'string' && p.objectUrl.length > 0)).toBe(true);
+
+    document.body.removeChild(el);
+  });
+
+  it('opens photo-viewer at the matching index when route-map dispatches route-map:photo-select (AC-015, AC-029)', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const routeMap = getRouteMap(root);
+    const secondPhoto = routeMap.photos[1]!;
+
+    dispatchPhotoSelect(routeMap, secondPhoto);
+
+    const viewer = document.body.querySelector('photo-viewer');
+    expect(viewer).not.toBeNull();
+    expect(viewer?.shadowRoot!.querySelector('img')?.getAttribute('src')).toBe(secondPhoto.objectUrl);
+    expect(viewer?.shadowRoot!.querySelector('.counter')?.textContent).toBe('2 de 2');
+
+    viewer?.remove();
+    document.body.removeChild(el);
+  });
+
+  it('does not change the map state (no extra flyTo/fitBounds calls) after opening and closing the viewer from the popup event (AC-018)', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const routeMap = getRouteMap(root);
+    const photo = routeMap.photos[0]!;
+
+    const fitBoundsCallsBefore = mapFitBounds.mock.calls.length;
+    const flyToCallsBefore = mapFlyTo.mock.calls.length;
+
+    dispatchPhotoSelect(routeMap, photo);
+
+    const viewer = document.body.querySelector('photo-viewer')!;
+    (viewer.shadowRoot!.querySelector('[data-cy="photo-viewer-close"]') as HTMLButtonElement).click();
+    expect(document.body.querySelector('photo-viewer')).toBeNull();
+
+    expect(mapFitBounds.mock.calls.length).toBe(fitBoundsCallsBefore);
+    expect(mapFlyTo.mock.calls.length).toBe(flyToCallsBefore);
+
     document.body.removeChild(el);
   });
 });

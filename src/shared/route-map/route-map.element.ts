@@ -12,6 +12,17 @@ const AMBER_FALLBACK = '#d4880f';
 import { addPhotoMarkers, photoClusterRadiusForZoom, type MapPhoto } from './route-map-photos.js';
 import { BaseElement } from '../base-element.js';
 
+/**
+ * Emitido al pulsar la miniatura del popup de un marcador de foto individual
+ * (AC-015, AC-029). Sigue el mismo patrón de desacoplo que `photo-gallery:select`:
+ * `<route-map>` reporta qué foto se pulsó y deja que el llamador decida abrir
+ * `<photo-viewer>`, sin importarlo ni conocerlo (AC-016 — Notas de Implementación).
+ */
+export const ROUTE_MAP_PHOTO_SELECT_EVENT = 'route-map:photo-select';
+export interface RouteMapPhotoSelectDetail {
+  photo: MapPhoto;
+}
+
 class RouteMap extends BaseElement {
   private _points: RouteMapPoint[] = [];
   private _photos: MapPhoto[] = [];
@@ -133,6 +144,11 @@ class RouteMap extends BaseElement {
       const img = document.createElement('img');
       img.src = photo.objectUrl;
       img.alt = 'Foto de la ruta';
+      // Pulsar la miniatura abre el visor completo (AC-015) — el mapa no sabe
+      // nada del visor, solo emite el evento (ver ROUTE_MAP_PHOTO_SELECT_EVENT).
+      img.addEventListener('click', () => {
+        this.emit<RouteMapPhotoSelectDetail>(ROUTE_MAP_PHOTO_SELECT_EVENT, { photo });
+      });
       content.appendChild(img);
     }
 
