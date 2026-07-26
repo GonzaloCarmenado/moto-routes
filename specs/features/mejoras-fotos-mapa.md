@@ -12,10 +12,10 @@ Mejora la integración visual entre las fotos de una ruta y su mapa/listado, apo
 - [x] AC-004: El tab-bar es agnóstico del dominio — no conoce fotos, rutas ni ningún dato de negocio concreto — y queda listo para reutilizarse en features futuras además de `<route-detail>`. _(por construcción: cero imports de dominio en tab-bar.element.ts; test: tab-bar.element.spec.ts)_
 
 ### Redesign de `<route-detail>` con pestañas
-- [ ] AC-005: `<route-detail>` mantiene el mapa y el bloque de cabecera (título, fecha, grid de estadísticas) fuera de las pestañas, siempre visibles; debajo se monta un `<tab-bar>` con al menos 3 pestañas: "Fotos", "Estadísticas" y "Notas".
-- [ ] AC-006: La pestaña "Fotos" contiene la galería de fotos rediseñada en cuadrícula (ver sección siguiente) y es la pestaña activa por defecto al abrir el detalle de una ruta.
-- [ ] AC-007: Las pestañas "Estadísticas" y "Notas" son ejemplos estructurales sin funcionalidad real: "Estadísticas" reutiliza tal cual el placeholder de gráfica ya existente ("Velocidad durante la ruta (próximamente)"); "Notas" muestra un texto de ejemplo estático (tipo lorem ipsum) indicando que el contenido real llegará en una futura iteración. Ninguna de las dos debe interpretarse como alcance funcional de esta spec — solo demuestran que el patrón de pestañas generaliza a más de un uso.
-- [ ] AC-008: Cambiar de pestaña en `<route-detail>` no vuelve a pedir las fotos al repositorio ni reconstruye el mapa — solo cambia qué panel es visible.
+- [x] AC-005: `<route-detail>` mantiene el mapa y el bloque de cabecera (título, fecha, grid de estadísticas) fuera de las pestañas, siempre visibles; debajo se monta un `<tab-bar>` con al menos 3 pestañas: "Fotos", "Estadísticas" y "Notas". _(test: route-detail.element.spec.ts → "mounts a tab-bar with 'Fotos', 'Estadísticas' y 'Notas'...")_
+- [x] AC-006: La pestaña "Fotos" contiene la galería de fotos rediseñada en cuadrícula (ver sección siguiente) y es la pestaña activa por defecto al abrir el detalle de una ruta. _(test: route-detail.element.spec.ts → "mounts a tab-bar...", aria-selected="true" en fotos)_
+- [x] AC-007: Las pestañas "Estadísticas" y "Notas" son ejemplos estructurales sin funcionalidad real: "Estadísticas" reutiliza tal cual el placeholder de gráfica ya existente ("Velocidad durante la ruta (próximamente)"); "Notas" muestra un texto de ejemplo estático (tipo lorem ipsum) indicando que el contenido real llegará en una futura iteración. Ninguna de las dos debe interpretarse como alcance funcional de esta spec — solo demuestran que el patrón de pestañas generaliza a más de un uso. _(test: route-detail.element.spec.ts → "shows the existing chart placeholder unchanged...", "shows a static example placeholder text in 'Notas'...")_
+- [x] AC-008: Cambiar de pestaña en `<route-detail>` no vuelve a pedir las fotos al repositorio ni reconstruye el mapa — solo cambia qué panel es visible. _(test: route-detail.element.spec.ts → "does not refetch photos/points when switching...", "does not reinstantiate route-map when switching tabs...")_
 
 ### Galería de fotos en cuadrícula ("estilo Instagram")
 - [ ] AC-009: Dentro de la pestaña "Fotos", las miniaturas se muestran en una cuadrícula responsiva: 2 columnas en viewport estrecho (móvil) y 3 columnas en viewport ancho, con miniaturas cuadradas notablemente más grandes que las 80×80px actuales de la tira horizontal.
@@ -42,7 +42,7 @@ Mejora la integración visual entre las fotos de una ruta y su mapa/listado, apo
 
 ### Tests
 - [x] AC-026: Test unitario: `<tab-bar>` cambia el panel visible al pulsar cada botón de pestaña, y en todo momento solo un panel está visible. _(test: tab-bar.element.spec.ts)_
-- [ ] AC-027: Test unitario: `<route-detail>` renderiza las 3 pestañas ("Fotos", "Estadísticas", "Notas") y "Fotos" es la activa por defecto.
+- [x] AC-027: Test unitario: `<route-detail>` renderiza las 3 pestañas ("Fotos", "Estadísticas", "Notas") y "Fotos" es la activa por defecto. _(test: route-detail.element.spec.ts)_
 - [ ] AC-028: Test unitario: `<photo-gallery layout="grid">` renderiza las miniaturas en cuadrícula y emite `photo-gallery:select` con el mismo contrato que `layout="strip"`.
 - [ ] AC-029: Test unitario: al pulsar la miniatura del popup de un marcador individual en `<route-map>`, se dispara la apertura del visor con el `startIndex` correspondiente a esa foto dentro de la lista completa.
 - [ ] AC-030: Test unitario: la función de simplificado de trazado reduce un array de N puntos a un máximo de ~40 puntos, preservando siempre el primer y el último punto del recorrido original.

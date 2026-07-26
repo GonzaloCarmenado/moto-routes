@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
+import { MemoryPhotoRepository } from '../shared/repositories/memory-photo.repository.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { Route } from '../shared/models/route.types.js';
 import './route-detail.element.js';
@@ -11,8 +12,9 @@ vi.mock('../shared/services/photo-capture-adapter.service.js', async (importOrig
   return { ...actual, pickFromGallery: vi.fn() };
 });
 
-// Mock MapLibre para tests (route-map.element.ts internamente instancia el mapa)
-vi.mock('maplibre-gl', () => {
+// mapCtor se expone vía vi.hoisted para poder comprobar en los tests de pestañas
+// (AC-008) que cambiar de pestaña no vuelve a instanciar maplibregl.Map.
+const { mapCtor } = vi.hoisted(() => {
   const mockMap = {
     remove: vi.fn(),
     fitBounds: vi.fn(),
@@ -24,7 +26,11 @@ vi.mock('maplibre-gl', () => {
       if (event === 'load') cb();
     }),
   };
-  const mapFn = vi.fn(() => mockMap);
+  return { mapCtor: vi.fn(() => mockMap) };
+});
+
+// Mock MapLibre para tests (route-map.element.ts internamente instancia el mapa)
+vi.mock('maplibre-gl', () => {
   const markerFn = vi.fn(() => ({
     setLngLat: vi.fn().mockReturnThis(),
     addTo: vi.fn().mockReturnThis(),
@@ -37,8 +43,8 @@ vi.mock('maplibre-gl', () => {
     remove: vi.fn(),
   }));
   return {
-    default: { Map: mapFn, Marker: markerFn, Popup: popupFn },
-    Map: mapFn,
+    default: { Map: mapCtor, Marker: markerFn, Popup: popupFn },
+    Map: mapCtor,
     Marker: markerFn,
     Popup: popupFn,
   };
@@ -319,6 +325,89 @@ describe('route-detail - integración con route-map', () => {
     const routeMap = root.querySelector<HTMLElement & { points: { lat: number; lng: number }[] }>('route-map');
     expect(routeMap).not.toBeNull();
     expect(routeMap?.points).toEqual([]);
+    document.body.removeChild(el);
+  });
+});
+
+describe('route-detail - pestañas (AC-005 a AC-008, AC-027)', () => {
+  let repo: IRouteRepository;
+  let savedRoute: Route;
+
+  beforeEach(async () => {
+    localStorage.clear();
+    repo = new MemoryRouteRepository();
+    savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+  });
+
+  function tabBarRoot(root: ShadowRoot): ShadowRoot {
+    return root.querySelector('tab-bar')!.shadowRoot!;
+  }
+
+  function clickTab(root: ShadowRoot, id: string): void {
+    (tabBarRoot(root).querySelector(`[data-cy="tab-bar-btn-${id}"]`) as HTMLButtonElement).click();
+  }
+
+  it('mounts a tab-bar with "Fotos", "Estadísticas" y "Notas", "Fotos" activa por defecto (AC-006, AC-027)', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const tabBar = root.querySelector('tab-bar');
+    expect(tabBar).not.toBeNull();
+
+    const fotosBtn = tabBarRoot(root).querySelector('[data-cy="tab-bar-btn-fotos"]');
+    const statsBtn = tabBarRoot(root).querySelector('[data-cy="tab-bar-btn-estadisticas"]');
+    const notasBtn = tabBarRoot(root).querySelector('[data-cy="tab-bar-btn-notas"]');
+    expect(fotosBtn).not.toBeNull();
+    expect(statsBtn).not.toBeNull();
+    expect(notasBtn).not.toBeNull();
+    expect(fotosBtn?.getAttribute('aria-selected')).toBe('true');
+    expect(statsBtn?.getAttribute('aria-selected')).toBe('false');
+    expect(notasBtn?.getAttribute('aria-selected')).toBe('false');
+    document.body.removeChild(el);
+  });
+
+  it('shows the existing chart placeholder unchanged in "Estadísticas" (AC-007)', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const chartArea = root.querySelector('.chart-area');
+    expect(chartArea).not.toBeNull();
+    expect(chartArea?.textContent).toBe('(próximamente)');
+    document.body.removeChild(el);
+  });
+
+  it('shows a static example placeholder text in "Notas" (AC-007)', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const noteText = root.querySelector('.note-text');
+    expect(noteText).not.toBeNull();
+    expect(noteText?.textContent).toBeTruthy();
+    document.body.removeChild(el);
+  });
+
+  it('does not refetch photos/points when switching to "Notas" and back to "Fotos" (AC-008)', async () => {
+    const getPointsSpy = vi.spyOn(repo, 'getPointsByRouteId');
+    const getByRouteIdSpy = vi.spyOn(MemoryPhotoRepository.prototype, 'getByRouteId');
+
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const pointsCallsBefore = getPointsSpy.mock.calls.length;
+    const photoCallsBefore = getByRouteIdSpy.mock.calls.length;
+
+    clickTab(root, 'notas');
+    clickTab(root, 'fotos');
+
+    expect(getPointsSpy.mock.calls.length).toBe(pointsCallsBefore);
+    expect(getByRouteIdSpy.mock.calls.length).toBe(photoCallsBefore);
+    document.body.removeChild(el);
+  });
+
+  it('does not reinstantiate route-map when switching tabs (AC-008)', async () => {
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const mapCallsBefore = mapCtor.mock.calls.length;
+
+    clickTab(root, 'notas');
+    clickTab(root, 'fotos');
+
+    expect(mapCtor.mock.calls.length).toBe(mapCallsBefore);
     document.body.removeChild(el);
   });
 });

@@ -30,7 +30,7 @@
   - `CREAR src/shared/tab-bar/tab-bar.element.spec.ts`
 - **Notas**: Extiende `BaseElement`/`renderShadow` (ADR-022). Propiedad `tabs: {id:string; label:string}[]` (setter dispara `render()`); estado interno `_activeId` inicializado a `tabs[0]?.id` la primera vez que se asignan `tabs` (no se resetea si `tabs` se reasigna con el mismo primer id — solo en el primer set). El shadow DOM renderiza, por cada tab, un contenedor `<div class="tab-bar__panel">` que envuelve un `<slot name="{id}">`; el toggle de "activo" es una clase (`.tab-bar__panel--active`) que alterna `display`, nunca se quita el nodo del DOM ni se vuelve a crear el `<slot>`. El `<tab-bar>` no importa nada de fotos/rutas — cero dependencias de dominio, cumpliendo AC-004. Sin lógica de teclado adicional: al ser `<button>` reales, Tab/Enter/Espacio ya funcionan de forma nativa sin JS extra (AC-003 se cumple "gratis").
 
-## Paso 2: Redesign de `<route-detail>` con pestañas
+## Paso 2: Redesign de `<route-detail>` con pestañas — ✅ Completado
 - **Objetivo**: Mover el mapa/cabecera fuera de las pestañas (ya lo están hoy) y envolver "Estadísticas" (placeholder de gráfica ya existente) y "Fotos"/"Notas" en un `<tab-bar>` con 3 pestañas, sin recargar fotos/mapa al cambiar de pestaña.
 - **AC cubiertos**: AC-005, AC-006, AC-007, AC-008, AC-027
 - **Tests a escribir** (primero, en `route-detail.element.spec.ts`):
