@@ -18,6 +18,10 @@ async function createList(repo: IRouteRepository): Promise<HTMLElement> {
   return list;
 }
 
+function currentThumb(list: HTMLElement): Element {
+  return list.shadowRoot!.querySelector('.thumb')!;
+}
+
 describe('route-list - listado y tarjetas', () => {
   let repo: IRouteRepository;
 
@@ -231,6 +235,99 @@ describe('route-list - eventos e interacción', () => {
     root = list.shadowRoot!;
     expect(root.querySelectorAll('.route-card').length).toBe(1);
     expect(root.querySelector('.route-list__empty')).toBeNull();
+    document.body.removeChild(list);
+  });
+});
+
+describe('route-list - trazado SVG y backfill perezoso (AC-021, AC-022, AC-023, AC-024, AC-031)', () => {
+  let repo: IRouteRepository;
+
+  beforeEach(() => {
+    repo = new MemoryRouteRepository();
+  });
+
+  it('renders an svg with a path inside .thumb, without the media-placeholder class, when previewPolyline is already saved (AC-021)', async () => {
+    const saved = await repo.save(
+      { duration: 100, totalDistance: 5, avgSpeed: 20, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+    await repo.updatePreviewPolyline(saved.id, [
+      [10, 20],
+      [11, 21],
+      [12, 22],
+    ]);
+
+    const list = await createList(repo);
+    const root = list.shadowRoot!;
+    const card = root.querySelector('.route-card')!;
+    const thumb = card.querySelector('.thumb')!;
+    expect(thumb.classList.contains('media-placeholder')).toBe(false);
+    expect(thumb.querySelector('svg path[data-cy="route-card-trace"]')).not.toBeNull();
+    document.body.removeChild(list);
+  });
+
+  it('keeps showing the striped placeholder without throwing when the route has neither previewPolyline nor route_points (AC-022, AC-024)', async () => {
+    await repo.save(
+      { duration: 100, totalDistance: 5, avgSpeed: 20, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+
+    const list = await createList(repo);
+    await waitRender();
+    const root = list.shadowRoot!;
+    const thumb = root.querySelector('.thumb')!;
+    expect(thumb.classList.contains('media-placeholder')).toBe(true);
+    expect(thumb.querySelector('svg')).toBeNull();
+    document.body.removeChild(list);
+  });
+
+  it('shows the placeholder on first render, then swaps to the svg once the background backfill resolves, without recomputing on a second load (AC-023, AC-031)', async () => {
+    const routeId = crypto.randomUUID();
+    await repo.save(
+      { id: routeId, duration: 100, totalDistance: 5, avgSpeed: 20, status: 'completed', visibility: 'private', origin: 'local' },
+      [
+        { routeId, timestamp: 1, lat: 10, lng: 20, alt: 0, speed: 0 },
+        { routeId, timestamp: 2, lat: 11, lng: 21, alt: 0, speed: 0 },
+      ],
+      [],
+    );
+    const persistedPoints = await repo.getPointsByRouteId(routeId);
+
+    // Retrasa deliberadamente la respuesta de getPointsByRouteId para poder
+    // observar el estado intermedio: placeholder pintado antes de que el
+    // backfill en segundo plano resuelva.
+    let resolvePoints!: (points: typeof persistedPoints) => void;
+    const deferred = new Promise<typeof persistedPoints>((resolve) => {
+      resolvePoints = resolve;
+    });
+    vi.spyOn(repo, 'getPointsByRouteId').mockReturnValueOnce(deferred);
+    const updateSpy = vi.spyOn(repo, 'updatePreviewPolyline');
+
+    // Monta primero y asigna el repositorio después: evita que `connectedCallback`
+    // y el setter de `repository` disparen dos `fetchAndRender()` concurrentes
+    // (lo que haría el `getPointsByRouteId` mockeado solo "una vez" impredecible).
+    const list = document.createElement('route-list') as HTMLElement & { repository: IRouteRepository };
+    document.body.appendChild(list);
+    list.repository = repo;
+    await waitRender();
+    expect(currentThumb(list).classList.contains('media-placeholder')).toBe(true);
+    expect(updateSpy).not.toHaveBeenCalled();
+
+    // Ahora resuelve la respuesta pendiente: el backfill en segundo plano completa.
+    resolvePoints(persistedPoints);
+    await waitRender();
+    expect(currentThumb(list).classList.contains('media-placeholder')).toBe(false);
+    expect(currentThumb(list).querySelector('svg path[data-cy="route-card-trace"]')).not.toBeNull();
+    expect(updateSpy).toHaveBeenCalledOnce();
+
+    // Segunda carga del listado (ej. volver a abrir): no se recalcula de nuevo.
+    window.dispatchEvent(new CustomEvent('nav-rutas'));
+    await waitRender();
+    expect(currentThumb(list).querySelector('svg path[data-cy="route-card-trace"]')).not.toBeNull();
+    expect(updateSpy).toHaveBeenCalledOnce();
+
     document.body.removeChild(list);
   });
 });

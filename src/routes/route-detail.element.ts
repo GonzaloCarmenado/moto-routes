@@ -1,10 +1,10 @@
 import styles from './route-detail.element.css?inline';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { IPhotoRepository } from '../shared/models/photo.repository.js';
-import type { Photo } from '../shared/models/photo.types.js';
 import type { Route } from '../shared/models/route.types.js';
 import { formatDuration } from '../cockpit/cockpit.transform.js';
 import '../shared/route-map/route-map.element.js';
+import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from '../shared/route-map/route-map.element.js';
 import type { MapPhoto } from '../shared/route-map/route-map-photos.js';
 import '../photos/photo-capture.element.js';
 import type { PhotoCaptureElement } from '../photos/photo-capture.element.js';
@@ -19,15 +19,10 @@ import { showToast } from '../shared/feedback/toast.js';
 import { BaseElement } from '../shared/base-element.js';
 import { APP_EVENTS, dispatchAppEvent } from '../shared/app-events.js';
 import '../shared/photo-gallery/photo-gallery.element.js';
-import { PHOTO_GALLERY_SELECT_EVENT, type PhotoGallerySelectDetail, type GalleryPhoto } from '../shared/photo-gallery/photo-gallery.element.js';
+import { PHOTO_GALLERY_SELECT_EVENT, type PhotoGallerySelectDetail, type GalleryPhoto, type PhotoGalleryLayout } from '../shared/photo-gallery/photo-gallery.element.js';
 import { openPhotoViewer } from '../shared/photo-viewer/photo-viewer.element.js';
-
-/**
- * Tipo que asocia una foto con su URL de objeto para mostrar en UI.
- */
-interface PhotoWithUrl extends Photo {
-  objectUrl: string;
-}
+import '../shared/tab-bar/tab-bar.element.js';
+import type { PhotoWithUrl, TabBarElement } from './route-detail.types.js';
 
 class RouteDetail extends BaseElement {
   private _repository: IRouteRepository | null = null;
@@ -37,6 +32,7 @@ class RouteDetail extends BaseElement {
   private _photos: PhotoWithUrl[] = [];
   private _points: { lat: number; lng: number }[] = [];
   private _photoCaptureEl: PhotoCaptureElement | null = null;
+  private _fotosPanelEl: HTMLElement | null = null;
   private _loading = false;
 
   private async getPhotoRepo(): Promise<IPhotoRepository> {
@@ -158,7 +154,12 @@ class RouteDetail extends BaseElement {
       photos?: MapPhoto[];
     };
     routeMap.points = points.map((p) => ({ lat: p.lat, lng: p.lng }));
-    routeMap.photos = this._photos;
+    routeMap.photos = this._photos; // AC-016: objectUrl ya resuelto, igual que la galería
+    // AC-015/AC-017: solo el marcador individual dispara este evento, nunca un cluster.
+    routeMap.addEventListener(ROUTE_MAP_PHOTO_SELECT_EVENT, ((event: CustomEvent<RouteMapPhotoSelectDetail>) => {
+      const index = this.toGalleryPhotos().findIndex((p) => p.id === event.detail.photo.id);
+      if (index !== -1) this.openPhotoViewerAt(index);
+    }) as EventListener);
     return routeMap;
   }
 
@@ -167,9 +168,49 @@ class RouteDetail extends BaseElement {
     content.className = 'detail-content';
     content.appendChild(this.buildHeader(route));
     content.appendChild(this.buildStatGrid(route));
-    content.appendChild(this.buildChart());
-    content.appendChild(this.buildPhotosSection());
+    content.appendChild(this.buildTabBar());
     return content;
+  }
+
+  /**
+   * Envuelve "Estadísticas"/"Fotos"/"Notas" en un `<tab-bar>` (AC-005, AC-006).
+   * Cada panel se añade como hijo ligero marcado con `slot="{id}"`, siguiendo
+   * la API de `<tab-bar>` — nunca se reconstruye al cambiar de pestaña (AC-008).
+   */
+  private buildTabBar(): TabBarElement {
+    const tabBar = document.createElement('tab-bar') as TabBarElement;
+    tabBar.tabs = [
+      { id: 'fotos', label: 'Fotos' },
+      { id: 'estadisticas', label: 'Estadísticas' },
+      { id: 'notas', label: 'Notas' },
+    ];
+
+    this._fotosPanelEl = this.buildPhotosSection();
+    tabBar.appendChild(this._fotosPanelEl);
+    tabBar.appendChild(this.buildEstadisticasPanel());
+    tabBar.appendChild(this.buildNotasPlaceholder());
+    return tabBar;
+  }
+
+  /** "Estadísticas": placeholder de gráfica ya existente, sin cambios (AC-007). */
+  private buildEstadisticasPanel(): HTMLElement {
+    const chart = this.buildChart();
+    chart.setAttribute('slot', 'estadisticas');
+    return chart;
+  }
+
+  /**
+   * "Notas": ejemplo estructural sin alcance funcional (AC-007) — texto estático
+   * indicando que el contenido real llegará en una futura iteración.
+   */
+  private buildNotasPlaceholder(): HTMLElement {
+    const panel = document.createElement('div');
+    panel.setAttribute('slot', 'notas');
+    const text = document.createElement('p');
+    text.className = 'note-text';
+    text.textContent = 'Aquí podrás añadir tus propias notas sobre la ruta (próximamente): sensaciones, incidencias, recomendaciones para la próxima vez.';
+    panel.appendChild(text);
+    return panel;
   }
 
   private buildHeader(route: Route): DocumentFragment {
@@ -223,29 +264,35 @@ class RouteDetail extends BaseElement {
   }
 
   private buildGalleryElement(): HTMLElement {
-    const gallery = document.createElement('photo-gallery') as HTMLElement & { photos: GalleryPhoto[] };
+    const gallery = document.createElement('photo-gallery') as HTMLElement & { photos: GalleryPhoto[]; layout: PhotoGalleryLayout };
+    gallery.layout = 'grid';
     gallery.photos = this.toGalleryPhotos();
     gallery.addEventListener(PHOTO_GALLERY_SELECT_EVENT, ((event: CustomEvent<PhotoGallerySelectDetail>) => {
-      openPhotoViewer({
-        photos: this.toGalleryPhotos(),
-        startIndex: event.detail.index,
-        onDelete: (photo) => this.handleDeletePhoto(photo.id),
-      });
+      this.openPhotoViewerAt(event.detail.index);
     }) as EventListener);
     return gallery;
   }
 
-  private buildPhotosSection(): DocumentFragment {
-    const fragment = document.createDocumentFragment();
+  /** Único punto de apertura del visor: galería en cuadrícula y popup del mapa
+   * comparten esta misma llamada (AC-011, AC-015). */
+  private openPhotoViewerAt(index: number): void {
+    openPhotoViewer({ photos: this.toGalleryPhotos(), startIndex: index, onDelete: (photo) => this.handleDeletePhoto(photo.id) });
+  }
+
+  /** Panel de la pestaña "Fotos" (AC-006). Un `<div slot="fotos">` — no un
+   * `DocumentFragment`, que no puede llevar el atributo `slot`. */
+  private buildPhotosSection(): HTMLElement {
+    const section = document.createElement('div');
+    section.setAttribute('slot', 'fotos');
 
     const photosLabel = document.createElement('div');
     photosLabel.className = 'section-label';
     photosLabel.textContent = 'Fotos de la ruta';
-    fragment.appendChild(photosLabel);
-    fragment.appendChild(this.buildAddPhotoButton());
-    fragment.appendChild(this.buildGalleryElement());
+    section.appendChild(photosLabel);
+    section.appendChild(this.buildAddPhotoButton());
+    section.appendChild(this.buildGalleryElement());
 
-    return fragment;
+    return section;
   }
 
   /** Persiste una foto y devuelve si se guardó de verdad (muestra su propio toast de error). */
@@ -294,27 +341,17 @@ class RouteDetail extends BaseElement {
     }
   }
 
+  /**
+   * Reemplaza el panel de "Fotos" (tras añadir/borrar una foto) usando la
+   * referencia directa guardada en `buildTabBar()`, en vez de buscarlo por
+   * posición dentro de `.detail-content` — esa heurística ya no encontraría
+   * nada, el contenido vive ahora dentro del `<tab-bar>`.
+   */
   private rerenderPhotosSection(): void {
-    const root = this.shadowRoot;
-    if (!root) return;
-
-    const detail = root.querySelector('.detail-content');
-    if (!detail) return;
-
-    const labels = detail.querySelectorAll('.section-label');
-    const lastLabel = labels[labels.length - 1];
-    if (lastLabel) {
-      let el: ChildNode | null = lastLabel.nextSibling;
-      while (el) {
-        const next = el.nextSibling;
-        el.remove();
-        el = next;
-      }
-      lastLabel.remove();
-    }
-
+    if (!this._fotosPanelEl) return;
     const newSection = this.buildPhotosSection();
-    detail.appendChild(newSection);
+    this._fotosPanelEl.replaceWith(newSection);
+    this._fotosPanelEl = newSection;
   }
 
   /** Devuelve si se borró de verdad, para que `<photo-viewer>` sepa si debe quitarla de su vista. */

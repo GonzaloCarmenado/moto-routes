@@ -19,8 +19,11 @@ export interface PhotoGallerySelectDetail {
  * resueltas y emite un evento con el índice al pulsar una miniatura — el
  * llamador decide qué hacer (normalmente, abrir `<photo-viewer>`).
  */
+export type PhotoGalleryLayout = 'strip' | 'grid';
+
 class PhotoGalleryElement extends BaseElement {
   private _photos: GalleryPhoto[] = [];
+  private _layout: PhotoGalleryLayout = 'strip';
 
   set photos(value: GalleryPhoto[]) {
     this._photos = value;
@@ -29,6 +32,19 @@ class PhotoGalleryElement extends BaseElement {
 
   get photos(): GalleryPhoto[] {
     return this._photos;
+  }
+
+  /** `'strip'` (por defecto, tira horizontal usada en `<cockpit-view>`) o
+   * `'grid'` (cuadrícula usada en la pestaña "Fotos" de `<route-detail>`).
+   * Solo cambia la clase modificadora del contenedor — la selección de
+   * miniatura y el estado vacío no se duplican entre layouts. */
+  set layout(value: PhotoGalleryLayout) {
+    this._layout = value;
+    this.render();
+  }
+
+  get layout(): PhotoGalleryLayout {
+    return this._layout;
   }
 
   constructor() {
@@ -67,7 +83,7 @@ class PhotoGalleryElement extends BaseElement {
 
   private buildGallery(): HTMLElement {
     const gallery = document.createElement('div');
-    gallery.className = 'photo-gallery';
+    gallery.className = this._layout === 'grid' ? 'photo-gallery photo-gallery--grid' : 'photo-gallery';
     gallery.setAttribute('data-cy', 'photo-gallery');
     this._photos.forEach((photo, index) => {
       gallery.appendChild(this.buildThumbnail(photo, index));

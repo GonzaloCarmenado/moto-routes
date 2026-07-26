@@ -8,6 +8,7 @@ import type { CockpitState, RoutePoint, RouteMetadata } from './cockpit.types.js
 import { calculateDistance, calculateAvgSpeed, detectStop } from './cockpit.transform.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { CreateRoute, CreateRoutePoint, CreateRouteStop } from '../shared/models/route.types.js';
+import { simplifyPolyline } from '../shared/services/route-polyline.service.js';
 
 export interface GpsProvider {
   getCurrentPosition(): Promise<GeolocationPosition>;
@@ -150,6 +151,20 @@ function persistFallback(data: string): void {
   }
 }
 
+/**
+ * Persiste la ruta como 'completed' y, de forma independiente, el trazado
+ * simplificado (AC-019). Deliberadamente NO se encadena vía
+ * `save(...).then(() => updatePreviewPolyline(...))`: para MemoryRouteRepository
+ * ambas mutaciones ya son síncronas dentro de cada llamada (aunque envueltas en
+ * una promesa), así que llamarlas como sentencias secuenciales normales evita el
+ * salto de microtarea que introduciría un `.then()` y que los tests existentes
+ * (que hacen `await repo.getById(...)` justo después de `confirmSaveRecording()`)
+ * no verían reflejado de forma fiable. Para SqliteRouteRepository ambas tocan
+ * columnas disjuntas de una fila que ya existe (insertada como 'active' al
+ * empezar a grabar), así que el orden relativo no afecta a la corrección.
+ * Si `updatePreviewPolyline` falla, no debe impedir el resto del guardado — el
+ * backfill perezoso del listado recalculará el trazado más adelante.
+ */
 function persistRouteOnStop(repository: IRouteRepository | undefined, state: CockpitState): void {
   if (!repository) return;
   const route = buildCreateRoute(state);
@@ -158,6 +173,12 @@ function persistRouteOnStop(repository: IRouteRepository | undefined, state: Coc
   repository.save(route, points, stops).catch(() => {
     // Si falla, guardar backup en localStorage
     persistFallback(JSON.stringify({ route, points, stops }));
+  });
+
+  const previewPolyline = simplifyPolyline(state.points);
+  repository.updatePreviewPolyline(state.routeId, previewPolyline).catch(() => {
+    // No crítico: el backfill perezoso del listado de rutas recalculará el
+    // trazado a partir de route_points en la próxima carga.
   });
 }
 

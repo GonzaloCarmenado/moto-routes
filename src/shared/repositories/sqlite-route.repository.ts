@@ -71,7 +71,21 @@ export class SqliteRouteRepository implements IRouteRepository {
     for (const stmt of statements) {
       await this.db.execute(stmt);
     }
+    await this.ensurePreviewPolylineColumn();
     this.initialized = true;
+  }
+
+  /**
+   * `CREATE TABLE IF NOT EXISTS` no migra una tabla que ya existía antes de esta
+   * columna (mismo tipo de gap que el `PRAGMA foreign_keys` de ADR-023) — se
+   * comprueba con `PRAGMA table_info` y solo se ejecuta `ALTER TABLE` si hace falta.
+   */
+  private async ensurePreviewPolylineColumn(): Promise<void> {
+    const columns = await this.db.select('PRAGMA table_info(routes);');
+    const hasColumn = columns.some((c) => c['name'] === 'preview_polyline');
+    if (!hasColumn) {
+      await this.db.execute('ALTER TABLE routes ADD COLUMN preview_polyline TEXT;');
+    }
   }
 
   async save(
@@ -125,7 +139,10 @@ export class SqliteRouteRepository implements IRouteRepository {
       );
     }
 
-    return { ...route, id, createdAt };
+    // save() nunca lista preview_polyline en su INSERT/UPDATE, así que nunca lo
+    // sobrescribe en BBDD — solo hace falta reflejar el valor ya existente aquí
+    // para que el objeto devuelto cumpla el tipo Route.
+    return { ...route, id, createdAt, previewPolyline: existing?.previewPolyline ?? null };
   }
 
   async getById(id: string): Promise<Route | null> {
@@ -164,6 +181,14 @@ export class SqliteRouteRepository implements IRouteRepository {
     // CASCADE se encarga de puntos y paradas
     await this.db.execute(`DELETE FROM routes WHERE id = ?`, [id]);
   }
+
+  async updatePreviewPolyline(routeId: string, polyline: [number, number][]): Promise<void> {
+    await this.ensureSchema();
+    await this.db.execute(`UPDATE routes SET preview_polyline = ? WHERE id = ?`, [
+      JSON.stringify(polyline),
+      routeId,
+    ]);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -179,6 +204,7 @@ interface RouteRow {
   status: string;
   visibility: string;
   origin: string;
+  preview_polyline?: string | null;
 }
 
 interface RoutePointRow {
@@ -211,6 +237,7 @@ function rowToRoute(r: RouteRow): Route {
     status: r.status as Route['status'],
     visibility: r.visibility as Route['visibility'],
     origin: r.origin as Route['origin'],
+    previewPolyline: r.preview_polyline != null ? (JSON.parse(r.preview_polyline) as [number, number][]) : null,
   };
 }
 
