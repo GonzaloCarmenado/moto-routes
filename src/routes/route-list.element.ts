@@ -12,6 +12,7 @@ import { showToast } from '../shared/feedback/toast.js';
 import { toErrorMessage } from '../shared/utils/errors.js';
 import { buildPolylineSvgPath } from './route-list.transform.js';
 import { ensurePreviewPolyline } from './route-list-polyline.service.js';
+import { injectTestData, removeTestData } from '../test-helpers/inject-test-data.js';
 
 const THUMB_TRACE_SIZE = 72;
 
@@ -101,11 +102,17 @@ class RouteList extends BaseElement {
   }
 
   private buildBody(routes: Route[]): HTMLElement {
+    const container = document.createElement('div');
+
+    // Panel debug TEMPORAL — visible siempre. Se elimina junto a inject-test-data.ts
+    container.appendChild(this.buildDebugPanel());
+
     if (routes.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'route-list__empty';
       empty.textContent = 'No hay rutas guardadas todavía';
-      return empty;
+      container.appendChild(empty);
+      return container;
     }
 
     const list = document.createElement('div');
@@ -113,7 +120,8 @@ class RouteList extends BaseElement {
     for (const route of routes) {
       list.appendChild(this.buildCard(route));
     }
-    return list;
+    container.appendChild(list);
+    return container;
   }
 
   private buildCard(route: Route): HTMLElement {
@@ -213,6 +221,59 @@ class RouteList extends BaseElement {
         // hasta la próxima carga del listado — preview_polyline es un dato
         // derivado y recalculable, nunca la fuente de verdad.
       });
+  }
+
+  /**
+   * Panel debug con botones para inyectar/eliminar datos de prueba.
+   * Solo visible si localStorage['debug'] está definido.
+   * Se elimina junto a inject-test-data.ts tras la verificación.
+   */
+  private buildDebugPanel(): HTMLElement {
+    const panel = document.createElement('div');
+    panel.style.cssText = 'padding: 8px; background: #1a1a2e; border: 1px solid #ff8c00; border-radius: 8px; margin: 8px 0;';
+
+    const title = document.createElement('div');
+    title.style.cssText = 'font-size: 11px; color: #ff8c00; margin-bottom: 4px;';
+    title.textContent = '🧪 DEBUG MODE (localStorage.debug)';
+    panel.appendChild(title);
+
+    const btnInject = document.createElement('button');
+    btnInject.textContent = '📥 Inyectar datos prueba';
+    btnInject.style.cssText = 'background: #ff8c00; color: #000; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; margin-right: 8px;';
+    btnInject.addEventListener('click', () => {
+      void this.handleInjectTestData();
+    });
+
+    const btnRemove = document.createElement('button');
+    btnRemove.textContent = '🗑 Eliminar datos prueba';
+    btnRemove.style.cssText = 'background: #c0392b; color: #fff; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;';
+    btnRemove.addEventListener('click', () => {
+      void this.handleRemoveTestData();
+    });
+
+    panel.appendChild(btnInject);
+    panel.appendChild(btnRemove);
+    return panel;
+  }
+
+  private async handleInjectTestData(): Promise<void> {
+    try {
+      await injectTestData();
+      showToast('🧪 Datos de prueba inyectados. Recarga el listado.', 'success');
+      void this.fetchAndRender();
+    } catch (err) {
+      showToast(`⚠️ Error al inyectar: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
+  }
+
+  private async handleRemoveTestData(): Promise<void> {
+    try {
+      await removeTestData();
+      showToast('🧹 Datos de prueba eliminados.', 'success');
+      void this.fetchAndRender();
+    } catch (err) {
+      showToast(`⚠️ Error al eliminar: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
   }
 
   private buildDeleteButton(route: Route): HTMLButtonElement {
