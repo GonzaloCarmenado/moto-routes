@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import './cockpit.element.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
+import { pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
+import type * as PhotoCaptureAdapter from '../shared/services/photo-capture-adapter.service.js';
+
+vi.mock('../shared/services/photo-capture-adapter.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof PhotoCaptureAdapter>();
+  return { ...actual, pickFromGallery: vi.fn() };
+});
 
 beforeEach(() => {
   const mockGeolocation = {
@@ -266,6 +273,29 @@ describe('CockpitView - foto durante grabación', () => {
       vi.useRealTimers();
     }
 
+    document.body.removeChild(cockpit);
+  });
+
+  it('adds every photo selected from the gallery, not just the last one (bug regression)', async () => {
+    const { cockpit, shadowRoot } = await mountCockpit();
+    const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
+    masterBtn.click();
+    await waitRender();
+
+    vi.mocked(pickFromGallery).mockResolvedValue([
+      new File([''], 'a.jpg', { type: 'image/jpeg' }),
+      new File([''], 'b.jpg', { type: 'image/jpeg' }),
+      new File([''], 'c.jpg', { type: 'image/jpeg' }),
+    ]);
+
+    const photoCapture = shadowRoot.querySelector('[data-cy="cockpit-photo-capture"]')!;
+    (photoCapture.shadowRoot!.querySelector('.photo-btn') as HTMLButtonElement).click();
+    (photoCapture.shadowRoot!.querySelector('[data-cy="photo-menu-gallery"]') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 200));
+
+    const gallery = shadowRoot.querySelector('[data-cy="cockpit-photo-gallery"]')!;
+    expect(gallery.shadowRoot!.querySelectorAll('[data-cy="photo-thumbnail"]')).toHaveLength(3);
+    expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('📷 3 fotos añadidas');
     document.body.removeChild(cockpit);
   });
 });

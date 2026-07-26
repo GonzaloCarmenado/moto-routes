@@ -10,7 +10,7 @@ import type { PhotoCaptureElement } from '../photos/photo-capture.element.js';
 import { PHOTO_CAPTURE_EVENT, type PhotoCaptureEventDetail } from '../photos/photo-capture.types.js';
 import { openPhotoViewer } from '../shared/photo-viewer/photo-viewer.element.js';
 import { captureFromCamera, pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
-import { processPhotoCapture, fetchGalleryPhotos } from './cockpit-photo.service.js';
+import { processMultiplePhotos, fetchGalleryPhotos, deleteCockpitPhoto } from './cockpit-photo.service.js';
 import { toErrorMessage } from '../shared/utils/errors.js';
 import { showToast } from '../shared/feedback/toast.js';
 import { resolveStopDecision } from './cockpit-stop.service.js';
@@ -214,7 +214,7 @@ class CockpitView extends BaseElement {
 
   private buildGalleryElement(): PhotoGalleryElement {
     const gallery = buildPhotoGalleryElement((index) => {
-      openPhotoViewer({ photos: gallery.photos, startIndex: index });
+      openPhotoViewer({ photos: gallery.photos, startIndex: index, onDelete: (photo) => this.handleDeletePhoto(photo.id) });
     });
     this.galleryEl = gallery;
     return gallery;
@@ -224,6 +224,20 @@ class CockpitView extends BaseElement {
     const photoRepo = await this.getPhotoRepo();
     const photos = await fetchGalleryPhotos(photoRepo, routeId);
     if (this.galleryEl) this.galleryEl.photos = photos;
+  }
+
+  /** Devuelve si se borró de verdad, para que `<photo-viewer>` sepa si debe quitarla de su vista. */
+  private async handleDeletePhoto(photoId: string): Promise<boolean> {
+    try {
+      if (!(await deleteCockpitPhoto(photoId, await this.getPhotoRepo()))) return false;
+    } catch (err) {
+      showToast(`⚠️ ${toErrorMessage(err, 'Error al eliminar la foto')}`, 'error');
+      return false;
+    }
+
+    if (this.galleryEl) this.galleryEl.photos = this.galleryEl.photos.filter((p) => p.id !== photoId);
+    showToast('Foto eliminada', 'success');
+    return true;
   }
 
   private buildScreen(
@@ -292,10 +306,12 @@ class CockpitView extends BaseElement {
     const state = this.service.getCurrentState();
     if (state.status !== 'recording' && state.status !== 'paused') return;
 
-    // 1. Capturar imagen según fuente seleccionada
-    const file = source === 'camera'
-      ? await captureFromCamera()
+    // 1. Capturar imagen(es) según fuente seleccionada. La galería permite
+    // seleccionar varias — hay que persistirlas todas, no solo la primera.
+    const files = source === 'camera'
+      ? await captureFromCamera().then((file) => (file ? [file] : []))
       : await pickFromGallery();
+    if (files.length === 0) return;
 
     // 2. routeId pre-generado al iniciar la grabación (ver CockpitState.routeId):
     // es el mismo id con el que la ruta se persistirá al llamar a stopRecording(),
@@ -306,31 +322,21 @@ class CockpitView extends BaseElement {
     const lastPoint = state.points.length > 0
       ? state.points[state.points.length - 1]!
       : null;
+    const routePoints = state.points.map((p) => ({ lat: p.lat, lng: p.lng }));
 
-    // 4. Procesar la foto (con feedback de carga: guardar en appDataDir puede tardar
+    // 4. Procesar cada foto (con feedback de carga: guardar en appDataDir puede tardar
     // un momento y sin indicador parece que la subida no ha hecho nada)
-    if (file && this.photoCaptureEl) this.photoCaptureEl.loading = true;
+    if (this.photoCaptureEl) this.photoCaptureEl.loading = true;
     try {
       const photoRepo = await this.getPhotoRepo();
-      await processPhotoCapture({
-        file,
-        routeId,
-        photoRepo,
-        lastPoint,
-        routePoints: state.points.map((p) => ({ lat: p.lat, lng: p.lng })),
-        callbacks: {
-          onSuccess: () => {
-            showToast('📷 Foto añadida', 'success');
-            void this.refreshGallery(routeId);
-          },
-          onError: (error: string) => {
-            showToast(`⚠️ No se pudo guardar la foto: ${error}`, 'error');
-          },
-          onCancel: () => {
-            // User cancelled, nothing to do
-          },
-        },
+      const addedCount = await processMultiplePhotos({
+        files, routeId, photoRepo, lastPoint, routePoints,
+        onError: (error) => { showToast(`⚠️ No se pudo guardar la foto: ${error}`, 'error'); },
       });
+      if (addedCount > 0) {
+        showToast(addedCount === 1 ? '📷 Foto añadida' : `📷 ${String(addedCount)} fotos añadidas`, 'success');
+        void this.refreshGallery(routeId);
+      }
     } catch (err) {
       // Red de seguridad: cualquier fallo no cubierto por los callbacks de arriba
       // (p.ej. un error al abrir la cámara/galería) también debe ser visible,

@@ -52,11 +52,11 @@
 
 ## ⚠️ Issues Encontrados
 
-### ISSUE-001: El pragma `PRAGMA foreign_keys = ON` no está verificado contra SQLite real
+### ISSUE-001: El pragma `PRAGMA foreign_keys = ON` no está verificado contra SQLite real — ✅ RESUELTO 2026-07-26
 - **Severidad**: BAJA (mitigado)
 - **Descripción**: Los tests de `sqlite-route.repository.spec.ts`/`sqlite-photo.repository.spec.ts` usan un mock de `SqlDb` en JS (array en memoria), no SQLite real — no pueden validar que el pragma efectivamente activa el cascade en producción.
 - **Mitigación aplicada**: `deleteRouteAndPhotos()` no depende solo del cascade SQL — borra explícitamente cada foto (archivo + fila) antes de borrar la ruta, así que el resultado es correcto en ambos backends aunque el pragma fallara silenciosamente.
-- **Recomendación**: Verificar manualmente en un dispositivo Android real que borrar una ruta con fotos no deja huérfanos en `route_points`/`route_stops` (la cascada de esas dos tablas sí depende únicamente del pragma).
+- **Verificación en dispositivo real (2026-07-26)**: se extrajo la BBDD (`scripts/pull-db.ps1`, con fix de `Get-Content -Encoding Byte` → `-AsByteStream` para PowerShell 7) antes y después de borrar rutas desde la UI. Dos rutas borradas por el usuario (`1b20e66b-...`, `9e88f3b9-...`) desaparecieron de `routes` junto con sus filas en `route_points` y `route_stops` — **0 filas huérfanas** encontradas en ninguna de las tres tablas hijas tras el borrado. El cascade funciona correctamente en Android real.
 
 ### ISSUE-002: AC-010 (loading state homogéneo) es una homogeneización parcial
 - **Severidad**: BAJA
