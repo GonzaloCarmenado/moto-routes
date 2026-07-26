@@ -3,6 +3,13 @@ import { MemoryRouteRepository } from '../shared/repositories/memory-route.repos
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { Route } from '../shared/models/route.types.js';
 import './route-detail.element.js';
+import { pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
+import type * as PhotoCaptureAdapter from '../shared/services/photo-capture-adapter.service.js';
+
+vi.mock('../shared/services/photo-capture-adapter.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof PhotoCaptureAdapter>();
+  return { ...actual, pickFromGallery: vi.fn() };
+});
 
 // Mock MapLibre para tests (route-map.element.ts internamente instancia el mapa)
 vi.mock('maplibre-gl', () => {
@@ -11,6 +18,8 @@ vi.mock('maplibre-gl', () => {
     fitBounds: vi.fn(),
     addSource: vi.fn(),
     addLayer: vi.fn(),
+    getZoom: vi.fn(() => 12),
+    flyTo: vi.fn(),
     on: vi.fn((event: string, cb: () => void) => {
       if (event === 'load') cb();
     }),
@@ -19,11 +28,19 @@ vi.mock('maplibre-gl', () => {
   const markerFn = vi.fn(() => ({
     setLngLat: vi.fn().mockReturnThis(),
     addTo: vi.fn().mockReturnThis(),
+    remove: vi.fn(),
+  }));
+  const popupFn = vi.fn(() => ({
+    setLngLat: vi.fn().mockReturnThis(),
+    setDOMContent: vi.fn().mockReturnThis(),
+    addTo: vi.fn().mockReturnThis(),
+    remove: vi.fn(),
   }));
   return {
-    default: { Map: mapFn, Marker: markerFn },
+    default: { Map: mapFn, Marker: markerFn, Popup: popupFn },
     Map: mapFn,
     Marker: markerFn,
+    Popup: popupFn,
   };
 });
 
@@ -232,6 +249,33 @@ describe('route-detail - galería y visor de fotos (AC-019, AC-020, AC-033)', ()
 
     expect(galleryRoot(root).querySelectorAll('[data-cy="photo-thumbnail"]')).toHaveLength(1);
     document.body.querySelector('photo-viewer')?.remove();
+    document.body.removeChild(el);
+  });
+});
+
+describe('route-detail - añadir varias fotos desde la galería (bug: solo se guardaba la última)', () => {
+  it('persists every file selected from the gallery, not just the last one', async () => {
+    localStorage.clear();
+    const repo = new MemoryRouteRepository();
+    const savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+
+    vi.mocked(pickFromGallery).mockResolvedValue([
+      new File([''], 'a.jpg', { type: 'image/jpeg' }),
+      new File([''], 'b.jpg', { type: 'image/jpeg' }),
+      new File([''], 'c.jpg', { type: 'image/jpeg' }),
+    ]);
+
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const photoCapture = root.querySelector('[data-cy="detail-photo-capture"]')!;
+    (photoCapture.shadowRoot!.querySelector('.photo-btn') as HTMLButtonElement).click();
+    (photoCapture.shadowRoot!.querySelector('[data-cy="photo-menu-gallery"]') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(galleryRoot(root).querySelectorAll('[data-cy="photo-thumbnail"]')).toHaveLength(3);
     document.body.removeChild(el);
   });
 });

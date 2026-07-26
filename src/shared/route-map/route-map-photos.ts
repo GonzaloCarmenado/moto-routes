@@ -5,23 +5,41 @@
 import * as maplibregl from 'maplibre-gl';
 import type { Photo } from '../models/photo.types.js';
 
+/** Foto con su URL ya resuelta, para poder mostrar una miniatura en el popup del marcador. */
+export interface MapPhoto extends Photo {
+  readonly objectUrl?: string;
+}
+
 const PHOTO_CLUSTER_RADIUS_METERS = 50;
+// El radio de clustering se define en metros "reales" a este zoom de referencia (calle/barrio).
+// Al hacer zoom, se escala exponencialmente (igual que la resolución de Web Mercator: cada nivel
+// de zoom duplica/divide la resolución), así que en zoom alto el radio efectivo se encoge y los
+// clusters se desagrupan, y en zoom bajo crece y agrupa más (AC-018).
+const PHOTO_CLUSTER_REFERENCE_ZOOM = 15;
+
+/** Radio de clustering (en metros) equivalente a `PHOTO_CLUSTER_RADIUS_METERS` en el zoom dado. */
+export function photoClusterRadiusForZoom(zoom: number): number {
+  return PHOTO_CLUSTER_RADIUS_METERS * Math.pow(2, PHOTO_CLUSTER_REFERENCE_ZOOM - zoom);
+}
 
 /**
- * Añade marcadores de fotos al mapa MapLibre con clustering simple.
+ * Añade marcadores de fotos al mapa MapLibre con clustering simple y devuelve los
+ * `Marker` creados, para que el llamador pueda quitarlos al recalcular (p.ej. al hacer zoom).
  * Los estilos de los marcadores viven en `route-map.element.css`
  * (`.route-map-marker--photo` / `--cluster`).
  */
 export function addPhotoMarkers(
   map: maplibregl.Map,
-  photos: Photo[],
-  onPhotoClick?: (photo: Photo) => void,
-): void {
+  photos: MapPhoto[],
+  radiusMeters: number,
+  onPhotoClick?: (photo: MapPhoto) => void,
+): maplibregl.Marker[] {
   const withCoords = photos.filter((p) => p.latitude != null && p.longitude != null);
-  if (withCoords.length === 0) return;
+  if (withCoords.length === 0) return [];
 
   // Group by proximity (simple clustering)
-  const clusters = clusterPhotos(withCoords, PHOTO_CLUSTER_RADIUS_METERS);
+  const clusters = clusterPhotos(withCoords, radiusMeters);
+  const markers: maplibregl.Marker[] = [];
 
   for (const cluster of clusters) {
     const isCluster = cluster.photos.length > 1;
@@ -44,34 +62,37 @@ export function addPhotoMarkers(
       el.addEventListener('click', () => onPhotoClick?.(cluster.photos[0]!));
     }
 
-    new maplibregl.Marker({ element: el })
+    const marker = new maplibregl.Marker({ element: el })
       .setLngLat([cluster.centerLng, cluster.centerLat])
       .addTo(map);
+    markers.push(marker);
   }
+
+  return markers;
 }
 
-interface PhotoCluster {
+interface PhotoCluster<T extends Photo> {
   centerLat: number;
   centerLng: number;
-  photos: Photo[];
+  photos: T[];
 }
 
 /**
  * Algoritmo simple de clustering basado en distancia Haversine.
  * Agrupa fotos que están a menos de `radiusMeters` de distancia.
  */
-export function clusterPhotos(
-  photos: Photo[],
+export function clusterPhotos<T extends Photo>(
+  photos: T[],
   radiusMeters: number,
-): PhotoCluster[] {
-  const clusters: PhotoCluster[] = [];
+): PhotoCluster<T>[] {
+  const clusters: PhotoCluster<T>[] = [];
   const assigned = new Set<string>();
 
   for (const photo of photos) {
     if (assigned.has(photo.id)) continue;
     if (photo.latitude == null || photo.longitude == null) continue;
 
-    const cluster: PhotoCluster = {
+    const cluster: PhotoCluster<T> = {
       centerLat: photo.latitude,
       centerLng: photo.longitude,
       photos: [photo],

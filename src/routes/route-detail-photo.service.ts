@@ -6,12 +6,10 @@
  */
 
 import type { IPhotoRepository } from '../shared/models/photo.repository.js';
-import type { CreatePhoto, Photo } from '../shared/models/photo.types.js';
+import type { CreatePhoto } from '../shared/models/photo.types.js';
 import type { CaptureResult } from '../shared/services/photo-capture-adapter.service.js';
 import { isTauri } from '../shared/services/photo-capture-adapter.service.js';
 import { persistCapturedPhoto } from '../shared/services/photo-persist.service.js';
-import { deletePhotoFile } from '../shared/services/photo-storage.service.js';
-import { confirmDialog } from '../shared/feedback/confirm-dialog.element.js';
 
 /**
  * Añade una foto a una ruta con persistencia real y devuelve, además del
@@ -39,29 +37,4 @@ export async function addPhotoToRoute(
   const objectUrl = isTauri() ? URL.createObjectURL(file) : photo.filePath;
 
   return { photo, objectUrl };
-}
-
-/**
- * Pide confirmación y, si se acepta, borra el archivo y la fila de una foto.
- * Devuelve si se borró o si el usuario canceló, para que el llamador decida
- * cómo actualizar su UI (la limpieza de `objectUrl`/refresco de galería es
- * responsabilidad del llamador, que es quien conoce esos detalles de vista).
- */
-export async function deletePhotoWithConfirmation(
-  photo: Photo,
-  photoRepo: IPhotoRepository,
-): Promise<'deleted' | 'cancelled'> {
-  const choice = await confirmDialog({
-    title: 'Eliminar foto',
-    message: 'Esta acción no se puede deshacer.',
-    actions: [
-      { id: 'cancel', label: 'Cancelar', variant: 'neutral' },
-      { id: 'confirm', label: 'Eliminar', variant: 'danger' },
-    ],
-  });
-  if (choice !== 'confirm') return 'cancelled';
-
-  await deletePhotoFile(photo.filePath);
-  await photoRepo.delete(photo.id);
-  return 'deleted';
 }

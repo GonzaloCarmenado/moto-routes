@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { processPhotoCapture } from './cockpit-photo.service.js';
+import { processPhotoCapture, deleteCockpitPhoto } from './cockpit-photo.service.js';
 import type { IPhotoRepository } from '../shared/models/photo.repository.js';
-import type { CreatePhoto } from '../shared/models/photo.types.js';
+import type { CreatePhoto, Photo } from '../shared/models/photo.types.js';
 import type { RoutePoint } from './cockpit.types.js';
+import '../shared/feedback/confirm-dialog.element.js';
 
 function createMockRepo(): IPhotoRepository {
   return {
@@ -141,5 +142,50 @@ describe('processPhotoCapture (cockpit)', () => {
     const addedPhoto = (photoRepo.add as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as CreatePhoto;
     expect(addedPhoto.capturedAt).toBeDefined();
     expect(() => new Date(addedPhoto.capturedAt)).not.toThrow();
+  });
+});
+
+describe('deleteCockpitPhoto', () => {
+  const photo: Photo = {
+    id: 'photo-1',
+    routeId: 'route-1',
+    filePath: 'photos/photo-1.jpg',
+    latitude: null,
+    longitude: null,
+    capturedAt: '2026-07-20T10:00:00.000Z',
+    createdAt: '2026-07-20T10:00:00.000Z',
+  };
+
+  async function confirmPendingDialog(action: 'confirm' | 'cancel'): Promise<void> {
+    await new Promise((r) => setTimeout(r, 0));
+    const dialog = document.body.querySelector('confirm-dialog')!;
+    (dialog.shadowRoot!.querySelector(`[data-cy="confirm-dialog-action-${action}"]`) as HTMLButtonElement).click();
+  }
+
+  it('returns false without asking for confirmation when the photo no longer exists', async () => {
+    const photoRepo = createMockRepo();
+    const result = await deleteCockpitPhoto('missing-id', photoRepo);
+    expect(result).toBe(false);
+    expect(document.body.querySelector('confirm-dialog')).toBeNull();
+  });
+
+  it('deletes the photo and returns true when the user confirms', async () => {
+    const photoRepo: IPhotoRepository = { ...createMockRepo(), getById: vi.fn().mockResolvedValue(photo) };
+
+    const resultPromise = deleteCockpitPhoto(photo.id, photoRepo);
+    await confirmPendingDialog('confirm');
+
+    expect(await resultPromise).toBe(true);
+    expect(photoRepo.delete).toHaveBeenCalledWith(photo.id);
+  });
+
+  it('does not delete the photo and returns false when the user cancels', async () => {
+    const photoRepo: IPhotoRepository = { ...createMockRepo(), getById: vi.fn().mockResolvedValue(photo) };
+
+    const resultPromise = deleteCockpitPhoto(photo.id, photoRepo);
+    await confirmPendingDialog('cancel');
+
+    expect(await resultPromise).toBe(false);
+    expect(photoRepo.delete).not.toHaveBeenCalled();
   });
 });

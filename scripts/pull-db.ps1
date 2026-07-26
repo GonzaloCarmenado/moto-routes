@@ -54,7 +54,7 @@ $msg = "  BBDD extraida: $localCopy ($($size) bytes)"
 Write-Host $msg -ForegroundColor Green
 
 # 4. Verificar integridad
-$header = Get-Content $localCopy -Encoding Byte -TotalCount 16
+$header = Get-Content $localCopy -AsByteStream -TotalCount 16
 $isSqlite = ($header[0] -eq 0x53 -and $header[1] -eq 0x51 -and $header[2] -eq 0x4C)
 if (-not $isSqlite) {
     Write-Host "  ERROR: Archivo extraido no es una BBDD SQLite valida." -ForegroundColor Red

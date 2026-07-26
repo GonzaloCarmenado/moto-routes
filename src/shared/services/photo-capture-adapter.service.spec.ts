@@ -87,7 +87,7 @@ describe('pickFromGallery (browser)', () => {
     delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
   });
 
-  it('should create an input with type file without capture', async () => {
+  it('should create an input with type file, multiple, and without capture', async () => {
     const createElementSpy = vi.spyOn(document, 'createElement');
 
     const mockFile = new File([''], 'gallery.jpg', { type: 'image/jpeg' });
@@ -102,6 +102,36 @@ describe('pickFromGallery (browser)', () => {
 
     const result = await promise;
     expect(inputEl.getAttribute('capture')).toBeNull();
-    expect(result).toBe(mockFile);
+    expect(inputEl.multiple).toBe(true);
+    expect(result).toEqual([mockFile]);
+  });
+
+  it('should return every file selected, not just the first one (bug: only the last photo was added)', async () => {
+    const createElementSpy = vi.spyOn(document, 'createElement');
+
+    const fileA = new File([''], 'a.jpg', { type: 'image/jpeg' });
+    const fileB = new File([''], 'b.jpg', { type: 'image/jpeg' });
+    const fileC = new File([''], 'c.jpg', { type: 'image/jpeg' });
+    const promise = pickFromGallery();
+
+    const inputEl = createElementSpy.mock.results[0]?.value as HTMLInputElement;
+    Object.defineProperty(inputEl, 'files', {
+      value: [fileA, fileB, fileC],
+      writable: true,
+    });
+    inputEl.dispatchEvent(new Event('change'));
+
+    const result = await promise;
+    expect(result).toEqual([fileA, fileB, fileC]);
+  });
+
+  it('should return an empty array when the user cancels', async () => {
+    const createElementSpy = vi.spyOn(document, 'createElement');
+    const promise = pickFromGallery();
+
+    const inputEl = createElementSpy.mock.results[0]?.value as HTMLInputElement;
+    inputEl.dispatchEvent(new Event('cancel'));
+
+    expect(await promise).toEqual([]);
   });
 });

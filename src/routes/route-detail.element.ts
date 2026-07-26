@@ -5,12 +5,14 @@ import type { Photo } from '../shared/models/photo.types.js';
 import type { Route } from '../shared/models/route.types.js';
 import { formatDuration } from '../cockpit/cockpit.transform.js';
 import '../shared/route-map/route-map.element.js';
+import type { MapPhoto } from '../shared/route-map/route-map-photos.js';
 import '../photos/photo-capture.element.js';
 import type { PhotoCaptureElement } from '../photos/photo-capture.element.js';
 import { PHOTO_CAPTURE_EVENT, type PhotoCaptureEventDetail } from '../photos/photo-capture.types.js';
 import { createPhotoRepository } from '../shared/services/photo-storage.service.js';
 import { captureFromCamera, pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
-import { addPhotoToRoute, deletePhotoWithConfirmation } from './route-detail-photo.service.js';
+import { addPhotoToRoute } from './route-detail-photo.service.js';
+import { deletePhotoWithConfirmation } from '../shared/services/photo-delete.service.js';
 import { getPhotoUrl } from '../shared/services/photo-storage.service.js';
 import { toErrorMessage } from '../shared/utils/errors.js';
 import { showToast } from '../shared/feedback/toast.js';
@@ -153,7 +155,7 @@ class RouteDetail extends BaseElement {
   private buildMap(points: { lat: number; lng: number }[]): HTMLElement {
     const routeMap = document.createElement('route-map') as HTMLElement & {
       points: { lat: number; lng: number }[];
-      photos?: Photo[];
+      photos?: MapPhoto[];
     };
     routeMap.points = points.map((p) => ({ lat: p.lat, lng: p.lng }));
     routeMap.photos = this._photos;
@@ -246,23 +248,38 @@ class RouteDetail extends BaseElement {
     return fragment;
   }
 
+  /** Persiste una foto y devuelve si se guardó de verdad (muestra su propio toast de error). */
+  private async persistSinglePhoto(file: File, photoRepo: IPhotoRepository): Promise<boolean> {
+    try {
+      return Boolean(await addPhotoToRoute(file, this._routeId!, photoRepo, this._points));
+    } catch (err) {
+      showToast(`⚠️ ${toErrorMessage(err, 'Error al añadir la foto')}`, 'error');
+      return false;
+    }
+  }
+
   private async handleAddPhoto(source: 'camera' | 'gallery'): Promise<void> {
     if (!this._routeId) return;
 
-    const file = source === 'camera'
-      ? await captureFromCamera()
+    // La galería permite seleccionar varias fotos — hay que persistirlas todas,
+    // no solo la primera.
+    const files = source === 'camera'
+      ? await captureFromCamera().then((file) => (file ? [file] : []))
       : await pickFromGallery();
 
-    if (!file) return;
+    if (files.length === 0) return;
 
     // Feedback de carga: guardar en appDataDir/leer de vuelta puede tardar un momento,
     // y sin indicador parece que la subida no ha hecho nada.
     if (this._photoCaptureEl) this._photoCaptureEl.loading = true;
     try {
       const photoRepo = await this.getPhotoRepo();
-      const result = await addPhotoToRoute(file, this._routeId, photoRepo, this._points);
+      let addedAny = false;
+      for (const file of files) {
+        if (await this.persistSinglePhoto(file, photoRepo)) addedAny = true;
+      }
 
-      if (result) {
+      if (addedAny) {
         // Refresh photos with proper URLs (handles Tauri convertFileSrc)
         this._photos = await Promise.all(
           (await photoRepo.getByRouteId(this._routeId)).map(async (p) => ({
@@ -272,8 +289,6 @@ class RouteDetail extends BaseElement {
         );
         this.rerenderPhotosSection();
       }
-    } catch (err) {
-      showToast(`⚠️ ${toErrorMessage(err, 'Error al añadir la foto')}`, 'error');
     } finally {
       if (this._photoCaptureEl) this._photoCaptureEl.loading = false;
     }
