@@ -21,4 +21,7 @@ export interface IRouteRepository {
   getStopsByRouteId(routeId: string): Promise<RouteStop[]>;
 
   delete(id: string): Promise<void>;
+
+  /** Persiste el trazado simplificado de una ruta de forma independiente del resto de campos. */
+  updatePreviewPolyline(routeId: string, polyline: [number, number][]): Promise<void>;
 }

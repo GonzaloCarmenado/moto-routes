@@ -32,7 +32,10 @@ export class MemoryRouteRepository implements IRouteRepository {
     const existing = this.routes.get(id);
     const createdAt = existing?.createdAt ?? new Date().toISOString();
 
-    const savedRoute: Route = { ...route, id, createdAt };
+    // Preservar previewPolyline de la ruta existente: route (CreateRoute) nunca lo trae,
+    // así que sin esto un save() posterior (ej. active -> completed) lo borraría en
+    // silencio, repitiendo la clase de bug de ADR-020/ADR-023.
+    const savedRoute: Route = { ...route, id, createdAt, previewPolyline: existing?.previewPolyline ?? null };
     this.routes.set(id, savedRoute);
     if (!existing) this.orderMap.set(id, this.insertOrder++);
 
@@ -93,6 +96,14 @@ export class MemoryRouteRepository implements IRouteRepository {
     this.routes.delete(id);
     this.points.delete(id);
     this.stops.delete(id);
+    return Promise.resolve();
+  }
+
+  updatePreviewPolyline(routeId: string, polyline: [number, number][]): Promise<void> {
+    const existing = this.routes.get(routeId);
+    if (existing) {
+      this.routes.set(routeId, { ...existing, previewPolyline: polyline });
+    }
     return Promise.resolve();
   }
 }

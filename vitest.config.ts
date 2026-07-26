@@ -34,6 +34,7 @@ export default defineConfig({
         'src/shared/models/route.repository.ts',
         'src/shared/models/photo.types.ts',
         'src/shared/models/photo.repository.ts',
+        'src/routes/route-detail.types.ts',
         '**/*.d.ts',
         '**/*.spec.ts',
       ],

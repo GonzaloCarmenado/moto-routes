@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
 
 const {
-  addSource, addLayer, fitBounds, remove, mapCtor, markerCtor, markerRemove, popupCtor, mapOn, getZoom,
+  addSource, addLayer, fitBounds, remove, mapCtor, markerCtor, markerRemove, popupCtor, mapOn, getZoom, flyTo,
 } = vi.hoisted(() => {
   const addSourceFn = vi.fn();
   const addLayerFn = vi.fn();
   const fitBoundsFn = vi.fn();
   const removeFn = vi.fn();
   const getZoomFn = vi.fn(() => 12);
+  const flyToFn = vi.fn();
   const onFn = vi.fn((event: string, cb: () => void) => {
     if (event === 'load') cb();
   });
@@ -18,7 +20,7 @@ const {
     remove: removeFn,
     on: onFn,
     getZoom: getZoomFn,
-    flyTo: vi.fn(),
+    flyTo: flyToFn,
   };
   const mapCtorFn = vi.fn((_options: { center: [number, number] }) => mockMapInstance);
 
@@ -64,6 +66,7 @@ const {
     popupCtor: popupCtorFn,
     mapOn: onFn,
     getZoom: getZoomFn,
+    flyTo: flyToFn,
   };
 });
 
@@ -79,7 +82,14 @@ vi.mock('maplibre-gl', () => ({
 }));
 
 import './route-map.element.js';
+import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from './route-map.element.js';
 import type { MapPhoto } from './route-map-photos.js';
+
+// Se lee el CSS como texto plano (en vez de la importación `?inline` que usa el
+// componente en runtime) solo para la comprobación de regresión de AC-014: no
+// se puede medir tamaño renderizado en jsdom (no hay motor de layout), pero sí
+// se puede comprobar que la regla existente no ha cambiado al añadir el listener.
+const routeMapCss = readFileSync('src/shared/route-map/route-map.element.css', 'utf-8');
 
 type RouteMapEl = HTMLElement & { points: { lat: number; lng: number }[]; photos: MapPhoto[] };
 
@@ -140,6 +150,7 @@ describe('route-map', () => {
     fitBounds.mockClear();
     remove.mockClear();
     mapOn.mockClear();
+    flyTo.mockClear();
     getZoom.mockReturnValue(12);
     document.body.querySelectorAll('.route-map-photo-popup').forEach((el) => { el.remove(); });
   });
@@ -231,6 +242,70 @@ describe('route-map', () => {
 
       expect(findMarkerElements('photo-cluster')).toHaveLength(1);
       expect(findMarkerElements('photo-marker')).toHaveLength(0);
+
+      document.body.removeChild(el);
+    });
+
+    it('dispatches route-map:photo-select with the clicked photo when the popup thumbnail is clicked (AC-015, AC-029)', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+      const photo = makePhoto('p1', 40.4168, -3.7038, 'blob:thumb-1');
+      el.photos = [photo];
+      await waitRender();
+
+      const [marker] = findMarkerElements('photo-marker');
+      marker!.click();
+
+      const popup = document.body.querySelector('[data-cy="route-map-photo-popup"]')!;
+      const img = popup.querySelector('img') as HTMLImageElement;
+
+      const handler = vi.fn();
+      el.addEventListener(ROUTE_MAP_PHOTO_SELECT_EVENT, ((e: CustomEvent<RouteMapPhotoSelectDetail>) => {
+        handler(e.detail);
+      }) as EventListener);
+      img.click();
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler.mock.calls[0]?.[0]).toEqual({ photo });
+
+      document.body.removeChild(el);
+    });
+
+    it('keeps the popup open on the same trigger as before, with the existing 120x120 thumbnail size unchanged (regression AC-014)', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+      el.photos = [makePhoto('p1', 40.4168, -3.7038, 'blob:thumb-1')];
+      await waitRender();
+
+      const [marker] = findMarkerElements('photo-marker');
+      marker!.click();
+
+      const popup = document.body.querySelector('[data-cy="route-map-photo-popup"]');
+      expect(popup).not.toBeNull();
+      expect(popup!.querySelector('img')?.getAttribute('src')).toBe('blob:thumb-1');
+      // El tamaño del thumbnail se define en CSS, no en JS — se comprueba que
+      // la regla existente no se ha tocado al añadir el listener de click.
+      expect(routeMapCss).toMatch(/\.route-map-photo-popup img\s*{[^}]*width:\s*120px;/);
+      expect(routeMapCss).toMatch(/\.route-map-photo-popup img\s*{[^}]*height:\s*120px;/);
+
+      document.body.removeChild(el);
+    });
+
+    it('still calls map.flyTo and does not dispatch route-map:photo-select when a cluster marker is clicked (regression AC-017)', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+      el.photos = [
+        makePhoto('p1', 40.4168, -3.7038, 'blob:thumb-1'),
+        makePhoto('p2', 40.41693, -3.7038, 'blob:thumb-2'),
+      ];
+      await waitRender();
+      expect(findMarkerElements('photo-cluster')).toHaveLength(1);
+
+      const handler = vi.fn();
+      el.addEventListener(ROUTE_MAP_PHOTO_SELECT_EVENT, handler);
+
+      const [cluster] = findMarkerElements('photo-cluster');
+      cluster!.click();
+
+      expect(flyTo).toHaveBeenCalledOnce();
+      expect(handler).not.toHaveBeenCalled();
 
       document.body.removeChild(el);
     });

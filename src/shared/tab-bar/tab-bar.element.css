@@ -1,0 +1,45 @@
+@import '../styles/tokens.css';
+
+:host {
+  display: block;
+}
+
+.tab-bar__list {
+  display: flex;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--space-3);
+}
+
+.tab-bar__btn {
+  flex: 1;
+  min-width: var(--hitbox-min);
+  min-height: var(--hitbox-min);
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.tab-bar__btn:hover {
+  color: var(--ink);
+}
+
+.tab-bar__btn--active {
+  color: var(--amber);
+  border-bottom-color: var(--amber-strong);
+}
+
+.tab-bar__panel {
+  display: none;
+}
+
+.tab-bar__panel--active {
+  display: block;
+}

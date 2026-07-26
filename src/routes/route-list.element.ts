@@ -10,6 +10,10 @@ import { deleteRouteAndPhotos } from '../shared/services/route-deletion.service.
 import { confirmDialog } from '../shared/feedback/confirm-dialog.element.js';
 import { showToast } from '../shared/feedback/toast.js';
 import { toErrorMessage } from '../shared/utils/errors.js';
+import { buildPolylineSvgPath } from './route-list.transform.js';
+import { ensurePreviewPolyline } from './route-list-polyline.service.js';
+
+const THUMB_TRACE_SIZE = 72;
 
 class RouteList extends BaseElement {
   private _repository: IRouteRepository | null = null;
@@ -115,13 +119,12 @@ class RouteList extends BaseElement {
   private buildCard(route: Route): HTMLElement {
     const card = document.createElement('div');
     card.className = 'route-card';
+    card.dataset.routeId = route.id;
     card.addEventListener('click', () => {
       dispatchAppEvent(APP_EVENTS.VIEW_ROUTE, { routeId: route.id });
     });
 
-    const thumb = document.createElement('div');
-    thumb.className = 'thumb media-placeholder';
-    card.appendChild(thumb);
+    card.appendChild(this.buildThumb(route, card));
 
     const info = document.createElement('div');
     info.className = 'info';
@@ -144,6 +147,72 @@ class RouteList extends BaseElement {
     card.appendChild(info);
     card.appendChild(this.buildDeleteButton(route));
     return card;
+  }
+
+  /**
+   * Construye el `.thumb` de la tarjeta: la silueta SVG si `route` ya tiene
+   * `previewPolyline` disponible, o el placeholder de franjas existente. En
+   * este último caso, si la ruta aún no tiene el trazado calculado (`null`),
+   * dispara el backfill perezoso en segundo plano (sin bloquear el render).
+   */
+  private buildThumb(route: Route, card: HTMLElement): HTMLElement {
+    const svgPath = buildPolylineSvgPath(route.previewPolyline, THUMB_TRACE_SIZE, THUMB_TRACE_SIZE);
+    if (svgPath) return this.buildTraceThumb(svgPath);
+
+    if (route.previewPolyline === null) {
+      this.scheduleBackfill(route, card);
+    }
+    return this.buildPlaceholderThumb();
+  }
+
+  private buildPlaceholderThumb(): HTMLElement {
+    const thumb = document.createElement('div');
+    thumb.className = 'thumb media-placeholder';
+    return thumb;
+  }
+
+  private buildTraceThumb(pathD: string): HTMLElement {
+    const thumb = document.createElement('div');
+    thumb.className = 'thumb thumb--trace';
+
+    const svgNs = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNs, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${String(THUMB_TRACE_SIZE)} ${String(THUMB_TRACE_SIZE)}`);
+
+    const path = document.createElementNS(svgNs, 'path');
+    path.setAttribute('d', pathD);
+    path.setAttribute('data-cy', 'route-card-trace');
+    svg.appendChild(path);
+
+    thumb.appendChild(svg);
+    return thumb;
+  }
+
+  /**
+   * Lanza `ensurePreviewPolyline` sin `await` (el placeholder ya se ha
+   * pintado) y, si resuelve con un trazado, sustituye el `.thumb` de esa
+   * tarjeta concreta in-place y actualiza `route.previewPolyline` en memoria
+   * (mutando el objeto que ya vive en `this._routes`) para que una
+   * re-renderización posterior no vuelva a mostrar el placeholder.
+   */
+  private scheduleBackfill(route: Route, card: HTMLElement): void {
+    const repo = this._repository;
+    if (!repo) return;
+
+    void ensurePreviewPolyline(repo, route)
+      .then((polyline) => {
+        if (!polyline) return;
+        route.previewPolyline = polyline;
+
+        const svgPath = buildPolylineSvgPath(polyline, THUMB_TRACE_SIZE, THUMB_TRACE_SIZE);
+        if (!svgPath) return;
+        card.querySelector('.thumb')?.replaceWith(this.buildTraceThumb(svgPath));
+      })
+      .catch(() => {
+        // Backfill best-effort: si falla, la tarjeta sigue en placeholder
+        // hasta la próxima carga del listado — preview_polyline es un dato
+        // derivado y recalculable, nunca la fuente de verdad.
+      });
   }
 
   private buildDeleteButton(route: Route): HTMLButtonElement {
