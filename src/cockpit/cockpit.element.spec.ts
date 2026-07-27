@@ -88,8 +88,8 @@ async function startAndLongPressStop(shadowRoot: ShadowRoot): Promise<void> {
   await vi.advanceTimersByTimeAsync(1500);
 }
 
-function getConfirmDialog(): HTMLElement {
-  const dialog = document.body.querySelector('confirm-dialog');
+function getSaveRouteDialog(): HTMLElement {
+  const dialog = document.body.querySelector('cockpit-save-route-dialog');
   expect(dialog).not.toBeNull();
   return dialog as HTMLElement;
 }
@@ -286,17 +286,17 @@ describe('CockpitView - foto durante grabación', () => {
 
 describe('CockpitView - guardar/descartar al parar (AC-003 a AC-006)', () => {
   afterEach(() => {
-    document.body.querySelector('confirm-dialog')?.remove();
+    document.body.querySelector('cockpit-save-route-dialog')?.remove();
   });
 
-  it('opens a confirm dialog on completing the long-press stop, without persisting a completed route yet (AC-003)', async () => {
+  it('opens a save-route dialog on completing the long-press stop, without persisting a completed route yet (AC-003)', async () => {
     const repo = new MemoryRouteRepository();
     const { cockpit, shadowRoot } = await mountCockpitWithRepo(repo);
 
     vi.useFakeTimers();
     try {
       await startAndLongPressStop(shadowRoot);
-      getConfirmDialog();
+      getSaveRouteDialog();
 
       const all = await repo.getAll();
       expect(all.filter((r) => r.status === 'completed')).toHaveLength(0);
@@ -313,15 +313,15 @@ describe('CockpitView - guardar/descartar al parar (AC-003 a AC-006)', () => {
     vi.useFakeTimers();
     try {
       await startAndLongPressStop(shadowRoot);
-      const dialog = getConfirmDialog();
-      const saveBtn = dialog.shadowRoot!.querySelector('[data-cy="confirm-dialog-action-save"]') as HTMLButtonElement;
+      const dialog = getSaveRouteDialog();
+      const saveBtn = dialog.shadowRoot!.querySelector('[data-cy="save-route-dialog-action-save"]') as HTMLButtonElement;
       saveBtn.click();
       await vi.advanceTimersByTimeAsync(50);
 
       const all = await repo.getAll();
       expect(all.filter((r) => r.status === 'completed')).toHaveLength(1);
       expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('Ruta guardada');
-      expect(document.body.querySelector('confirm-dialog')).toBeNull();
+      expect(document.body.querySelector('cockpit-save-route-dialog')).toBeNull();
     } finally {
       vi.useRealTimers();
     }
@@ -336,7 +336,7 @@ describe('CockpitView - guardar/descartar al parar (AC-003 a AC-006)', () => {
     let dialog: HTMLElement;
     try {
       await startAndLongPressStop(shadowRoot);
-      dialog = getConfirmDialog();
+      dialog = getSaveRouteDialog();
     } finally {
       // El descarte encadena un import() dinámico (getPhotoRepo → createPhotoRepository)
       // que no resuelve de forma fiable solo avanzando fake timers; a partir de aquí,
@@ -344,7 +344,7 @@ describe('CockpitView - guardar/descartar al parar (AC-003 a AC-006)', () => {
       vi.useRealTimers();
     }
 
-    const discardBtn = dialog.shadowRoot!.querySelector('[data-cy="confirm-dialog-action-discard"]') as HTMLButtonElement;
+    const discardBtn = dialog.shadowRoot!.querySelector('[data-cy="save-route-dialog-action-discard"]') as HTMLButtonElement;
     discardBtn.click();
     await waitRender();
 
@@ -361,14 +361,14 @@ describe('CockpitView - guardar/descartar al parar (AC-003 a AC-006)', () => {
     vi.useFakeTimers();
     try {
       await startAndLongPressStop(shadowRoot);
-      const dialog = getConfirmDialog();
+      const dialog = getSaveRouteDialog();
 
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-      expect(document.body.querySelector('confirm-dialog')).not.toBeNull();
+      expect(document.body.querySelector('cockpit-save-route-dialog')).not.toBeNull();
 
-      const overlay = dialog.shadowRoot!.querySelector('[data-cy="confirm-dialog-overlay"]') as HTMLElement;
+      const overlay = dialog.shadowRoot!.querySelector('[data-cy="save-route-dialog-overlay"]') as HTMLElement;
       overlay.click();
-      expect(document.body.querySelector('confirm-dialog')).not.toBeNull();
+      expect(document.body.querySelector('cockpit-save-route-dialog')).not.toBeNull();
     } finally {
       vi.useRealTimers();
     }

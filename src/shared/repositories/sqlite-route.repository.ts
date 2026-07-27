@@ -72,6 +72,8 @@ export class SqliteRouteRepository implements IRouteRepository {
       await this.db.execute(stmt);
     }
     await this.ensurePreviewPolylineColumn();
+    await this.ensureColumn('name', 'TEXT');
+    await this.ensureColumn('notes', 'TEXT');
     this.initialized = true;
   }
 
@@ -85,6 +87,15 @@ export class SqliteRouteRepository implements IRouteRepository {
     const hasColumn = columns.some((c) => c['name'] === 'preview_polyline');
     if (!hasColumn) {
       await this.db.execute('ALTER TABLE routes ADD COLUMN preview_polyline TEXT;');
+    }
+  }
+
+  /** Mismo patrón que `ensurePreviewPolylineColumn`, generalizado para `name`/`notes`. */
+  private async ensureColumn(name: string, sqlType: string): Promise<void> {
+    const columns = await this.db.select('PRAGMA table_info(routes);');
+    const hasColumn = columns.some((c) => c['name'] === name);
+    if (!hasColumn) {
+      await this.db.execute(`ALTER TABLE routes ADD COLUMN ${name} ${sqlType};`);
     }
   }
 
@@ -102,16 +113,21 @@ export class SqliteRouteRepository implements IRouteRepository {
     const existing = await this.getById(id);
     const createdAt = existing?.createdAt ?? new Date().toISOString();
 
+    // Coalescido con el valor ya existente: name puede omitirse en llamadas intermedias
+    // (ej. la fila 'active' insertada al empezar a grabar) sin perder el nombre asignado
+    // en un save() posterior si, por lo que fuera, se volviera a omitir.
+    const name = route.name ?? existing?.name ?? null;
+
     if (existing) {
       await this.db.execute(
-        `UPDATE routes SET duration = ?, total_distance = ?, avg_speed = ?, status = ?, visibility = ?, origin = ? WHERE id = ?`,
-        [route.duration, route.totalDistance, route.avgSpeed, route.status, route.visibility, route.origin, id],
+        `UPDATE routes SET duration = ?, total_distance = ?, avg_speed = ?, status = ?, visibility = ?, origin = ?, name = ? WHERE id = ?`,
+        [route.duration, route.totalDistance, route.avgSpeed, route.status, route.visibility, route.origin, name, id],
       );
     } else {
       await this.db.execute(
-        `INSERT INTO routes (id, created_at, duration, total_distance, avg_speed, status, visibility, origin)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, createdAt, route.duration, route.totalDistance, route.avgSpeed, route.status, route.visibility, route.origin],
+        `INSERT INTO routes (id, created_at, duration, total_distance, avg_speed, status, visibility, origin, name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, createdAt, route.duration, route.totalDistance, route.avgSpeed, route.status, route.visibility, route.origin, name],
       );
     }
 
@@ -139,10 +155,10 @@ export class SqliteRouteRepository implements IRouteRepository {
       );
     }
 
-    // save() nunca lista preview_polyline en su INSERT/UPDATE, así que nunca lo
+    // save() nunca lista preview_polyline/notes en su INSERT/UPDATE, así que nunca los
     // sobrescribe en BBDD — solo hace falta reflejar el valor ya existente aquí
     // para que el objeto devuelto cumpla el tipo Route.
-    return { ...route, id, createdAt, previewPolyline: existing?.previewPolyline ?? null };
+    return { ...route, id, createdAt, previewPolyline: existing?.previewPolyline ?? null, name, notes: existing?.notes ?? null };
   }
 
   async getById(id: string): Promise<Route | null> {
@@ -189,6 +205,11 @@ export class SqliteRouteRepository implements IRouteRepository {
       routeId,
     ]);
   }
+
+  async updateNotes(routeId: string, notes: string | null): Promise<void> {
+    await this.ensureSchema();
+    await this.db.execute(`UPDATE routes SET notes = ? WHERE id = ?`, [notes, routeId]);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -205,6 +226,8 @@ interface RouteRow {
   visibility: string;
   origin: string;
   preview_polyline?: string | null;
+  name?: string | null;
+  notes?: string | null;
 }
 
 interface RoutePointRow {
@@ -238,6 +261,8 @@ function rowToRoute(r: RouteRow): Route {
     visibility: r.visibility as Route['visibility'],
     origin: r.origin as Route['origin'],
     previewPolyline: r.preview_polyline != null ? (JSON.parse(r.preview_polyline) as [number, number][]) : null,
+    name: r.name ?? null,
+    notes: r.notes ?? null,
   };
 }
 

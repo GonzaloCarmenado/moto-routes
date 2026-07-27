@@ -13,10 +13,10 @@ interface DbRow {
 }
 
 function insertRoute(rows: DbRow[], orderState: { value: number }, params: unknown[]): { rowsAffected: number } {
-  const [id, createdAt, duration, totalDistance, avgSpeed, status, visibility, origin] = params;
+  const [id, createdAt, duration, totalDistance, avgSpeed, status, visibility, origin, name] = params;
   rows.push({
     table: 'routes',
-    data: { id, created_at: createdAt, duration, total_distance: totalDistance, avg_speed: avgSpeed, status, visibility, origin },
+    data: { id, created_at: createdAt, duration, total_distance: totalDistance, avg_speed: avgSpeed, status, visibility, origin, name: name ?? null },
     order: orderState.value++,
   });
   return { rowsAffected: 1 };
@@ -43,10 +43,18 @@ function insertStops(rows: DbRow[], params: unknown[]): { rowsAffected: number }
 }
 
 function updateRoute(rows: DbRow[], params: unknown[]): { rowsAffected: number } {
-  const [duration, totalDistance, avgSpeed, status, visibility, origin, id] = params;
+  const [duration, totalDistance, avgSpeed, status, visibility, origin, name, id] = params;
   const row = rows.find((r) => r.table === 'routes' && r.data['id'] === id);
   if (!row) return { rowsAffected: 0 };
-  row.data = { ...row.data, duration, total_distance: totalDistance, avg_speed: avgSpeed, status, visibility, origin };
+  row.data = { ...row.data, duration, total_distance: totalDistance, avg_speed: avgSpeed, status, visibility, origin, name: name ?? null };
+  return { rowsAffected: 1 };
+}
+
+function updateNotes(rows: DbRow[], params: unknown[]): { rowsAffected: number } {
+  const [notes, id] = params;
+  const row = rows.find((r) => r.table === 'routes' && r.data['id'] === id);
+  if (!row) return { rowsAffected: 0 };
+  row.data = { ...row.data, notes };
   return { rowsAffected: 1 };
 }
 
@@ -79,6 +87,9 @@ function queryMock(rows: DbRow[], orderState: { value: number }, sql: string, pa
   if (upper.startsWith('INSERT INTO ROUTE_STOPS') && params) return Promise.resolve(insertStops(rows, params));
   if (upper.startsWith('UPDATE ROUTES SET PREVIEW_POLYLINE') && params) {
     return Promise.resolve(updatePreviewPolyline(rows, params));
+  }
+  if (upper.startsWith('UPDATE ROUTES SET NOTES') && params) {
+    return Promise.resolve(updateNotes(rows, params));
   }
   if (upper.startsWith('UPDATE ROUTES') && params) return Promise.resolve(updateRoute(rows, params));
   if (upper.startsWith('DELETE') && params) return Promise.resolve(deleteRows(rows, params[0] as string));
@@ -138,10 +149,17 @@ function createMockDb(): SqlDb {
  * no sirve para verificar el check-y-ALTER TABLE — se necesita uno propio
  * y más explícito, igual que ya advierte el plan de esta feature.
  */
-function createMigrationMockDb(hasPreviewPolylineColumn: boolean): {
+interface MigrationMockOptions {
+  hasPreviewPolylineColumn?: boolean;
+  hasNameColumn?: boolean;
+  hasNotesColumn?: boolean;
+}
+
+function createMigrationMockDb(options: MigrationMockOptions = {}): {
   db: SqlDb;
   alterTableCalls: string[];
 } {
+  const { hasPreviewPolylineColumn = false, hasNameColumn = false, hasNotesColumn = false } = options;
   const alterTableCalls: string[] = [];
   const preexistingRow = {
     id: 'legacy-route-1',
@@ -163,6 +181,8 @@ function createMigrationMockDb(hasPreviewPolylineColumn: boolean): {
     { name: 'visibility' },
     { name: 'origin' },
     ...(hasPreviewPolylineColumn ? [{ name: 'preview_polyline' }] : []),
+    ...(hasNameColumn ? [{ name: 'name' }] : []),
+    ...(hasNotesColumn ? [{ name: 'notes' }] : []),
   ];
 
   const db: SqlDb = {
@@ -184,7 +204,7 @@ function createMigrationMockDb(hasPreviewPolylineColumn: boolean): {
 
 describe('preview_polyline column migration (AC-025, AC-032)', () => {
   it('runs ALTER TABLE exactly once when preview_polyline is missing from a preexisting routes table, keeping the existing row intact', async () => {
-    const { db, alterTableCalls } = createMigrationMockDb(false);
+    const { db, alterTableCalls } = createMigrationMockDb({ hasNameColumn: true, hasNotesColumn: true });
     const repo = new SqliteRouteRepository(db);
 
     const all = await repo.getAll();
@@ -204,7 +224,38 @@ describe('preview_polyline column migration (AC-025, AC-032)', () => {
   });
 
   it('does not run ALTER TABLE when preview_polyline already exists', async () => {
-    const { db, alterTableCalls } = createMigrationMockDb(true);
+    const { db, alterTableCalls } = createMigrationMockDb({
+      hasPreviewPolylineColumn: true, hasNameColumn: true, hasNotesColumn: true,
+    });
+    const repo = new SqliteRouteRepository(db);
+
+    await repo.getAll();
+
+    expect(alterTableCalls).toHaveLength(0);
+  });
+});
+
+describe('name/notes columns migration (AC-004, AC-007, AC-015)', () => {
+  it('runs ALTER TABLE exactly once for name and once for notes when both are missing from a preexisting routes table, keeping the existing row intact', async () => {
+    const { db, alterTableCalls } = createMigrationMockDb({ hasPreviewPolylineColumn: true });
+    const repo = new SqliteRouteRepository(db);
+
+    const all = await repo.getAll();
+
+    expect(alterTableCalls).toContain('ALTER TABLE routes ADD COLUMN name TEXT;');
+    expect(alterTableCalls).toContain('ALTER TABLE routes ADD COLUMN notes TEXT;');
+    expect(alterTableCalls).toHaveLength(2);
+
+    expect(all).toHaveLength(1);
+    expect(all[0]!.id).toBe('legacy-route-1');
+    expect(all[0]!.name).toBeNull();
+    expect(all[0]!.notes).toBeNull();
+  });
+
+  it('does not run ALTER TABLE for name/notes when both already exist', async () => {
+    const { db, alterTableCalls } = createMigrationMockDb({
+      hasPreviewPolylineColumn: true, hasNameColumn: true, hasNotesColumn: true,
+    });
     const repo = new SqliteRouteRepository(db);
 
     await repo.getAll();
