@@ -177,19 +177,6 @@ export function buildControls(options: ControlsOptions): HTMLElement {
   return wrapper;
 }
 
-export function buildInvisibleToggle(invisibleMode: boolean, onToggle: () => void): HTMLElement {
-  const btn = document.createElement('button');
-  btn.id = 'cockpit-invisible-btn';
-  btn.setAttribute('data-cy', 'cockpit-invisible-btn');
-  btn.className = `invisible-toggle ${invisibleMode ? 'invisible-toggle--active' : ''}`;
-  const eyePath = invisibleMode
-    ? 'M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22'
-    : 'M12 5c-7 0-11 8-11 8s4 8 11 8 11-8 11-8-4-8-11-8zm0 13a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z';
-  btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="${eyePath}"/></svg><span>Modo invisible</span>`;
-  btn.addEventListener('click', onToggle);
-  return btn;
-}
-
 export function buildPhotoGalleryElement(onSelect: (index: number) => void): PhotoGalleryElement {
   const gallery = document.createElement('photo-gallery') as PhotoGalleryElement;
   gallery.setAttribute('data-cy', 'cockpit-photo-gallery');

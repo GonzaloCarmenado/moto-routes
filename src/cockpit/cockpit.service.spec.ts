@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
-import { createCockpitService, type GpsProvider, type StorageProvider } from './cockpit.service.js';
+import { createCockpitService, type GpsProvider, type StorageProvider, type ForegroundServiceProvider } from './cockpit.service.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
 
 function createMockGps(): GpsProvider {
@@ -25,6 +25,13 @@ function createMockGps(): GpsProvider {
 function createMockStorage(): StorageProvider {
   return {
     save: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+function createMockForegroundService(): ForegroundServiceProvider {
+  return {
+    start: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -54,7 +61,6 @@ describe('createCockpitService - estado de grabación', () => {
     expect(state.currentSpeed).toBe(0);
     expect(state.points).toEqual([]);
     expect(state.hasGpsPermission).toBe(false);
-    expect(state.invisibleMode).toBe(false);
     expect(typeof state.routeId).toBe('string');
     expect(state.routeId.length).toBeGreaterThan(0);
   });
@@ -135,14 +141,15 @@ describe('createCockpitService - notificaciones a listeners', () => {
   });
 
   it('should notify on each state change', () => {
+    service.startRecording();
     const listener = vi.fn();
     service.subscribe(listener);
     listener.mockClear();
 
-    service.setInvisibleMode(true);
+    service.pauseRecording();
     expect(listener).toHaveBeenCalledTimes(1);
-    const stateArg = listener.mock.calls[0]![0] as { invisibleMode: boolean };
-    expect(stateArg.invisibleMode).toBe(true);
+    const stateArg = listener.mock.calls[0]![0] as { status: string };
+    expect(stateArg.status).toBe('paused');
   });
 
   it('should pass snapshot (clone) to listeners', () => {
@@ -155,7 +162,7 @@ describe('createCockpitService - notificaciones a listeners', () => {
   });
 });
 
-describe('createCockpitService - permisos GPS y modo invisible', () => {
+describe('createCockpitService - permisos GPS', () => {
   let gps: GpsProvider;
   let service: ReturnType<typeof createCockpitService>;
 
@@ -163,13 +170,6 @@ describe('createCockpitService - permisos GPS y modo invisible', () => {
     vi.useFakeTimers();
     gps = createMockGps();
     service = createCockpitService(gps, createMockStorage());
-  });
-
-  it('should toggle invisible mode', () => {
-    service.setInvisibleMode(true);
-    expect(service.getCurrentState().invisibleMode).toBe(true);
-    service.setInvisibleMode(false);
-    expect(service.getCurrentState().invisibleMode).toBe(false);
   });
 
   it('should check permissions', async () => {
@@ -510,5 +510,52 @@ describe('createCockpitService with repository', () => {
     expect(saved).not.toBeNull();
     expect(saved!.status).toBe('completed');
     expect(saved!.previewPolyline).toEqual([]);
+  });
+});
+
+describe('createCockpitService - foreground service (grabación en segundo plano siempre activa)', () => {
+  let gps: GpsProvider;
+  let storage: StorageProvider;
+  let foregroundService: ForegroundServiceProvider;
+  let service: ReturnType<typeof createCockpitService>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    gps = createMockGps();
+    storage = createMockStorage();
+    foregroundService = createMockForegroundService();
+    service = createCockpitService(gps, storage, undefined, foregroundService);
+  });
+
+  it('should start the native foreground service as soon as a recording starts, without any toggle', () => {
+    service.startRecording();
+    expect(foregroundService.start).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not restart the foreground service on pause/resume (GPS watch keeps running while paused)', () => {
+    service.startRecording();
+    (foregroundService.start as Mock).mockClear();
+    service.pauseRecording();
+    service.resumeRecording();
+    expect(foregroundService.start).not.toHaveBeenCalled();
+  });
+
+  it('should stop the native foreground service once the recording is stopped (prepareStop)', () => {
+    service.startRecording();
+    service.prepareStop();
+    expect(foregroundService.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not call foregroundService.stop on prepareStop when idle (no recording was ever started)', () => {
+    service.prepareStop();
+    expect(foregroundService.stop).not.toHaveBeenCalled();
+  });
+
+  it('should work without a foregroundService provided (backwards compat)', () => {
+    const plainService = createCockpitService(gps, storage);
+    expect(() => {
+      plainService.startRecording();
+      plainService.prepareStop();
+    }).not.toThrow();
   });
 });
