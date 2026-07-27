@@ -1,5 +1,6 @@
 import { BaseElement } from '../shared/base-element.js';
 import { createCockpitService, createBrowserGpsProvider, type CockpitService, type StorageProvider } from './cockpit.service.js';
+import { createTauriForegroundServiceProvider } from './cockpit-foreground.service.js';
 import { getCockpitDisplayValues, getStatusChipClass, getStatusChipLabel } from './cockpit.transform.js';
 import type { CockpitState } from './cockpit.types.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
@@ -25,7 +26,6 @@ import {
   buildAvgSpeedBanner,
   buildProgressArc,
   buildControls,
-  buildInvisibleToggle,
   buildGpsOverlay,
   buildPhotoGalleryElement,
   updateLiveDisplay,
@@ -44,7 +44,6 @@ class CockpitView extends BaseElement {
   private photoCaptureEl: PhotoCaptureElement | null = null;
   private galleryEl: PhotoGalleryElement | null = null;
   private lastStatus: CockpitState['status'] | null = null;
-  private lastInvisibleMode: boolean | null = null;
 
   private async getPhotoRepo(): Promise<IPhotoRepository> {
     this.photoRepo ??= await createPhotoRepository();
@@ -78,7 +77,6 @@ class CockpitView extends BaseElement {
   private syncRenderSignature(): void {
     const state = this.service?.getCurrentState();
     this.lastStatus = state?.status ?? null;
-    this.lastInvisibleMode = state?.invisibleMode ?? null;
   }
 
   disconnectedCallback(): void {
@@ -110,16 +108,15 @@ class CockpitView extends BaseElement {
         this.repo = new MemoryRouteRepository();
       }
     }
-    this.service = createCockpitService(gps, storage, this.repo);
+    this.service = createCockpitService(gps, storage, this.repo, createTauriForegroundServiceProvider());
     this.service.subscribe((state) => {
       // El tick del cronómetro y cada punto GPS notifican una vez por segundo aprox.
       // Reconstruir todo el DOM en cada uno de esos eventos destruía <photo-capture>
       // con su menú Cámara/Galería recién abierto. Solo hace falta un render completo
-      // cuando cambia algo "estructural" (status/invisibleMode); el resto son solo
-      // números que se actualizan in-place.
-      const structuralChange = state.status !== this.lastStatus || state.invisibleMode !== this.lastInvisibleMode;
+      // cuando cambia algo "estructural" (status); el resto son solo números que se
+      // actualizan in-place.
+      const structuralChange = state.status !== this.lastStatus;
       this.lastStatus = state.status;
-      this.lastInvisibleMode = state.invisibleMode;
       if (structuralChange) {
         this.render();
       } else {
@@ -179,12 +176,6 @@ class CockpitView extends BaseElement {
     } else if (state.status === 'paused') {
       this.service.resumeRecording();
     }
-  }
-
-  private handleInvisibleToggle(): void {
-    if (!this.service) return;
-    const state = this.service.getCurrentState();
-    this.service.setInvisibleMode(!state.invisibleMode);
   }
 
   private showGpsOverlay(): void {
@@ -264,7 +255,6 @@ class CockpitView extends BaseElement {
       onPauseResume: () => { this.handlePauseResume(); },
       arc,
     }));
-    screen.appendChild(buildInvisibleToggle(state?.invisibleMode ?? false, () => { this.handleInvisibleToggle(); }));
 
     this.photoCaptureEl = isActive ? this.buildPhotoCaptureButton() : null;
     if (this.photoCaptureEl) screen.appendChild(this.photoCaptureEl);

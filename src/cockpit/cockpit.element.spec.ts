@@ -103,22 +103,6 @@ describe('CockpitView - controles principales', () => {
     document.body.removeChild(cockpit);
   });
 
-  it('should render invisible toggle with hitbox classes (AC-009)', async () => {
-    const { cockpit, shadowRoot } = await mountCockpit();
-    const invisBtn = shadowRoot.getElementById('cockpit-invisible-btn');
-    expect(invisBtn).not.toBeNull();
-    expect(invisBtn?.className).toContain('invisible-toggle');
-    document.body.removeChild(cockpit);
-  });
-
-  it('should have invisible button without active state when idle (AC-015)', async () => {
-    const { cockpit, shadowRoot } = await mountCockpit();
-    const invisBtn = shadowRoot.getElementById('cockpit-invisible-btn');
-    expect(invisBtn).not.toBeNull();
-    expect(invisBtn?.className).not.toContain('invisible-toggle--active');
-    document.body.removeChild(cockpit);
-  });
-
   it('should label the master button as "Iniciar grabación" when idle (AC-002)', async () => {
     const { cockpit, shadowRoot } = await mountCockpit();
     const btn = shadowRoot.getElementById('cockpit-master-btn');
