@@ -1,7 +1,7 @@
 import styles from './route-detail.element.css?inline';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { IPhotoRepository } from '../shared/models/photo.repository.js';
-import type { Route } from '../shared/models/route.types.js';
+import type { Route, RoutePoint } from '../shared/models/route.types.js';
 import { formatDuration } from '../cockpit/cockpit.transform.js';
 import '../shared/route-map/route-map.element.js';
 import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from '../shared/route-map/route-map.element.js';
@@ -24,6 +24,8 @@ import { openPhotoViewer } from '../shared/photo-viewer/photo-viewer.element.js'
 import '../shared/tab-bar/tab-bar.element.js';
 import type { PhotoWithUrl, TabBarElement } from './route-detail.types.js';
 import { buildNotasPanel, saveRouteNote } from './route-detail-notes.js';
+import { buildTimelinePanel } from './route-detail-timeline.js';
+import type { TimelinePhotoInput } from './route-timeline.types.js';
 
 class RouteDetail extends BaseElement {
   private _repository: IRouteRepository | null = null;
@@ -32,8 +34,10 @@ class RouteDetail extends BaseElement {
   private _photoRepo: IPhotoRepository | null = null;
   private _photos: PhotoWithUrl[] = [];
   private _points: { lat: number; lng: number }[] = [];
+  private _routePoints: RoutePoint[] = [];
   private _photoCaptureEl: PhotoCaptureElement | null = null;
   private _fotosPanelEl: HTMLElement | null = null;
+  private _timelinePanelEl: HTMLElement | null = null;
   private _loading = false;
 
   private async getPhotoRepo(): Promise<IPhotoRepository> {
@@ -91,6 +95,7 @@ class RouteDetail extends BaseElement {
       photoRepo.getByRouteId(this._routeId),
     ]);
     this._route = route;
+    this._routePoints = points;
     this._points = points.map((p) => ({ lat: p.lat, lng: p.lng }));
     this.revokePhotoUrls();
     // Convert file paths to accessible URLs (handles Tauri convertFileSrc)
@@ -174,7 +179,7 @@ class RouteDetail extends BaseElement {
   }
 
   /**
-   * Envuelve "Estadísticas"/"Fotos"/"Notas" en un `<tab-bar>` (AC-005, AC-006).
+   * Envuelve "Fotos"/"Estadísticas"/"Notas"/"Timeline" en un `<tab-bar>` (AC-005, AC-006, AC-001).
    * Cada panel se añade como hijo ligero marcado con `slot="{id}"`, siguiendo
    * la API de `<tab-bar>` — nunca se reconstruye al cambiar de pestaña (AC-008).
    */
@@ -184,12 +189,15 @@ class RouteDetail extends BaseElement {
       { id: 'fotos', label: 'Fotos' },
       { id: 'estadisticas', label: 'Estadísticas' },
       { id: 'notas', label: 'Notas' },
+      { id: 'timeline', label: 'Timeline' },
     ];
 
     this._fotosPanelEl = this.buildPhotosSection();
     tabBar.appendChild(this._fotosPanelEl);
     tabBar.appendChild(this.buildEstadisticasPanel());
     tabBar.appendChild(buildNotasPanel(route, (textarea) => this.handleSaveNote(route, textarea)));
+    this._timelinePanelEl = this.buildTimelinePanel();
+    tabBar.appendChild(this._timelinePanelEl);
     return tabBar;
   }
 
@@ -328,7 +336,7 @@ class RouteDetail extends BaseElement {
             objectUrl: await getPhotoUrl(p.filePath),
           })),
         );
-        this.rerenderPhotosSection();
+        this.refreshAllPanels();
       }
     } finally {
       if (this._photoCaptureEl) this._photoCaptureEl.loading = false;
@@ -348,6 +356,37 @@ class RouteDetail extends BaseElement {
     this._fotosPanelEl = newSection;
   }
 
+  /** Construye el panel de Timeline. */
+  private buildTimelinePanel(): HTMLElement {
+    const timelinePhotos: TimelinePhotoInput[] = this._photos.map((p) => ({
+      id: p.id,
+      capturedAt: p.capturedAt,
+    }));
+    const el = buildTimelinePanel(
+      this._routePoints,
+      timelinePhotos,
+      (photoId: string): void => {
+        const idx = this.toGalleryPhotos().findIndex((gp) => gp.id === photoId);
+        if (idx !== -1) this.openPhotoViewerAt(idx);
+      },
+    );
+    return el;
+  }
+
+  /** Reconstruye el panel de Timeline tras cambios en las fotos. */
+  private rerenderTimelinePanel(): void {
+    if (!this._timelinePanelEl) return;
+    const newPanel = this.buildTimelinePanel();
+    this._timelinePanelEl.replaceWith(newPanel);
+    this._timelinePanelEl = newPanel;
+  }
+
+  /** Refresca ambos paneles (Fotos y Timeline) al cambiar fotos. */
+  private refreshAllPanels(): void {
+    this.rerenderPhotosSection();
+    this.rerenderTimelinePanel();
+  }
+
   /** Devuelve si se borró de verdad, para que `<photo-viewer>` sepa si debe quitarla de su vista. */
   private async handleDeletePhoto(photoId: string): Promise<boolean> {
     const photo = this._photos.find((p) => p.id === photoId);
@@ -363,7 +402,7 @@ class RouteDetail extends BaseElement {
 
     URL.revokeObjectURL(photo.objectUrl);
     this._photos = this._photos.filter((p) => p.id !== photoId);
-    this.rerenderPhotosSection();
+    this.refreshAllPanels();
     showToast('Foto eliminada', 'success');
     return true;
   }
