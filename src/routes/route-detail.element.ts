@@ -23,6 +23,7 @@ import { PHOTO_GALLERY_SELECT_EVENT, type PhotoGallerySelectDetail, type Gallery
 import { openPhotoViewer } from '../shared/photo-viewer/photo-viewer.element.js';
 import '../shared/tab-bar/tab-bar.element.js';
 import type { PhotoWithUrl, TabBarElement } from './route-detail.types.js';
+import { buildNotasPanel, saveRouteNote } from './route-detail-notes.js';
 
 class RouteDetail extends BaseElement {
   private _repository: IRouteRepository | null = null;
@@ -168,7 +169,7 @@ class RouteDetail extends BaseElement {
     content.className = 'detail-content';
     content.appendChild(this.buildHeader(route));
     content.appendChild(this.buildStatGrid(route));
-    content.appendChild(this.buildTabBar());
+    content.appendChild(this.buildTabBar(route));
     return content;
   }
 
@@ -177,7 +178,7 @@ class RouteDetail extends BaseElement {
    * Cada panel se añade como hijo ligero marcado con `slot="{id}"`, siguiendo
    * la API de `<tab-bar>` — nunca se reconstruye al cambiar de pestaña (AC-008).
    */
-  private buildTabBar(): TabBarElement {
+  private buildTabBar(route: Route): TabBarElement {
     const tabBar = document.createElement('tab-bar') as TabBarElement;
     tabBar.tabs = [
       { id: 'fotos', label: 'Fotos' },
@@ -188,8 +189,13 @@ class RouteDetail extends BaseElement {
     this._fotosPanelEl = this.buildPhotosSection();
     tabBar.appendChild(this._fotosPanelEl);
     tabBar.appendChild(this.buildEstadisticasPanel());
-    tabBar.appendChild(this.buildNotasPlaceholder());
+    tabBar.appendChild(buildNotasPanel(route, (textarea) => this.handleSaveNote(route, textarea)));
     return tabBar;
+  }
+
+  private async handleSaveNote(route: Route, textarea: HTMLTextAreaElement): Promise<boolean> {
+    if (!this._repository) return false;
+    return saveRouteNote(this._repository, route, textarea);
   }
 
   /** "Estadísticas": placeholder de gráfica ya existente, sin cambios (AC-007). */
@@ -199,26 +205,14 @@ class RouteDetail extends BaseElement {
     return chart;
   }
 
-  /**
-   * "Notas": ejemplo estructural sin alcance funcional (AC-007) — texto estático
-   * indicando que el contenido real llegará en una futura iteración.
-   */
-  private buildNotasPlaceholder(): HTMLElement {
-    const panel = document.createElement('div');
-    panel.setAttribute('slot', 'notas');
-    const text = document.createElement('p');
-    text.className = 'note-text';
-    text.textContent = 'Aquí podrás añadir tus propias notas sobre la ruta (próximamente): sensaciones, incidencias, recomendaciones para la próxima vez.';
-    panel.appendChild(text);
-    return panel;
-  }
-
   private buildHeader(route: Route): DocumentFragment {
     const fragment = document.createDocumentFragment();
 
     const title = document.createElement('h1');
     title.className = 'detail-title';
-    title.textContent = `Ruta ${route.createdAt ? new Date(route.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' }) : ''}`;
+    title.textContent = route.name?.trim()
+      ? route.name
+      : `Ruta ${route.createdAt ? new Date(route.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' }) : ''}`;
     fragment.appendChild(title);
 
     const date = document.createElement('p');

@@ -158,6 +158,36 @@ describe('route-detail - contenido básico', () => {
   });
 });
 
+describe('route-detail - nombre de ruta (AC-006, AC-007)', () => {
+  it('shows the persisted name as .detail-title when the route has one (AC-006)', async () => {
+    localStorage.clear();
+    const repo = new MemoryRouteRepository();
+    const savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local', name: 'Puerto de la Bonaigua' },
+      [],
+      [],
+    );
+
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    expect(root.querySelector('.detail-title')?.textContent).toBe('Puerto de la Bonaigua');
+    document.body.removeChild(el);
+  });
+
+  it('falls back to the createdAt-derived title when name is null (AC-007)', async () => {
+    localStorage.clear();
+    const repo = new MemoryRouteRepository();
+    const savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    expect(root.querySelector('.detail-title')?.textContent).toContain('Ruta ');
+    document.body.removeChild(el);
+  });
+});
+
 describe('route-detail - galería y visor de fotos (AC-019, AC-020, AC-033)', () => {
   let repo: IRouteRepository;
   let savedRoute: Route;
@@ -381,14 +411,6 @@ describe('route-detail - pestañas (AC-005 a AC-008, AC-027)', () => {
     document.body.removeChild(el);
   });
 
-  it('shows a static example placeholder text in "Notas" (AC-007)', async () => {
-    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
-    const noteText = root.querySelector('.note-text');
-    expect(noteText).not.toBeNull();
-    expect(noteText?.textContent).toBeTruthy();
-    document.body.removeChild(el);
-  });
-
   it('does not refetch photos/points when switching to "Notas" and back to "Fotos" (AC-008)', async () => {
     const getPointsSpy = vi.spyOn(repo, 'getPointsByRouteId');
     const getByRouteIdSpy = vi.spyOn(MemoryPhotoRepository.prototype, 'getByRouteId');
@@ -500,6 +522,174 @@ describe('route-detail - integración mapa → visor de fotos (AC-014 a AC-018, 
     expect(mapFitBounds.mock.calls.length).toBe(fitBoundsCallsBefore);
     expect(mapFlyTo.mock.calls.length).toBe(flyToCallsBefore);
 
+    document.body.removeChild(el);
+  });
+});
+
+describe('route-detail - editor de notas (AC-010 a AC-017)', () => {
+  let repo: IRouteRepository;
+
+  function notasRoot(root: ShadowRoot): ShadowRoot {
+    return root.querySelector('tab-bar')!.shadowRoot!;
+  }
+
+  function clickTab(root: ShadowRoot, id: string): void {
+    (notasRoot(root).querySelector(`[data-cy="tab-bar-btn-${id}"]`) as HTMLButtonElement).click();
+  }
+
+  function notesTextarea(root: ShadowRoot): HTMLTextAreaElement {
+    return root.querySelector('[data-cy="route-detail-textarea-notas"]') as HTMLTextAreaElement;
+  }
+
+  function saveNoteBtn(root: ShadowRoot): HTMLButtonElement {
+    return root.querySelector('[data-cy="route-detail-btn-guardar-nota"]') as HTMLButtonElement;
+  }
+
+  function editNoteBtn(root: ShadowRoot): HTMLButtonElement {
+    return root.querySelector('[data-cy="route-detail-btn-editar-nota"]') as HTMLButtonElement;
+  }
+
+  function noteViewText(root: ShadowRoot): HTMLElement {
+    return root.querySelector('[data-cy="route-detail-texto-nota"]') as HTMLElement;
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    repo = new MemoryRouteRepository();
+    // Toasts anteriores (de otros describe de este mismo archivo) se autodestruyen
+    // pasado su plazo real, pero los tests no esperan tanto — se limpian explícitamente
+    // para que `document.body.querySelector('[data-cy="photo-toast"]')` no encuentre
+    // un toast obsoleto de un test anterior en vez del que dispara este test.
+    document.body.querySelectorAll('.photo-toast').forEach((el) => { el.remove(); });
+  });
+
+  it('shows an empty textarea with the expected placeholder when the route has no notes (AC-014)', async () => {
+    const savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [], [],
+    );
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    clickTab(root, 'notas');
+
+    const textarea = notesTextarea(root);
+    expect(textarea).not.toBeNull();
+    expect(textarea.value).toBe('');
+    expect(textarea.placeholder).toBe('Escribe aquí tus notas sobre la ruta…');
+    document.body.removeChild(el);
+  });
+
+  it('loads and shows the existing note in view mode without any user action (AC-013, AC-019)', async () => {
+    const savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [], [],
+    );
+    await repo.updateNotes(savedRoute.id, 'Buen firme, gasolinera en el km 40');
+
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    clickTab(root, 'notas');
+
+    expect(noteViewText(root).textContent).toBe('Buen firme, gasolinera en el km 40');
+    expect(notesTextarea(root)).toBeNull();
+    expect(editNoteBtn(root)).not.toBeNull();
+    document.body.removeChild(el);
+  });
+
+  it('switches to the editable textarea, prefilled with the current text, when the edit icon is clicked (AC-019)', async () => {
+    const savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [], [],
+    );
+    await repo.updateNotes(savedRoute.id, 'Buen firme, gasolinera en el km 40');
+
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    clickTab(root, 'notas');
+    editNoteBtn(root).click();
+
+    expect(notesTextarea(root).value).toBe('Buen firme, gasolinera en el km 40');
+    expect(noteViewText(root)).toBeNull();
+    document.body.removeChild(el);
+  });
+
+  it('persists the typed text via updateNotes and shows a success toast when "Guardar nota" is clicked (AC-010, AC-011, AC-012)', async () => {
+    const savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [], [],
+    );
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    clickTab(root, 'notas');
+
+    notesTextarea(root).value = 'Curva peligrosa en el km 12';
+    saveNoteBtn(root).click();
+    await waitRender();
+
+    const persisted = await repo.getById(savedRoute.id);
+    expect(persisted!.notes).toBe('Curva peligrosa en el km 12');
+    expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('Nota guardada');
+    document.body.removeChild(el);
+  });
+
+  it('updates the persisted value when editing an existing note, and returns to view mode with the updated text (AC-013 edición, AC-019)', async () => {
+    const savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [], [],
+    );
+    await repo.updateNotes(savedRoute.id, 'Texto original');
+
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    clickTab(root, 'notas');
+    editNoteBtn(root).click();
+
+    notesTextarea(root).value = 'Texto actualizado';
+    saveNoteBtn(root).click();
+    await waitRender();
+
+    const persisted = await repo.getById(savedRoute.id);
+    expect(persisted!.notes).toBe('Texto actualizado');
+    expect(noteViewText(root).textContent).toBe('Texto actualizado');
+    expect(notesTextarea(root)).toBeNull();
+    document.body.removeChild(el);
+  });
+
+  it('persists notes as null (without any confirmation dialog) when all content is deleted and saved, staying in the editable textarea since there is nothing left to view (AC-016, AC-019)', async () => {
+    const savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [], [],
+    );
+    await repo.updateNotes(savedRoute.id, 'Texto a borrar');
+
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    clickTab(root, 'notas');
+    editNoteBtn(root).click();
+
+    notesTextarea(root).value = '';
+    saveNoteBtn(root).click();
+    await waitRender();
+
+    expect(document.body.querySelector('confirm-dialog')).toBeNull();
+    const persisted = await repo.getById(savedRoute.id);
+    expect(persisted!.notes).toBeNull();
+    expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('Nota guardada');
+    expect(notesTextarea(root).value).toBe('');
+    expect(noteViewText(root)).toBeNull();
+    document.body.removeChild(el);
+  });
+
+  it('shows an error toast and keeps the typed text in the textarea when updateNotes rejects (AC-017)', async () => {
+    const savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [], [],
+    );
+    vi.spyOn(repo, 'updateNotes').mockRejectedValueOnce(new Error('fallo de BBDD'));
+
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    clickTab(root, 'notas');
+
+    notesTextarea(root).value = 'Texto que no debe perderse';
+    saveNoteBtn(root).click();
+    await waitRender();
+
+    expect(document.body.querySelector('[data-cy="photo-toast-error"]')?.textContent).toBe('⚠️ fallo de BBDD');
+    expect(notesTextarea(root).value).toBe('Texto que no debe perderse');
     document.body.removeChild(el);
   });
 });

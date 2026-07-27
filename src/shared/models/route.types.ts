@@ -28,6 +28,10 @@ export interface Route {
   origin: RouteOrigin;
   /** Trazado simplificado (pares [lat, lng]), dato derivado y recalculable — null si aún no se ha calculado/persistido. */
   previewPolyline: [number, number][] | null;
+  /** Nombre elegido por el usuario al guardar (o el por defecto de fecha/hora) — null en rutas guardadas antes de esta feature o aún no finalizadas. */
+  name: string | null;
+  /** Notas de texto libre editadas desde el detalle de ruta — null si no se ha guardado ninguna. */
+  notes: string | null;
 }
 
 export interface RoutePoint {
@@ -64,6 +68,10 @@ export interface CreateRoute {
   status: RouteStatus;
   visibility: RouteVisibility;
   origin: RouteOrigin;
+  /** Opcional: la fila 'active' insertada al empezar a grabar aún no tiene nombre — se
+   * añade en el save() final de confirmSaveRecording(). La regla de "nunca vacío" al
+   * guardar de verdad se garantiza en cockpit-stop.service.ts, no en este tipo. */
+  name?: string;
 }
 
 export interface CreateRoutePoint {

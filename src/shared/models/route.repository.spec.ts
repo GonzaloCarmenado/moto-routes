@@ -153,6 +153,47 @@ function registerPreviewPolylineTests(getRepo: () => IRouteRepository): void {
   });
 }
 
+function registerNameAndNotesTests(getRepo: () => IRouteRepository): void {
+  it('should persist and return the name passed in CreateRoute tal cual (AC-004)', async () => {
+    const saved = await getRepo().save({ ...sampleRoute, name: 'Puerto de la Bonaigua' }, [], []);
+    expect(saved.name).toBe('Puerto de la Bonaigua');
+
+    const fetched = await getRepo().getById(saved.id);
+    expect(fetched!.name).toBe('Puerto de la Bonaigua');
+  });
+
+  it('should default name to null on a freshly saved route without name (prepares AC-007 fallback)', async () => {
+    const saved = await getRepo().save(sampleRoute, [], []);
+    expect(saved.name).toBeNull();
+  });
+
+  it('should default notes to null on a freshly saved route (AC-015)', async () => {
+    const saved = await getRepo().save(sampleRoute, [], []);
+    expect(saved.notes).toBeNull();
+  });
+
+  it('should persist and retrieve notes via updateNotes (AC-015)', async () => {
+    const saved = await getRepo().save(sampleRoute, [], []);
+    await getRepo().updateNotes(saved.id, 'Buen firme, gasolinera en el km 40');
+
+    const fetched = await getRepo().getById(saved.id);
+    expect(fetched!.notes).toBe('Buen firme, gasolinera en el km 40');
+  });
+
+  it('should leave notes as null when updateNotes is called with null on a route that had notes (AC-016)', async () => {
+    const saved = await getRepo().save(sampleRoute, [], []);
+    await getRepo().updateNotes(saved.id, 'Nota temporal');
+    await getRepo().updateNotes(saved.id, null);
+
+    const fetched = await getRepo().getById(saved.id);
+    expect(fetched!.notes).toBeNull();
+  });
+
+  it('should not throw when updateNotes targets a non-existent route id (no-op, same as updatePreviewPolyline)', async () => {
+    await expect(getRepo().updateNotes('nonexistent', 'texto')).resolves.not.toThrow();
+  });
+}
+
 function registerQueryTests(getRepo: () => IRouteRepository): void {
   it('should return all routes ordered by date descending', async () => {
     const r1 = await getRepo().save({ ...sampleRoute, duration: 100 }, [], []);
@@ -221,5 +262,6 @@ export function createRouteSuite(name: string, factory: () => IRouteRepository):
     registerQueryTests(getRepo);
     registerDeletionAndEmptyStateTests(getRepo);
     registerPreviewPolylineTests(getRepo);
+    registerNameAndNotesTests(getRepo);
   });
 }
