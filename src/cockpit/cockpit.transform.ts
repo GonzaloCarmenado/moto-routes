@@ -64,6 +64,30 @@ export function formatSpeed(speedKmh: number): string {
   return String(Math.round(speedKmh));
 }
 
+const ROUTE_NAME_MAX_LENGTH = 100;
+
+/**
+ * Recorta espacios en los extremos y trunca al límite de 100 caracteres
+ * (AC-003, AC-009). No decide el fallback por defecto — un resultado vacío
+ * es responsabilidad del llamador (ver `buildDefaultRouteName`).
+ */
+export function sanitizeRouteName(raw: string): string {
+  return raw.trim().slice(0, ROUTE_NAME_MAX_LENGTH);
+}
+
+/**
+ * Nombre por defecto cuando el usuario no escribe ninguno al guardar (AC-002):
+ * "Ruta {día} {mes abreviado} {año}, {hora}:{minuto}" — mismo formato de fecha
+ * ya usado en el listado de rutas, combinado con la hora para distinguir varias
+ * rutas guardadas el mismo día.
+ */
+export function buildDefaultRouteName(dateIso: string): string {
+  const date = new Date(dateIso);
+  const datePart = date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+  const timePart = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  return `Ruta ${datePart}, ${timePart}`;
+}
+
 export interface CockpitDisplayValues {
   speed: string;
   avgSpeed: string;

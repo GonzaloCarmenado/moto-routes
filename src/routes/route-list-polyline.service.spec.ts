@@ -14,6 +14,8 @@ function buildRoute(overrides: Partial<Route> = {}): Route {
     visibility: 'private',
     origin: 'local',
     previewPolyline: null,
+    name: null,
+    notes: null,
     ...overrides,
   };
 }
@@ -31,6 +33,7 @@ function buildMockRepo(points: RoutePoint[]): IRouteRepository {
     getStopsByRouteId: vi.fn(),
     delete: vi.fn(),
     updatePreviewPolyline: vi.fn().mockResolvedValue(undefined),
+    updateNotes: vi.fn().mockResolvedValue(undefined),
   };
 }
 

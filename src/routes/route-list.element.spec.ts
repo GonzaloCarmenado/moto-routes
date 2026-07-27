@@ -126,6 +126,40 @@ describe('route-list - estructura de tarjeta', () => {
   });
 });
 
+describe('route-list - nombre de ruta (AC-005, AC-007)', () => {
+  let repo: IRouteRepository;
+
+  beforeEach(() => {
+    repo = new MemoryRouteRepository();
+  });
+
+  it('shows the persisted name in the card .name when the route has one (AC-005)', async () => {
+    await repo.save(
+      { duration: 300, totalDistance: 10, avgSpeed: 60, status: 'completed', visibility: 'private', origin: 'local', name: 'Puerto de la Bonaigua' },
+      [],
+      [],
+    );
+
+    const list = await createList(repo);
+    const root = list.shadowRoot!;
+    expect(root.querySelector('.name')?.textContent).toBe('Puerto de la Bonaigua');
+    document.body.removeChild(list);
+  });
+
+  it('falls back to the "Ruta {fecha}" text when name is null (AC-007)', async () => {
+    await repo.save(
+      { duration: 300, totalDistance: 10, avgSpeed: 60, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+
+    const list = await createList(repo);
+    const root = list.shadowRoot!;
+    expect(root.querySelector('.name')?.textContent).toContain('Ruta ');
+    document.body.removeChild(list);
+  });
+});
+
 describe('route-list - eventos e interacción', () => {
   let repo: IRouteRepository;
 

@@ -24,4 +24,7 @@ export interface IRouteRepository {
 
   /** Persiste el trazado simplificado de una ruta de forma independiente del resto de campos. */
   updatePreviewPolyline(routeId: string, polyline: [number, number][]): Promise<void>;
+
+  /** Persiste las notas de una ruta de forma independiente del resto de campos. `null` borra la nota existente. */
+  updateNotes(routeId: string, notes: string | null): Promise<void>;
 }

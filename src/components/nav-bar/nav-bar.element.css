@@ -45,31 +45,45 @@
   color: var(--amber);
 }
 
-/* Botón Grabar — destacado y elevado */
+/* Botón Grabar — destacado y elevado.
+   El círculo (::before) y el punto (.record-dot) comparten la misma celda de
+   un grid ("circle"), con la etiqueta debajo ("label"): centrado estructural,
+   independiente del padding del botón — a diferencia del posicionamiento
+   absoluto con desplazamiento vertical fijo usado antes, que no descontaba
+   el padding heredado de .nav-item y dejaba el punto desviado hacia arriba. */
 .nav-item--record {
   position: relative;
   margin-top: -30px;
   color: var(--amber);
+  display: grid;
+  grid-template-areas: "circle" "label";
+  grid-template-rows: 56px auto;
+  justify-items: center;
+  row-gap: 4px;
 }
 
 .nav-item--record::before {
   content: '';
-  display: block;
+  grid-area: circle;
   width: 56px;
   height: 56px;
   border-radius: 50%;
   background: var(--amber-strong);
   box-shadow: 0 2px 12px oklch(60% 0.17 45 / 0.4);
-  margin-bottom: 4px;
 }
 
 .nav-item--record .record-dot {
-  position: absolute;
-  top: 20px;
+  grid-area: circle;
+  align-self: center;
+  justify-self: center;
   width: 16px;
   height: 16px;
   border-radius: 50%;
   background: var(--bezel);
+}
+
+.nav-item--record .nav-label {
+  grid-area: label;
 }
 
 .nav-label {

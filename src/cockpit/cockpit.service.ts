@@ -62,8 +62,8 @@ export interface CockpitService {
    * `confirmSaveRecording()` y `discardStop()`. Devuelve `null` si ya estaba `idle`.
    */
   prepareStop(): RouteMetadata | null;
-  /** Persiste el estado congelado por `prepareStop()` como 'completed' y resetea a `idle`. */
-  confirmSaveRecording(): void;
+  /** Persiste el estado congelado por `prepareStop()` como 'completed' con el nombre dado, y resetea a `idle`. */
+  confirmSaveRecording(name: string): void;
   /** Resetea a `idle` sin persistir. El borrado de la fila 'active' y sus fotos es responsabilidad del llamador (ver deleteRouteAndPhotos). */
   discardStop(): void;
   pauseRecording(): void;
@@ -240,8 +240,8 @@ function prepareStopAction(
   return buildMetadata(store.state);
 }
 
-function confirmSaveRecordingAction(store: ServiceStore, repository: IRouteRepository | undefined): void {
-  persistRouteOnStop(repository, store.state);
+function confirmSaveRecordingAction(store: ServiceStore, repository: IRouteRepository | undefined, name: string): void {
+  persistRouteOnStop(repository, store.state, name);
   store.state = { ...createInitialState(), hasGpsPermission: store.state.hasGpsPermission };
   notify(store);
 }
@@ -283,7 +283,7 @@ export function createCockpitService(
     getCurrentState: (): CockpitState => ({ ...store.state }),
     startRecording: (): void => { startRecordingAction(store, loop, repository, foregroundService); },
     prepareStop: (): RouteMetadata | null => prepareStopAction(store, loop, foregroundService),
-    confirmSaveRecording: (): void => { confirmSaveRecordingAction(store, repository); },
+    confirmSaveRecording: (name: string): void => { confirmSaveRecordingAction(store, repository, name); },
     discardStop: (): void => { discardStopAction(store); },
     pauseRecording: (): void => { pauseRecordingAction(store, loop); },
     resumeRecording: (): void => { resumeRecordingAction(store, loop); },
