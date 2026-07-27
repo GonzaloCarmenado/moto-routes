@@ -131,12 +131,84 @@
 /* Galería y placeholder de fotos: ver src/shared/photo-gallery/photo-gallery.element.css */
 
 /* Notas */
-.note-text {
+.notes-textarea {
+  width: 100%;
+  min-height: 140px;
+  background: var(--panel-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--space-3) var(--space-4);
+  color: var(--ink);
+  font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.5;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.notes-textarea:focus {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+.notes-view {
+  position: relative;
+  padding: var(--space-2) calc(var(--hitbox-min) + var(--space-2)) var(--space-5) 0;
+}
+
+.notes-view-text {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.notes-edit-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: var(--hitbox-min);
+  height: var(--hitbox-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
   color: var(--ink-soft);
-  font-style: italic;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.notes-edit-btn:hover,
+.notes-edit-btn:focus-visible {
+  color: var(--amber);
+}
+.notes-edit-btn svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.notes-save-btn {
+  display: block;
+  margin-top: var(--space-3);
   margin-bottom: 24px;
+  min-height: var(--hitbox-min);
+  padding: 0 var(--space-5);
+  background: var(--amber);
+  border: none;
+  border-radius: var(--r-sm);
+  color: var(--bg-bottom);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .empty-msg {

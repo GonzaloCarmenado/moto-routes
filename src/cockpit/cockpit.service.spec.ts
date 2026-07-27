@@ -83,7 +83,7 @@ describe('createCockpitService - estado de grabación', () => {
     // Sigue "recording" — la decisión de guardar/descartar no se ha tomado todavía
     expect(service.getCurrentState().status).toBe('recording');
 
-    service.confirmSaveRecording();
+    service.confirmSaveRecording('Ruta de prueba');
     expect(service.getCurrentState().status).toBe('idle');
   });
 
@@ -327,7 +327,7 @@ describe('createCockpitService - metadata al finalizar', () => {
     await service.checkGpsPermission();
     service.startRecording();
     service.prepareStop();
-    service.confirmSaveRecording();
+    service.confirmSaveRecording('Ruta de prueba');
     expect(service.getCurrentState().hasGpsPermission).toBe(true);
   });
 
@@ -354,7 +354,7 @@ describe('createCockpitService with repository', () => {
     const service = createCockpitService(gps, createMockStorage(), repo);
     service.startRecording();
     service.prepareStop();
-    service.confirmSaveRecording();
+    service.confirmSaveRecording('Ruta de prueba');
     const all = await repo.getAll();
     expect(all).toHaveLength(1);
     expect(all[0]!.duration).toBeGreaterThanOrEqual(0);
@@ -386,6 +386,17 @@ describe('createCockpitService with repository', () => {
     expect(saved!.status).toBe('active');
   });
 
+  it('should leave name as null on the active row inserted at start, before any name has been chosen (regression, prepares AC-007 fallback for interrupted recordings)', async () => {
+    const service = createCockpitService(gps, createMockStorage(), repo);
+    service.startRecording();
+    await Promise.resolve();
+
+    const routeIdDuringRecording = service.getCurrentState().routeId;
+    const saved = await repo.getById(routeIdDuringRecording);
+    expect(saved).not.toBeNull();
+    expect(saved!.name).toBeNull();
+  });
+
   it('should update the same row (not create a second one) when the route is later confirmed', async () => {
     const service = createCockpitService(gps, createMockStorage(), repo);
     service.startRecording();
@@ -393,7 +404,7 @@ describe('createCockpitService with repository', () => {
     const routeId = service.getCurrentState().routeId;
 
     service.prepareStop();
-    service.confirmSaveRecording();
+    service.confirmSaveRecording('Ruta de prueba');
 
     const all = await repo.getAll();
     expect(all.filter((r) => r.id === routeId)).toHaveLength(1);
@@ -413,7 +424,19 @@ describe('createCockpitService with repository', () => {
     service.startRecording();
     const metadata = service.prepareStop();
     expect(metadata).not.toBeNull();
-    expect(() => { service.confirmSaveRecording(); }).not.toThrow();
+    expect(() => { service.confirmSaveRecording('Ruta de prueba'); }).not.toThrow();
+  });
+
+  it('should persist a route with the given name on confirmSaveRecording (AC-004)', async () => {
+    const service = createCockpitService(gps, createMockStorage(), repo);
+    service.startRecording();
+    const routeId = service.getCurrentState().routeId;
+    service.prepareStop();
+    service.confirmSaveRecording('Puerto de la Bonaigua');
+
+    const saved = await repo.getById(routeId);
+    expect(saved).not.toBeNull();
+    expect(saved!.name).toBe('Puerto de la Bonaigua');
   });
 
   it('should persist the route using the routeId pre-generated in state (photos taken mid-recording stay linked)', async () => {
@@ -422,7 +445,7 @@ describe('createCockpitService with repository', () => {
     const routeIdDuringRecording = service.getCurrentState().routeId;
 
     service.prepareStop();
-    service.confirmSaveRecording();
+    service.confirmSaveRecording('Ruta de prueba');
 
     const saved = await repo.getById(routeIdDuringRecording);
     expect(saved).not.toBeNull();
@@ -434,7 +457,7 @@ describe('createCockpitService with repository', () => {
     service.startRecording();
     const firstRouteId = service.getCurrentState().routeId;
     service.prepareStop();
-    service.confirmSaveRecording();
+    service.confirmSaveRecording('Ruta de prueba');
     const nextRouteId = service.getCurrentState().routeId;
     expect(nextRouteId).not.toBe(firstRouteId);
   });
@@ -485,7 +508,7 @@ describe('createCockpitService with repository', () => {
     expect(recordedPoints.length).toBe(50);
 
     service.prepareStop();
-    service.confirmSaveRecording();
+    service.confirmSaveRecording('Ruta de prueba');
 
     const saved = await repo.getById(routeId);
     expect(saved).not.toBeNull();
@@ -504,7 +527,7 @@ describe('createCockpitService with repository', () => {
     const routeId = service.getCurrentState().routeId;
 
     service.prepareStop();
-    service.confirmSaveRecording();
+    service.confirmSaveRecording('Ruta de prueba');
 
     const saved = await repo.getById(routeId);
     expect(saved).not.toBeNull();

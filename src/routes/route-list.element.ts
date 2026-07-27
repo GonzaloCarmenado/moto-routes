@@ -131,7 +131,9 @@ class RouteList extends BaseElement {
 
     const name = document.createElement('span');
     name.className = 'name';
-    name.textContent = `Ruta ${route.createdAt ? new Date(route.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}`;
+    name.textContent = route.name?.trim()
+      ? route.name
+      : `Ruta ${route.createdAt ? new Date(route.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}`;
     info.appendChild(name);
 
     const date = document.createElement('span');

@@ -5,6 +5,8 @@ import {
   calculateAvgSpeed,
   formatSpeed,
   detectStop,
+  sanitizeRouteName,
+  buildDefaultRouteName,
 } from './cockpit.transform.js';
 
 describe('calculateDistance', () => {
@@ -140,5 +142,38 @@ describe('detectStop', () => {
     const result = detectStop(undefined, 15, 'possible-stop');
     expect(result.state).toBe('possible-stop');
     expect(result.timer).toBe(16);
+  });
+});
+
+describe('sanitizeRouteName', () => {
+  it('should trim leading and trailing whitespace (AC-003)', () => {
+    expect(sanitizeRouteName('  Puerto de la Bonaigua  ')).toBe('Puerto de la Bonaigua');
+  });
+
+  it('should return an empty string for a whitespace-only name, preparing the AC-002 fallback', () => {
+    expect(sanitizeRouteName('   ')).toBe('');
+  });
+
+  it('should truncate a name longer than 100 characters to exactly 100 (AC-009)', () => {
+    const result = sanitizeRouteName('a'.repeat(150));
+    expect(result).toHaveLength(100);
+  });
+
+  it('should leave a short name untouched other than trimming', () => {
+    expect(sanitizeRouteName('Ruta de prueba')).toBe('Ruta de prueba');
+  });
+});
+
+describe('buildDefaultRouteName (AC-002)', () => {
+  it('should build a name starting with "Ruta " followed by date and time', () => {
+    const result = buildDefaultRouteName('2026-07-27T12:30:00.000Z');
+    expect(result.startsWith('Ruta ')).toBe(true);
+    // Tolerante a la TZ del entorno de test: solo valida forma, no literal exacto.
+    expect(result).toMatch(/^Ruta .+\d{4}.*\d{1,2}:\d{2}$/);
+  });
+
+  it('should include the year so routes saved months apart remain distinguishable', () => {
+    const result = buildDefaultRouteName('2026-07-27T12:30:00.000Z');
+    expect(result).toContain('2026');
   });
 });

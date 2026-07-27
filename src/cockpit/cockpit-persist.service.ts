@@ -10,7 +10,7 @@ import { simplifyPolyline } from '../shared/services/route-polyline.service.js';
 
 const BACKUP_KEY = 'moto-routes-pending-backup';
 
-function buildCreateRoute(s: CockpitState): CreateRoute {
+function buildCreateRoute(s: CockpitState, name: string): CreateRoute {
   return {
     id: s.routeId,
     duration: s.elapsedTime,
@@ -19,6 +19,7 @@ function buildCreateRoute(s: CockpitState): CreateRoute {
     status: 'completed',
     visibility: 'private',
     origin: 'local',
+    name,
   };
 }
 
@@ -73,9 +74,9 @@ function persistFallback(data: string): void {
  * Si `updatePreviewPolyline` falla, no debe impedir el resto del guardado — el
  * backfill perezoso del listado recalculará el trazado más adelante.
  */
-export function persistRouteOnStop(repository: IRouteRepository | undefined, state: CockpitState): void {
+export function persistRouteOnStop(repository: IRouteRepository | undefined, state: CockpitState, name: string): void {
   if (!repository) return;
-  const route = buildCreateRoute(state);
+  const route = buildCreateRoute(state, name);
   const points = buildCreatePoints(state);
   const stops = buildStops(state);
   repository.save(route, points, stops).catch(() => {
