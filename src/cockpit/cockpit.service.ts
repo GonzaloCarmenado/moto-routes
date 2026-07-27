@@ -7,8 +7,10 @@
 import type { CockpitState, RoutePoint, RouteMetadata } from './cockpit.types.js';
 import { calculateDistance, calculateAvgSpeed, detectStop } from './cockpit.transform.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
-import type { CreateRoute, CreateRoutePoint, CreateRouteStop } from '../shared/models/route.types.js';
-import { simplifyPolyline } from '../shared/services/route-polyline.service.js';
+import { triggerForegroundService, type ForegroundServiceProvider } from './cockpit-foreground.service.js';
+import { persistRouteOnStart, persistRouteOnStop } from './cockpit-persist.service.js';
+
+export type { ForegroundServiceProvider } from './cockpit-foreground.service.js';
 
 export interface GpsProvider {
   getCurrentPosition(): Promise<GeolocationPosition>;
@@ -71,8 +73,6 @@ export interface CockpitService {
   setInvisibleMode(active: boolean): void;
 }
 
-const BACKUP_KEY = 'moto-routes-pending-backup';
-
 function createInitialState(): CockpitState {
   return {
     routeId: crypto.randomUUID(),
@@ -100,102 +100,6 @@ function buildMetadata(s: CockpitState): RouteMetadata {
     avgSpeed: s.avgSpeed,
     stops: [],
   };
-}
-
-function buildCreateRoute(s: CockpitState): CreateRoute {
-  return {
-    id: s.routeId,
-    duration: s.elapsedTime,
-    totalDistance: s.totalDistance,
-    avgSpeed: s.avgSpeed,
-    status: 'completed',
-    visibility: 'private',
-    origin: 'local',
-  };
-}
-
-/** Fila mínima para la ruta activa, insertada nada más empezar a grabar. */
-function buildActiveRoute(s: CockpitState): CreateRoute {
-  return {
-    id: s.routeId,
-    duration: 0,
-    totalDistance: 0,
-    avgSpeed: 0,
-    status: 'active',
-    visibility: 'private',
-    origin: 'local',
-  };
-}
-
-function buildCreatePoints(s: CockpitState): CreateRoutePoint[] {
-  return s.points.map((p) => ({
-    routeId: '', // será asignado por el repositorio
-    timestamp: p.timestamp,
-    lat: p.lat,
-    lng: p.lng,
-    alt: p.alt,
-    speed: p.speed,
-  }));
-}
-
-function buildStops(_s: CockpitState): CreateRouteStop[] {
-  // Por ahora sin detección de paradas implementada
-  return [];
-}
-
-function persistFallback(data: string): void {
-  try {
-    localStorage.setItem(BACKUP_KEY, data);
-  } catch {
-    // localStorage lleno o no disponible — silencioso
-  }
-}
-
-/**
- * Persiste la ruta como 'completed' y, de forma independiente, el trazado
- * simplificado (AC-019). Deliberadamente NO se encadena vía
- * `save(...).then(() => updatePreviewPolyline(...))`: para MemoryRouteRepository
- * ambas mutaciones ya son síncronas dentro de cada llamada (aunque envueltas en
- * una promesa), así que llamarlas como sentencias secuenciales normales evita el
- * salto de microtarea que introduciría un `.then()` y que los tests existentes
- * (que hacen `await repo.getById(...)` justo después de `confirmSaveRecording()`)
- * no verían reflejado de forma fiable. Para SqliteRouteRepository ambas tocan
- * columnas disjuntas de una fila que ya existe (insertada como 'active' al
- * empezar a grabar), así que el orden relativo no afecta a la corrección.
- * Si `updatePreviewPolyline` falla, no debe impedir el resto del guardado — el
- * backfill perezoso del listado recalculará el trazado más adelante.
- */
-function persistRouteOnStop(repository: IRouteRepository | undefined, state: CockpitState): void {
-  if (!repository) return;
-  const route = buildCreateRoute(state);
-  const points = buildCreatePoints(state);
-  const stops = buildStops(state);
-  repository.save(route, points, stops).catch(() => {
-    // Si falla, guardar backup en localStorage
-    persistFallback(JSON.stringify({ route, points, stops }));
-  });
-
-  const previewPolyline = simplifyPolyline(state.points);
-  repository.updatePreviewPolyline(state.routeId, previewPolyline).catch(() => {
-    // No crítico: el backfill perezoso del listado de rutas recalculará el
-    // trazado a partir de route_points en la próxima carga.
-  });
-}
-
-/**
- * Inserta la fila de la ruta en cuanto empieza la grabación (estado 'active', sin
- * puntos todavía). Necesario porque la tabla `photos` tiene FOREIGN KEY (route_id)
- * REFERENCES routes(id): una foto capturada en pleno directo se guarda con el mismo
- * routeId pre-generado (ver CockpitState.routeId), y sin esta fila previa el INSERT
- * de la foto viola la clave foránea. `save()` hace upsert por id, así que el guardado
- * final en persistRouteOnStop() actualiza esta misma fila en vez de duplicarla.
- */
-function persistRouteOnStart(repository: IRouteRepository | undefined, state: CockpitState): void {
-  if (!repository) return;
-  repository.save(buildActiveRoute(state), [], []).catch(() => {
-    // Si falla, no bloqueamos la grabación: persistRouteOnStop() reintentará
-    // el guardado completo (INSERT, ya que esta fila nunca llegó a crearse).
-  });
 }
 
 /** Estado mutable compartido por las funciones del servicio (evita closures anidados). */
@@ -303,7 +207,12 @@ function createRecordingLoop(gps: GpsProvider): RecordingLoop {
   };
 }
 
-function startRecordingAction(store: ServiceStore, loop: RecordingLoop, repository: IRouteRepository | undefined): void {
+function startRecordingAction(
+  store: ServiceStore,
+  loop: RecordingLoop,
+  repository: IRouteRepository | undefined,
+  foregroundService: ForegroundServiceProvider | undefined,
+): void {
   if (store.state.status !== 'idle') return;
   store.state = {
     ...store.state, status: 'recording', points: [], currentSpeed: 0, avgSpeed: 0,
@@ -313,6 +222,7 @@ function startRecordingAction(store: ServiceStore, loop: RecordingLoop, reposito
   store.lastPoint = null;
   notify(store);
   persistRouteOnStart(repository, store.state);
+  if (store.state.invisibleMode) triggerForegroundService(foregroundService, true);
   loop.startTick(() => {
     store.state = { ...store.state, elapsedTime: store.state.elapsedTime + 1 };
     notify(store);
@@ -320,10 +230,15 @@ function startRecordingAction(store: ServiceStore, loop: RecordingLoop, reposito
   loop.startWatch((point) => { addPoint(store, point); });
 }
 
-function prepareStopAction(store: ServiceStore, loop: RecordingLoop): RouteMetadata | null {
+function prepareStopAction(
+  store: ServiceStore,
+  loop: RecordingLoop,
+  foregroundService: ForegroundServiceProvider | undefined,
+): RouteMetadata | null {
   if (store.state.status === 'idle') return null;
   loop.stopTick();
   loop.stopWatch();
+  if (store.state.invisibleMode) triggerForegroundService(foregroundService, false);
   return buildMetadata(store.state);
 }
 
@@ -360,6 +275,7 @@ export function createCockpitService(
   gps: GpsProvider,
   _storage: StorageProvider,
   repository?: IRouteRepository,
+  foregroundService?: ForegroundServiceProvider,
 ): CockpitService {
   const store: ServiceStore = { state: createInitialState(), listeners: new Set(), lastPoint: null };
   const loop = createRecordingLoop(gps);
@@ -367,17 +283,22 @@ export function createCockpitService(
   return {
     subscribe: (listener): (() => void) => subscribeAction(store, listener),
     getCurrentState: (): CockpitState => ({ ...store.state }),
-    startRecording: (): void => { startRecordingAction(store, loop, repository); },
-    prepareStop: (): RouteMetadata | null => prepareStopAction(store, loop),
+    startRecording: (): void => { startRecordingAction(store, loop, repository, foregroundService); },
+    prepareStop: (): RouteMetadata | null => prepareStopAction(store, loop, foregroundService),
     confirmSaveRecording: (): void => { confirmSaveRecordingAction(store, repository); },
     discardStop: (): void => { discardStopAction(store); },
     pauseRecording: (): void => { pauseRecordingAction(store, loop); },
     resumeRecording: (): void => { resumeRecordingAction(store, loop); },
     checkGpsPermission: (): Promise<boolean> => checkGpsPermissionAction(store, gps),
     requestGpsPermission: (): Promise<boolean> => requestGpsPermissionAction(store, gps),
+    /** Solo arranca/para el foreground service real si hay grabación activa
+     * (recording o paused): el toggle está siempre visible (AC-015) pero no
+     * tiene sentido mantener vivo el servicio nativo fuera de una grabación. */
     setInvisibleMode: (active: boolean): void => {
       store.state = { ...store.state, invisibleMode: active };
       notify(store);
+      const isRecordingOrPaused = store.state.status === 'recording' || store.state.status === 'paused';
+      if (isRecordingOrPaused) triggerForegroundService(foregroundService, active);
     },
   };
 }

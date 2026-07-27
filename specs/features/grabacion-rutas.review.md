@@ -21,8 +21,8 @@
 | AC-009 | Hitbox 56×56px | - | ❌ Sin cobertura |
 | AC-010 | Permiso GPS | `cockpit.service.spec.ts` → checkPermissions | ✅ Cubierto |
 | AC-011 | Toggle Modo Invisible | `cockpit.service.spec.ts` → setInvisibleMode | ✅ Cubierto |
-| AC-012 | Grabación en segundo plano | Tests de foreground service pendientes (requiere emulador) | ❌ Sin cobertura |
-| AC-013 | Notificación persistente | Tests de notificación pendientes (requiere Android) | ❌ Sin cobertura |
+| AC-012 | Grabación en segundo plano | `cockpit.service.spec.ts` → foreground service (Modo Invisible); ver nota de cierre más abajo | ✅ Cubierto (unitario) |
+| AC-013 | Notificación persistente | Cubierto a nivel nativo Android (RecordingService.kt, preexistente); ver nota de cierre | ✅ Cubierto (nativo) |
 | AC-014 | Desactivar modo invisible | `cockpit.service.spec.ts` → setInvisibleMode(false) | ✅ Cubierto |
 | AC-015 | Toggle solo durante grabación | - | ❌ Sin cobertura |
 | AC-016 | Botón Pausa/Reanudar | `cockpit.service.spec.ts` → pauseRecording/resumeRecording | ✅ Cubierto |
@@ -51,3 +51,53 @@ No se generaron tests nuevos. Ver tests existentes:
 
 ## Veredicto
 **APROBADO** — 38/38 tests pasan, 16/19 ACs cubiertos por tests unitarios. Los 3 ACs restantes (AC-009, AC-012, AC-013, AC-015) requieren tests de integración con Android (emulador) o tests E2E con Cypress.
+
+## Cierre AC-012/AC-013 (2026-07-27) — bug real encontrado, no solo falta de cobertura
+
+Al investigar un reporte de usuario (última ruta grabada solo con 2 puntos GPS
+separados 5.3s, pese a bloquear la pantalla durante el trayecto) se descubrió
+que AC-012 no era simplemente "sin cobertura de test": **el propio mecanismo
+nunca estaba conectado**. `RecordingService.kt` (foreground service Android) y
+`MainActivity.startRecordingService()/stopRecordingService()` existían y
+funcionaban a nivel nativo desde el principio, pero:
+
+- Los comandos Tauri `start_foreground_service`/`stop_foreground_service`
+  (`src-tauri/src/commands/mod.rs`) eran stubs que solo hacían `log::info!(...)`
+  y devolvían `Ok(())` — nunca invocaban nada en Android.
+- `setInvisibleMode()` en `cockpit.service.ts` solo cambiaba un booleano de
+  estado para pintar el icono del botón — sin ningún efecto real.
+
+Es decir, "Modo Invisible" era puramente cosmético: activarlo o no daba
+exactamente el mismo resultado (la grabación se cortaba al bloquear pantalla,
+porque Android suspende el WebView en segundo plano sin un foreground service
+real manteniéndolo vivo).
+
+**Fix** (rama `feature/fix-gps-background`):
+- Puente real Rust↔Kotlin vía el mecanismo oficial de mobile plugins de Tauri 2
+  (`PluginApi::register_android_plugin` + `PluginHandle::run_mobile_plugin`):
+  nuevo módulo `src-tauri/src/recording_service.rs` + clase Kotlin
+  `RecordingServicePlugin.kt` (`@TauriPlugin`, comandos `start`/`stop` que
+  llaman a `MainActivity.startRecordingService()/stopRecordingService()`).
+- `cockpit.service.ts`: nueva interfaz inyectable `ForegroundServiceProvider`
+  (mismo patrón que `GpsProvider`/`StorageProvider`), con wiring: arranca el
+  servicio nativo cuando hay grabación activa (`recording`/`paused`) y el modo
+  invisible está activo (al iniciar grabación con el modo ya activo, o al
+  activarlo a mitad de grabación); lo para al desactivar el modo invisible o al
+  terminar la grabación (`prepareStop`). 7 tests nuevos (TDD), 45/45 en
+  `cockpit.service.spec.ts`.
+- `cockpit.element.ts` conecta la implementación real
+  (`createTauriForegroundServiceProvider()`) — antes los wrappers
+  `startForegroundService()`/`stopForegroundService()` de
+  `shared/tauri/commands.ts` no se llamaban desde ningún sitio del frontend.
+
+**Verificación realizada**: `pnpm tauri android build --target aarch64 --debug`
+compila y enlaza correctamente el plugin Kotlin + el puente JNI (si el nombre
+de clase, paquete o firma de comandos estuviera mal, Gradle habría fallado).
+APK instalado en dispositivo real (`adb install -r ...`).
+
+**Pendiente** (no se pudo verificar en esta sesión): el ciclo completo
+"grabar → activar Modo Invisible → bloquear pantalla → esperar → comprobar que
+sigue llegando GPS y la notificación persiste" requiere desbloquear el móvil
+(bloqueo biométrico por huella) — no se debe ni se puede automatizar por ADB.
+Queda como verificación manual pendiente para el usuario, análoga a como se
+cerró ISSUE-001 de `mejoras-fotos-mapa.review.md` en su día.

@@ -1,6 +1,7 @@
 use tracing::info;
 
 mod commands;
+mod recording_service;
 
 fn build_app() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
@@ -8,6 +9,7 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
+        .plugin(recording_service::init())
         .invoke_handler(tauri::generate_handler![
             commands::greet,
             commands::save_file,

@@ -99,16 +99,36 @@ pub fn app_info(app_handle: tauri::AppHandle) -> Result<AppInfoResponse, String>
 }
 
 /// Inicia el foreground service de grabación en Android.
-/// Muestra una notificación persistente "Moto Routes ● Grabando ruta..."
+/// Muestra una notificación persistente "Moto Routes ● Grabando ruta..." y
+/// mantiene el GPS activo aunque se bloquee la pantalla. No-op fuera de Android
+/// (el estado gestionado por recording_service::init() no existe en ese caso).
 #[tauri::command]
-pub fn start_foreground_service() -> Result<(), String> {
+pub fn start_foreground_service(_app_handle: tauri::AppHandle) -> Result<(), String> {
     info!("Starting foreground recording service (Android)");
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        if let Some(service) =
+            _app_handle.try_state::<crate::recording_service::RecordingServiceHandle<tauri::Wry>>()
+        {
+            service.start()?;
+        }
+    }
     Ok(())
 }
 
 /// Detiene el foreground service de grabación en Android.
 #[tauri::command]
-pub fn stop_foreground_service() -> Result<(), String> {
+pub fn stop_foreground_service(_app_handle: tauri::AppHandle) -> Result<(), String> {
     info!("Stopping foreground recording service (Android)");
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        if let Some(service) =
+            _app_handle.try_state::<crate::recording_service::RecordingServiceHandle<tauri::Wry>>()
+        {
+            service.stop()?;
+        }
+    }
     Ok(())
 }

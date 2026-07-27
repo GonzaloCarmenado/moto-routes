@@ -1,5 +1,6 @@
 import { BaseElement } from '../shared/base-element.js';
 import { createCockpitService, createBrowserGpsProvider, type CockpitService, type StorageProvider } from './cockpit.service.js';
+import { createTauriForegroundServiceProvider } from './cockpit-foreground.service.js';
 import { getCockpitDisplayValues, getStatusChipClass, getStatusChipLabel } from './cockpit.transform.js';
 import type { CockpitState } from './cockpit.types.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
@@ -110,7 +111,7 @@ class CockpitView extends BaseElement {
         this.repo = new MemoryRouteRepository();
       }
     }
-    this.service = createCockpitService(gps, storage, this.repo);
+    this.service = createCockpitService(gps, storage, this.repo, createTauriForegroundServiceProvider());
     this.service.subscribe((state) => {
       // El tick del cronómetro y cada punto GPS notifican una vez por segundo aprox.
       // Reconstruir todo el DOM en cada uno de esos eventos destruía <photo-capture>
