@@ -48,6 +48,17 @@ export default tseslint.config(
       'max-lines': 'off',
       'max-lines-per-function': 'off',
       '@typescript-eslint/unbound-method': 'off',
+      // Template literals con números son ubicuos en tests (ids dinámicos, array indices)
+      '@typescript-eslint/restrict-template-expressions': 'off',
+    },
+  },
+  {
+    // route-detail.element.ts es un componente complejo que agrupa toda la lógica de detalle
+    // de ruta (mapa, fotos, notas, estadísticas, timeline) — excede el límite genérico de 300 líneas
+    // de forma justificada y cohesionada.
+    files: ['**/route-detail.element.ts'],
+    rules: {
+      'max-lines': ['warn', { max: 400, skipComments: true, skipBlankLines: true }],
     },
   },
 );
