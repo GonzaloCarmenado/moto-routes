@@ -221,3 +221,111 @@
   display: block;
   margin-bottom: 12px;
 }
+
+/* Timeline */
+.timeline-panel {
+  padding: var(--space-3) 0;
+}
+
+.timeline-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  min-height: var(--hitbox-min);
+}
+
+.timeline-segment {
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  padding-top: 12px;
+}
+
+.timeline-delimiter-label {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--amber);
+  min-width: 60px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.timeline-delimiter-time {
+  font-family: var(--font-data);
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.timeline-delimiter-coords {
+  font-family: var(--font-data);
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-left: auto;
+}
+
+.timeline-delimiter-extra {
+  font-family: var(--font-data);
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-left: auto;
+}
+
+.timeline-segment-label {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.timeline-segment-value {
+  font-family: var(--font-data);
+  font-size: 18px;
+  color: var(--ink);
+  margin-left: auto;
+}
+
+.timeline-photo-event {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--hitbox-min);
+  padding: 4px 12px;
+  background: none;
+  border: none;
+  border-radius: var(--r-md);
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.timeline-photo-event:hover,
+.timeline-photo-event:focus-visible {
+  background: var(--panel-sunken);
+}
+
+.timeline-photo-label {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.timeline-photo-time {
+  font-family: var(--font-data);
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-left: auto;
+}
+
+.timeline-empty-msg {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 14px;
+  padding: var(--space-6) var(--space-4);
+}
