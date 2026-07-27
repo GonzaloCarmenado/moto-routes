@@ -14,9 +14,7 @@ El Cockpit es la pantalla principal de la aplicación, visible al abrirla. Permi
 - [x] AC-008: El chip superior debe ser neutral ("Listo") en reposo, verde/ámbar ("En ruta") grabando, y ámbar tenue ("Pausada") en pausa.
 - [x] AC-009: Todos los elementos interactivos deben tener un hitbox mínimo de 56×56px (para uso con guantes).
 - [x] AC-010: Si no hay permiso de GPS, debe mostrar un overlay con mensaje y botón para solicitar permiso.
-- [x] AC-011: Debe existir un botón/toggle "Modo Invisible" que al activarse permite grabar en segundo plano.
-- [x] AC-012: Con "Modo Invisible" activo, la grabación continúa aunque el usuario bloquee la pantalla o use otras apps.
-- [x] AC-015: El toggle de "Modo Invisible" está disponible siempre (no requiere grabación activa).
+- [x] AC-011: La grabación debe continuar en segundo plano automáticamente, sin necesidad de ningún toggle: al iniciar una ruta se arranca el foreground service Android (notificación persistente), y sigue vivo aunque el usuario bloquee la pantalla o use otras apps.
 - [x] AC-016: Durante la grabación existe un botón "Pausa" para detener/reanudar sin detener la ruta.
 - [ ] AC-017: La app debe detectar paradas automáticas cuando el vehículo está quieto durante un tiempo mínimo.
 - [ ] AC-018: La detección de parada debe ser conservative: mejor tardar hasta 30 segundos en confirmar una parada que generar falsos positivos.
@@ -61,10 +59,13 @@ El Cockpit es la pantalla principal de la aplicación, visible al abrirla. Permi
 - **Cuando** el usuario pulsa reanudar
 - **Entonces** el chip vuelve a "En ruta", el tiempo continúa, el GPS reanuda
 
-### Escenario: Modo invisible
-- **Dado** que la grabación está activa
-- **Cuando** el usuario activa "Modo Invisible"
-- **Entonces** el botón cambia a estado activo (tachado de ojo)
+### Escenario: Grabación en segundo plano
+- **Dado** que el usuario pulsa el botón maestro para iniciar una ruta
+- **Cuando** la grabación arranca
+- **Entonces** se inicia el foreground service Android (notificación persistente "● Grabando ruta...") sin ninguna acción adicional del usuario
+- **Y** si el usuario bloquea la pantalla o cambia de app, el GPS sigue registrando puntos
+- **Cuando** la ruta termina (long press STOP)
+- **Entonces** el foreground service se detiene y la notificación desaparece
 
 ## Diseño Visual
 Ver `specs/ui/design-system.md` para la especificación completa. Resumen:

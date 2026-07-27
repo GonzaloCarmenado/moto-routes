@@ -61,7 +61,6 @@ describe('createCockpitService - estado de grabación', () => {
     expect(state.currentSpeed).toBe(0);
     expect(state.points).toEqual([]);
     expect(state.hasGpsPermission).toBe(false);
-    expect(state.invisibleMode).toBe(false);
     expect(typeof state.routeId).toBe('string');
     expect(state.routeId.length).toBeGreaterThan(0);
   });
@@ -142,14 +141,15 @@ describe('createCockpitService - notificaciones a listeners', () => {
   });
 
   it('should notify on each state change', () => {
+    service.startRecording();
     const listener = vi.fn();
     service.subscribe(listener);
     listener.mockClear();
 
-    service.setInvisibleMode(true);
+    service.pauseRecording();
     expect(listener).toHaveBeenCalledTimes(1);
-    const stateArg = listener.mock.calls[0]![0] as { invisibleMode: boolean };
-    expect(stateArg.invisibleMode).toBe(true);
+    const stateArg = listener.mock.calls[0]![0] as { status: string };
+    expect(stateArg.status).toBe('paused');
   });
 
   it('should pass snapshot (clone) to listeners', () => {
@@ -162,7 +162,7 @@ describe('createCockpitService - notificaciones a listeners', () => {
   });
 });
 
-describe('createCockpitService - permisos GPS y modo invisible', () => {
+describe('createCockpitService - permisos GPS', () => {
   let gps: GpsProvider;
   let service: ReturnType<typeof createCockpitService>;
 
@@ -170,13 +170,6 @@ describe('createCockpitService - permisos GPS y modo invisible', () => {
     vi.useFakeTimers();
     gps = createMockGps();
     service = createCockpitService(gps, createMockStorage());
-  });
-
-  it('should toggle invisible mode', () => {
-    service.setInvisibleMode(true);
-    expect(service.getCurrentState().invisibleMode).toBe(true);
-    service.setInvisibleMode(false);
-    expect(service.getCurrentState().invisibleMode).toBe(false);
   });
 
   it('should check permissions', async () => {
@@ -520,7 +513,7 @@ describe('createCockpitService with repository', () => {
   });
 });
 
-describe('createCockpitService - foreground service (Modo Invisible en segundo plano)', () => {
+describe('createCockpitService - foreground service (grabación en segundo plano siempre activa)', () => {
   let gps: GpsProvider;
   let storage: StorageProvider;
   let foregroundService: ForegroundServiceProvider;
@@ -534,49 +527,26 @@ describe('createCockpitService - foreground service (Modo Invisible en segundo p
     service = createCockpitService(gps, storage, undefined, foregroundService);
   });
 
-  it('should NOT start the native foreground service when invisible mode is toggled while idle', () => {
-    service.setInvisibleMode(true);
-    expect(foregroundService.start).not.toHaveBeenCalled();
-  });
-
-  it('should start the native foreground service when invisible mode is activated during an active recording', () => {
-    service.startRecording();
-    service.setInvisibleMode(true);
-    expect(foregroundService.start).toHaveBeenCalledTimes(1);
-  });
-
-  it('should start the native foreground service when invisible mode is already active and recording starts', () => {
-    service.setInvisibleMode(true);
+  it('should start the native foreground service as soon as a recording starts, without any toggle', () => {
     service.startRecording();
     expect(foregroundService.start).toHaveBeenCalledTimes(1);
   });
 
-  it('should stop the native foreground service when invisible mode is deactivated mid-recording', () => {
-    service.startRecording();
-    service.setInvisibleMode(true);
-    service.setInvisibleMode(false);
-    expect(foregroundService.stop).toHaveBeenCalledTimes(1);
-  });
-
-  it('should start the foreground service on pause too (GPS watch keeps running while paused)', () => {
-    service.setInvisibleMode(true);
+  it('should not restart the foreground service on pause/resume (GPS watch keeps running while paused)', () => {
     service.startRecording();
     (foregroundService.start as Mock).mockClear();
     service.pauseRecording();
     service.resumeRecording();
-    // No debe reiniciar el servicio en cada pausa/resume: sigue vivo desde startRecording.
     expect(foregroundService.start).not.toHaveBeenCalled();
   });
 
-  it('should stop the native foreground service once the recording is stopped (prepareStop), regardless of invisible mode', () => {
+  it('should stop the native foreground service once the recording is stopped (prepareStop)', () => {
     service.startRecording();
-    service.setInvisibleMode(true);
     service.prepareStop();
     expect(foregroundService.stop).toHaveBeenCalledTimes(1);
   });
 
-  it('should not call the foreground service on prepareStop if invisible mode was never activated', () => {
-    service.startRecording();
+  it('should not call foregroundService.stop on prepareStop when idle (no recording was ever started)', () => {
     service.prepareStop();
     expect(foregroundService.stop).not.toHaveBeenCalled();
   });
@@ -585,7 +555,6 @@ describe('createCockpitService - foreground service (Modo Invisible en segundo p
     const plainService = createCockpitService(gps, storage);
     expect(() => {
       plainService.startRecording();
-      plainService.setInvisibleMode(true);
       plainService.prepareStop();
     }).not.toThrow();
   });

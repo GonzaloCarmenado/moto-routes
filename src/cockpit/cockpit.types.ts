@@ -47,5 +47,4 @@ export interface CockpitState {
   hasGpsPermission: boolean;
   gpsSignalLost: boolean;
   gpsLostTimer: number;
-  invisibleMode: boolean;
 }

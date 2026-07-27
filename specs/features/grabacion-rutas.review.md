@@ -20,11 +20,11 @@
 | AC-008 | Indicador REC en barra | State changes via listeners | ✅ Cubierto |
 | AC-009 | Hitbox 56×56px | - | ❌ Sin cobertura |
 | AC-010 | Permiso GPS | `cockpit.service.spec.ts` → checkPermissions | ✅ Cubierto |
-| AC-011 | Toggle Modo Invisible | `cockpit.service.spec.ts` → setInvisibleMode | ✅ Cubierto |
-| AC-012 | Grabación en segundo plano | `cockpit.service.spec.ts` → foreground service (Modo Invisible); ver nota de cierre más abajo | ✅ Cubierto (unitario) |
+| AC-011 | Grabación en segundo plano automática (sin toggle) | `cockpit.service.spec.ts` → foreground service (siempre activa); ver nota de cierre más abajo | ✅ Cubierto |
+| AC-012 | (retirado — fusionado en AC-011) | — | — |
 | AC-013 | Notificación persistente | Cubierto a nivel nativo Android (RecordingService.kt, preexistente); ver nota de cierre | ✅ Cubierto (nativo) |
-| AC-014 | Desactivar modo invisible | `cockpit.service.spec.ts` → setInvisibleMode(false) | ✅ Cubierto |
-| AC-015 | Toggle solo durante grabación | - | ❌ Sin cobertura |
+| AC-014 | (retirado — el toggle "Modo Invisible" se eliminó, ver nota de cierre) | — | — |
+| AC-015 | (retirado — el toggle "Modo Invisible" se eliminó, ver nota de cierre) | — | — |
 | AC-016 | Botón Pausa/Reanudar | `cockpit.service.spec.ts` → pauseRecording/resumeRecording | ✅ Cubierto |
 | AC-017 | Detección automática paradas | `cockpit.transform.spec.ts` → detectStop | ✅ Cubierto |
 | AC-018 | Algoritmo conservativo (30s) | `cockpit.transform.spec.ts` → detectStop timer scenarios | ✅ Cubierto |
@@ -101,3 +101,28 @@ sigue llegando GPS y la notificación persiste" requiere desbloquear el móvil
 (bloqueo biométrico por huella) — no se debe ni se puede automatizar por ADB.
 Queda como verificación manual pendiente para el usuario, análoga a como se
 cerró ISSUE-001 de `mejoras-fotos-mapa.review.md` en su día.
+
+## Retirada del toggle "Modo Invisible" (2026-07-27, misma sesión)
+
+Tras cerrar el bug de arriba, el usuario preguntó si el toggle seguía
+sirviendo para algo (con el fix, sigue siendo opt-in: sin activarlo, bloquear
+pantalla corta la grabación igual que antes) y decidió que no tenía sentido
+mantenerlo — mejor que la grabación en segundo plano sea automática siempre,
+sin que el usuario tenga que acordarse de activar nada. Se retira por completo:
+
+- **AC-011** se reescribe para reflejar que el foreground service arranca
+  siempre al iniciar una ruta (sin toggle) y para siempre al terminarla.
+- **AC-012, AC-014, AC-015** (todas sobre el toggle "Modo Invisible") se
+  retiran — no aplican a un comportamiento que ya no existe.
+- **AC-013** (notificación persistente) se mantiene: la notificación ahora
+  aparece siempre durante la grabación, no solo con el modo activado.
+
+**Código retirado**: `invisibleMode` de `CockpitState`, `setInvisibleMode()`
+de `CockpitService`, `buildInvisibleToggle()` de `cockpit.render.ts`,
+`handleInvisibleToggle()` y su wiring en `cockpit.element.ts`, y el CSS
+`.invisible-toggle*` de `cockpit.element.css`. `cockpit.service.ts` ahora
+llama a `triggerForegroundService(foregroundService, true/false)` sin
+condición alguna en `startRecordingAction`/`prepareStopAction`. Tests
+actualizados en `cockpit.service.spec.ts` (ya no dependen de activar nada) y
+se retiran los 2 tests de `cockpit.element.spec.ts` que comprobaban el botón.
+346/346 tests, cobertura 94.56%.

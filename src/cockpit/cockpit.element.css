@@ -281,46 +281,6 @@
 .control-labels span.wide { width: 88px; }
 
 /* ==========================================================================
-   Modo invisible (toggle secundario)
-   ========================================================================== */
-
-.invisible-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: var(--hitbox-min);
-  margin: var(--space-5) auto 0;
-  padding: 10px 20px;
-  border-radius: var(--r-pill);
-  border: 2px solid var(--line-strong);
-  background: transparent;
-  color: var(--ink-soft);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-}
-.invisible-toggle svg {
-  width: 20px;
-  height: 20px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.invisible-toggle--active {
-  border-color: var(--amber-border);
-  background: var(--amber-soft);
-  color: var(--amber);
-}
-
-/* ==========================================================================
    Overlay de permiso GPS
    ========================================================================== */
 
