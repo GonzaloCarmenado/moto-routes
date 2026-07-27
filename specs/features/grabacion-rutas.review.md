@@ -95,12 +95,11 @@ compila y enlaza correctamente el plugin Kotlin + el puente JNI (si el nombre
 de clase, paquete o firma de comandos estuviera mal, Gradle habría fallado).
 APK instalado en dispositivo real (`adb install -r ...`).
 
-**Pendiente** (no se pudo verificar en esta sesión): el ciclo completo
-"grabar → activar Modo Invisible → bloquear pantalla → esperar → comprobar que
-sigue llegando GPS y la notificación persiste" requiere desbloquear el móvil
-(bloqueo biométrico por huella) — no se debe ni se puede automatizar por ADB.
-Queda como verificación manual pendiente para el usuario, análoga a como se
-cerró ISSUE-001 de `mejoras-fotos-mapa.review.md` en su día.
+**Verificado en dispositivo real por el usuario (2026-07-27, tras el cambio de
+"Retirada del toggle" de más abajo)**: grabación con pantalla bloqueada
+confirmada funcional — notificación persistente y puntos GPS siguen llegando
+sin necesidad de ninguna acción del usuario. AC-011/AC-013 cerradas también a
+nivel de verificación manual en dispositivo, no solo compilación.
 
 ## Retirada del toggle "Modo Invisible" (2026-07-27, misma sesión)
 
