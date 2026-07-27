@@ -70,7 +70,6 @@ export interface CockpitService {
   resumeRecording(): void;
   checkGpsPermission(): Promise<boolean>;
   requestGpsPermission(): Promise<boolean>;
-  setInvisibleMode(active: boolean): void;
 }
 
 function createInitialState(): CockpitState {
@@ -88,7 +87,6 @@ function createInitialState(): CockpitState {
     hasGpsPermission: false,
     gpsSignalLost: false,
     gpsLostTimer: 0,
-    invisibleMode: false,
   };
 }
 
@@ -222,7 +220,7 @@ function startRecordingAction(
   store.lastPoint = null;
   notify(store);
   persistRouteOnStart(repository, store.state);
-  if (store.state.invisibleMode) triggerForegroundService(foregroundService, true);
+  triggerForegroundService(foregroundService, true);
   loop.startTick(() => {
     store.state = { ...store.state, elapsedTime: store.state.elapsedTime + 1 };
     notify(store);
@@ -238,7 +236,7 @@ function prepareStopAction(
   if (store.state.status === 'idle') return null;
   loop.stopTick();
   loop.stopWatch();
-  if (store.state.invisibleMode) triggerForegroundService(foregroundService, false);
+  triggerForegroundService(foregroundService, false);
   return buildMetadata(store.state);
 }
 
@@ -291,14 +289,5 @@ export function createCockpitService(
     resumeRecording: (): void => { resumeRecordingAction(store, loop); },
     checkGpsPermission: (): Promise<boolean> => checkGpsPermissionAction(store, gps),
     requestGpsPermission: (): Promise<boolean> => requestGpsPermissionAction(store, gps),
-    /** Solo arranca/para el foreground service real si hay grabación activa
-     * (recording o paused): el toggle está siempre visible (AC-015) pero no
-     * tiene sentido mantener vivo el servicio nativo fuera de una grabación. */
-    setInvisibleMode: (active: boolean): void => {
-      store.state = { ...store.state, invisibleMode: active };
-      notify(store);
-      const isRecordingOrPaused = store.state.status === 'recording' || store.state.status === 'paused';
-      if (isRecordingOrPaused) triggerForegroundService(foregroundService, active);
-    },
   };
 }
