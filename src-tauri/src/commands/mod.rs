@@ -165,3 +165,74 @@ pub fn resume_recording_location(_app_handle: tauri::AppHandle) -> Result<(), St
     }
     Ok(())
 }
+
+// ─── Tests ──────────────────────────────────────────────
+// AC-008 de `specs/features/deuda-tecnica-auditoria.md`: cubre la lógica de
+// validación real de `save_file` (rechaza rutas absolutas, exige relativas
+// sin `..`, rechaza contenido vacío) y de `greet` (rechaza nombre vacío).
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn save_file_rejects_absolute_path() {
+        let args = SaveFileArgs {
+            path: if cfg!(windows) {
+                "C:\\tmp\\x.txt".to_string()
+            } else {
+                "/tmp/x.txt".to_string()
+            },
+            content: "hello".to_string(),
+        };
+
+        let result = save_file(args);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn save_file_accepts_relative_path_without_dotdot() {
+        let path = "target/save_file_test_ok.txt";
+        let args = SaveFileArgs {
+            path: path.to_string(),
+            content: "hello".to_string(),
+        };
+
+        let result = save_file(args);
+
+        assert!(result.is_ok());
+        assert!(std::fs::read_to_string(path).is_ok_and(|c| c == "hello"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn save_file_rejects_path_traversal() {
+        let args = SaveFileArgs {
+            path: "../escape.txt".to_string(),
+            content: "hello".to_string(),
+        };
+
+        let result = save_file(args);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn save_file_rejects_empty_content() {
+        let args = SaveFileArgs {
+            path: "target/save_file_test_empty.txt".to_string(),
+            content: String::new(),
+        };
+
+        let result = save_file(args);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn greet_rejects_empty_name() {
+        let result = greet(String::new());
+
+        assert!(result.is_err());
+    }
+}

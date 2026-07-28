@@ -5,7 +5,9 @@
  */
 
 import type { CockpitState, RoutePoint, RouteMetadata } from './cockpit.types.js';
-import { calculateDistance, calculateAvgSpeed, detectStop } from './cockpit.transform.js';
+import { detectStop } from './cockpit.transform.js';
+import { calculateDistance } from '../shared/utils/geo.js';
+import { calculateAvgSpeed } from '../shared/utils/format.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import { triggerForegroundService, triggerLocationPause, type ForegroundServiceProvider } from './cockpit-foreground.service.js';
 import { persistRouteOnStart, persistRouteOnStop } from './cockpit-persist.service.js';

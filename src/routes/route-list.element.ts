@@ -2,7 +2,9 @@ import styles from './route-list.element.css?inline';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { IPhotoRepository } from '../shared/models/photo.repository.js';
 import type { Route } from '../shared/models/route.types.js';
-import { formatDuration } from '../cockpit/cockpit.transform.js';
+import { formatDuration } from '../shared/utils/format.js';
+import { formatRouteDate } from '../shared/utils/date.js';
+import { buildRouteDisplayName } from '../shared/utils/route-naming.js';
 import { BaseElement } from '../shared/base-element.js';
 import { APP_EVENTS, dispatchAppEvent } from '../shared/app-events.js';
 import { createPhotoRepository } from '../shared/services/photo-storage.service.js';
@@ -131,14 +133,12 @@ class RouteList extends BaseElement {
 
     const name = document.createElement('span');
     name.className = 'name';
-    name.textContent = route.name?.trim()
-      ? route.name
-      : `Ruta ${route.createdAt ? new Date(route.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}`;
+    name.textContent = buildRouteDisplayName(route.name, route.createdAt);
     info.appendChild(name);
 
     const date = document.createElement('span');
     date.className = 'date';
-    date.textContent = route.createdAt ? new Date(route.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+    date.textContent = formatRouteDate(route.createdAt);
     info.appendChild(date);
 
     const badges = document.createElement('div');

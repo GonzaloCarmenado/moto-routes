@@ -1,6 +1,12 @@
 import type { RoutePoint } from '../shared/models/route.types.js';
 import type { TimelineStop, TimelinePhotoInput, TimelineData, TimelineDelimiter, TimelineRow, TimelineSegment } from './route-timeline.types.js';
-import { detectStop, calculateDistance, calculateAvgSpeed as cockpitAvgSpeed } from '../cockpit/cockpit.transform.js';
+// Excepción admitida por AC-001 (`specs/features/deuda-tecnica-auditoria.md`):
+// `detectStop` sigue viviendo en `cockpit.transform.ts` porque depende de
+// `StopDetectionState`, un tipo específico del dominio cockpit. No usar este
+// import como precedente para otros imports cruzados `routes` → `cockpit`.
+import { detectStop } from '../cockpit/cockpit.transform.js';
+import { calculateDistance } from '../shared/utils/geo.js';
+import { calculateAvgSpeed as cockpitAvgSpeed } from '../shared/utils/format.js';
 
 /* ------------------------------------------------------------------ */
 /*  Paso 2: detectStopsFromPoints — AC-004 a AC-007                   */

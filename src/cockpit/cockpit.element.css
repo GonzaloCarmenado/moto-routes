@@ -58,7 +58,7 @@
 .btn-primary {
   background: var(--amber-strong);
   color: var(--bezel);
-  box-shadow: 0 0 24px oklch(60% 0.17 45 / 0.4);
+  box-shadow: 0 0 24px var(--amber-glow);
 }
 
 /* ==========================================================================
@@ -93,7 +93,7 @@
   background: currentColor;
 }
 .chip-recording .chip__dot {
-  box-shadow: 0 0 8px oklch(70% 0.17 45 / 0.8);
+  box-shadow: 0 0 8px var(--amber-glow);
   animation: pulse-dot 2s infinite ease-in-out;
 }
 .chip-paused .chip__dot {
@@ -120,7 +120,7 @@
   font-size: 112px;
   line-height: 1;
   color: var(--amber);
-  text-shadow: 0 0 40px oklch(70% 0.17 45 / 0.35);
+  text-shadow: 0 0 40px var(--amber-glow);
 }
 .speed-display .speed-unit {
   font-size: 15px;
@@ -216,7 +216,7 @@
   width: 88px;
   height: 88px;
   background: var(--amber-strong);
-  box-shadow: 0 0 30px oklch(60% 0.17 45 / 0.45);
+  box-shadow: 0 0 30px var(--amber-glow);
 }
 
 .control-btn.pause {
@@ -234,7 +234,7 @@
   width: 88px;
   height: 88px;
   background: var(--amber-strong);
-  box-shadow: 0 0 30px oklch(60% 0.17 45 / 0.45);
+  box-shadow: 0 0 30px var(--amber-glow);
 }
 
 .control-btn .icon-record-dot { width: 22px; height: 22px; border-radius: 50%; background: var(--bezel); }

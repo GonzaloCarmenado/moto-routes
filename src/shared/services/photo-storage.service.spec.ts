@@ -21,7 +21,25 @@ vi.mock('@tauri-apps/api/path', () => ({
   join: joinMock,
 }));
 
-import { savePhotoFile, getPhotoUrl, deletePhotoFile, createPhotoRepository } from './photo-storage.service.js';
+const createSqlitePhotoDbMock = vi.fn();
+class FakeSqlitePhotoRepository {
+  constructor(public db: unknown) {}
+}
+
+vi.mock('../repositories/sqlite-photo.factory.js', () => ({
+  createSqlitePhotoDb: createSqlitePhotoDbMock,
+}));
+vi.mock('../repositories/sqlite-photo.repository.js', () => ({
+  SqlitePhotoRepository: FakeSqlitePhotoRepository,
+}));
+
+import {
+  savePhotoFile,
+  getPhotoUrl,
+  deletePhotoFile,
+  createPhotoRepository,
+  buildPhotoMetadata,
+} from './photo-storage.service.js';
 
 /**
  * jsdom's File/Blob polyfill doesn't implement arrayBuffer() — patch it in for these tests.
@@ -157,10 +175,74 @@ describe('deletePhotoFile', () => {
 describe('createPhotoRepository', () => {
   afterEach(() => {
     setTauri(false);
+    vi.clearAllMocks();
   });
 
   it('returns a MemoryPhotoRepository outside Tauri', async () => {
     const repo = await createPhotoRepository();
     expect(repo.constructor.name).toBe('MemoryPhotoRepository');
+  });
+
+  it('returns a non-memory repository when the Tauri SQL connection succeeds', async () => {
+    setTauri(true);
+    createSqlitePhotoDbMock.mockResolvedValue({ execute: vi.fn(), select: vi.fn() });
+
+    const repo = await createPhotoRepository();
+
+    expect(repo.constructor.name).not.toBe('MemoryPhotoRepository');
+  });
+
+  it('falls back to MemoryPhotoRepository when the Tauri SQL connection rejects', async () => {
+    setTauri(true);
+    createSqlitePhotoDbMock.mockRejectedValue(new Error('SqlitePhotoRepository: Tauri SQL plugin not available.'));
+
+    const repo = await createPhotoRepository();
+
+    expect(repo.constructor.name).toBe('MemoryPhotoRepository');
+  });
+});
+
+describe('buildPhotoMetadata', () => {
+  it('builds a CreatePhoto with numeric coordinates and a recent ISO capturedAt', () => {
+    const before = Date.now();
+    const metadata = buildPhotoMetadata('/path/photo.jpg', 'route-1', 40.4168, -3.7038);
+    const after = Date.now();
+
+    expect(metadata).toMatchObject({
+      routeId: 'route-1',
+      filePath: '/path/photo.jpg',
+      latitude: 40.4168,
+      longitude: -3.7038,
+    });
+    const capturedAtMs = new Date(metadata.capturedAt).getTime();
+    expect(capturedAtMs).toBeGreaterThanOrEqual(before);
+    expect(capturedAtMs).toBeLessThanOrEqual(after);
+  });
+
+  it('builds a CreatePhoto with null coordinates when location is unavailable', () => {
+    const metadata = buildPhotoMetadata('/path/photo.jpg', 'route-1', null, null);
+
+    expect(metadata.latitude).toBeNull();
+    expect(metadata.longitude).toBeNull();
+  });
+});
+
+describe('getPhotoUrl - mime type detection (AC-010)', () => {
+  afterEach(() => {
+    setTauri(false);
+    vi.clearAllMocks();
+  });
+
+  it('creates a Blob with type image/png for a .png file path', async () => {
+    setTauri(true);
+    const createObjectURLMock = vi.fn().mockReturnValue('blob:mock-png-url');
+    vi.stubGlobal('URL', Object.assign(globalThis.URL, { createObjectURL: createObjectURLMock }));
+
+    await getPhotoUrl('/data/data/com.motoroutes.app/photos/abc.png');
+
+    const [blobArg] = createObjectURLMock.mock.calls[0] as [Blob];
+    expect(blobArg.type).toBe('image/png');
+
+    vi.unstubAllGlobals();
   });
 });
