@@ -1,10 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-// Mock virtual para los plugins Tauri que no están disponibles en npm
-vi.mock('@tauri-apps/plugin-camera', () => ({}));
-vi.mock('@tauri-apps/plugin-dialog', () => ({}));
-vi.mock('@tauri-apps/plugin-fs', () => ({}));
-
 import { isTauri, captureFromCamera, pickFromGallery, validatePhoto } from './photo-capture-adapter.service.js';
 
 describe('isTauri', () => {
@@ -133,5 +127,34 @@ describe('pickFromGallery (browser)', () => {
     inputEl.dispatchEvent(new Event('cancel'));
 
     expect(await promise).toEqual([]);
+  });
+});
+
+describe('pickFromGallery (Tauri Android)', () => {
+  beforeEach(() => {
+    // El WebView de Android abre el selector nativo de galería con el mismo
+    // <input type="file">, igual que en navegador — no debe bifurcar hacia
+    // ningún plugin de Tauri (regresión: la app se quedaba sin hacer nada al
+    // pulsar "Galería" porque ese plugin nunca llegó a registrarse).
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+  });
+
+  it('still uses <input type="file" multiple> when running inside Tauri', async () => {
+    const createElementSpy = vi.spyOn(document, 'createElement');
+
+    const mockFile = new File([''], 'gallery.jpg', { type: 'image/jpeg' });
+    const promise = pickFromGallery();
+
+    const inputEl = createElementSpy.mock.results[0]?.value as HTMLInputElement;
+    Object.defineProperty(inputEl, 'files', {
+      value: [mockFile],
+      writable: true,
+    });
+    inputEl.dispatchEvent(new Event('change'));
+
+    const result = await promise;
+    expect(inputEl.type).toBe('file');
+    expect(inputEl.multiple).toBe(true);
+    expect(result).toEqual([mockFile]);
   });
 });
