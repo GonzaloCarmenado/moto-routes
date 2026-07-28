@@ -16,6 +16,8 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
             commands::app_info,
             commands::start_foreground_service,
             commands::stop_foreground_service,
+            commands::pause_recording_location,
+            commands::resume_recording_location,
         ])
         .setup(|app| {
             info!("🚀 Moto Routes app started: {}", app.package_info().name);

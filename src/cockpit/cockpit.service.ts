@@ -7,7 +7,7 @@
 import type { CockpitState, RoutePoint, RouteMetadata } from './cockpit.types.js';
 import { calculateDistance, calculateAvgSpeed, detectStop } from './cockpit.transform.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
-import { triggerForegroundService, type ForegroundServiceProvider } from './cockpit-foreground.service.js';
+import { triggerForegroundService, triggerLocationPause, type ForegroundServiceProvider } from './cockpit-foreground.service.js';
 import { persistRouteOnStart, persistRouteOnStop } from './cockpit-persist.service.js';
 
 export type { ForegroundServiceProvider } from './cockpit-foreground.service.js';
@@ -161,8 +161,10 @@ function addPoint(store: ServiceStore, point: RoutePoint): void {
   notify(store);
 }
 
-/** Controla el intervalo de tick (tiempo transcurrido) y el watch de GPS por separado:
- * pausar solo detiene el tick, no el watch (comportamiento preexistente). */
+/** Controla el intervalo de tick (tiempo transcurrido) y el watch de GPS por separado.
+ * Corregido en la Fase 2 (AC-022): pausar SÍ detiene también el watch (antes se dejaba
+ * corriendo un watch "huérfano" que, al reanudar, se sumaba a uno nuevo y duplicaba
+ * cada punto GPS recibido tras la reanudación). */
 interface RecordingLoop {
   startTick(onTick: () => void): void;
   stopTick(): void;
@@ -251,16 +253,27 @@ function discardStopAction(store: ServiceStore): void {
   notify(store);
 }
 
-function pauseRecordingAction(store: ServiceStore, loop: RecordingLoop): void {
+function pauseRecordingAction(
+  store: ServiceStore,
+  loop: RecordingLoop,
+  foregroundService: ForegroundServiceProvider | undefined,
+): void {
   if (store.state.status !== 'recording') return;
   store.state = { ...store.state, status: 'paused' };
   loop.stopTick();
+  loop.stopWatch();
+  triggerLocationPause(foregroundService, true);
   notify(store);
 }
 
-function resumeRecordingAction(store: ServiceStore, loop: RecordingLoop): void {
+function resumeRecordingAction(
+  store: ServiceStore,
+  loop: RecordingLoop,
+  foregroundService: ForegroundServiceProvider | undefined,
+): void {
   if (store.state.status !== 'paused') return;
   store.state = { ...store.state, status: 'recording' };
+  triggerLocationPause(foregroundService, false);
   loop.startTick(() => {
     store.state = { ...store.state, elapsedTime: store.state.elapsedTime + 1 };
     notify(store);
@@ -285,8 +298,8 @@ export function createCockpitService(
     prepareStop: (): RouteMetadata | null => prepareStopAction(store, loop, foregroundService),
     confirmSaveRecording: (name: string): void => { confirmSaveRecordingAction(store, repository, name); },
     discardStop: (): void => { discardStopAction(store); },
-    pauseRecording: (): void => { pauseRecordingAction(store, loop); },
-    resumeRecording: (): void => { resumeRecordingAction(store, loop); },
+    pauseRecording: (): void => { pauseRecordingAction(store, loop, foregroundService); },
+    resumeRecording: (): void => { resumeRecordingAction(store, loop, foregroundService); },
     checkGpsPermission: (): Promise<boolean> => checkGpsPermissionAction(store, gps),
     requestGpsPermission: (): Promise<boolean> => requestGpsPermissionAction(store, gps),
   };

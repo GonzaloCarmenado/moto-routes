@@ -1,6 +1,7 @@
 import { BaseElement } from '../shared/base-element.js';
 import { createCockpitService, createBrowserGpsProvider, type CockpitService, type StorageProvider } from './cockpit.service.js';
 import { createTauriForegroundServiceProvider } from './cockpit-foreground.service.js';
+import { createNativeGpsProvider, isAndroidTauri, selectGpsProvider } from './cockpit-native-gps.service.js';
 import { getCockpitDisplayValues, getStatusChipClass, getStatusChipLabel } from './cockpit.transform.js';
 import type { CockpitState } from './cockpit.types.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
@@ -93,7 +94,13 @@ class CockpitView extends BaseElement {
   }
 
   private async initService(): Promise<void> {
-    const gps = createBrowserGpsProvider();
+    // El foreground service Android (RecordingService.kt) es la única fuente de
+    // puntos GPS mientras la grabación está activa (AC-020): navigator.geolocation
+    // .watchPosition() se pausa/limita en segundo plano, algo que la captura nativa
+    // reenviada vía evento Tauri no sufre. Fuera de un WebView Android real (web,
+    // desktop) se mantiene el provider de navegador sin cambios.
+    const browserGps = createBrowserGpsProvider();
+    const gps = selectGpsProvider(isAndroidTauri(), createNativeGpsProvider(browserGps), browserGps);
     const storage: StorageProvider = {
       save: (_path: string, _data: string): Promise<void> => {
         return Promise.resolve();
