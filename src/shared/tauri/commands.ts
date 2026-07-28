@@ -26,6 +26,25 @@ export async function stopForegroundService(): Promise<void> {
   }
 }
 
+/** Pausa la captura nativa de ubicación del foreground service (sin detener el
+ * servicio ni la notificación). No-op si el comando no existe (web/desktop). */
+export async function pauseRecordingLocation(): Promise<void> {
+  try {
+    await invoke('pause_recording_location');
+  } catch {
+    // Ignorar error si no está disponible
+  }
+}
+
+/** Reanuda la captura nativa de ubicación del foreground service. */
+export async function resumeRecordingLocation(): Promise<void> {
+  try {
+    await invoke('resume_recording_location');
+  } catch {
+    // Ignorar error si no está disponible
+  }
+}
+
 // Ejemplo: comando greet en Rust
 export interface GreetArgs {
   name: string;

@@ -32,6 +32,8 @@ function createMockForegroundService(): ForegroundServiceProvider {
   return {
     start: vi.fn().mockResolvedValue(undefined),
     stop: vi.fn().mockResolvedValue(undefined),
+    pauseLocationUpdates: vi.fn().mockResolvedValue(undefined),
+    resumeLocationUpdates: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -579,6 +581,85 @@ describe('createCockpitService - foreground service (grabación en segundo plano
     expect(() => {
       plainService.startRecording();
       plainService.prepareStop();
+    }).not.toThrow();
+  });
+});
+
+describe('createCockpitService - pausa sin duplicar el watch de GPS (Fase 2: AC-020, AC-022)', () => {
+  let gps: GpsProvider;
+  let storage: StorageProvider;
+  let foregroundService: ForegroundServiceProvider;
+  let service: ReturnType<typeof createCockpitService>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    gps = createMockGps();
+    storage = createMockStorage();
+    foregroundService = createMockForegroundService();
+    service = createCockpitService(gps, storage, undefined, foregroundService);
+  });
+
+  it('should call the cleanup function returned by watchPosition exactly once when pausing', () => {
+    const cleanupWatch = vi.fn();
+    (gps.watchPosition as Mock).mockReturnValue(cleanupWatch);
+    service.startRecording();
+    service.pauseRecording();
+    expect(cleanupWatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('should call watchPosition exactly twice in total (1 on start + 1 on resume)', () => {
+    service.startRecording();
+    service.pauseRecording();
+    service.resumeRecording();
+    expect(gps.watchPosition).toHaveBeenCalledTimes(2);
+  });
+
+  it('should not process the same point twice after resuming (regression: the previous watch used to be left running, duplicating points)', () => {
+    // Mock que simula un watchPosition real: cada llamada registra un callback "vivo"
+    // hasta que se invoque su función de limpieza. Si pauseRecordingAction no llamara
+    // a loop.stopWatch() antes de reanudar, el callback del start() seguiría "vivo" a
+    // la vez que el del resume(), y un mismo punto se procesaría 2 veces.
+    const watchers: { cb: (pos: GeolocationPosition) => void; active: boolean }[] = [];
+    (gps.watchPosition as Mock).mockImplementation((cb: (pos: GeolocationPosition) => void) => {
+      const entry = { cb, active: true };
+      watchers.push(entry);
+      return (): void => { entry.active = false; };
+    });
+
+    service.startRecording();
+    service.pauseRecording();
+    service.resumeRecording();
+
+    const fakePos = {
+      coords: { latitude: 10, longitude: 10, altitude: 0, speed: 0, accuracy: 10, altitudeAccuracy: 10, heading: 0 },
+      timestamp: 5000,
+    } as GeolocationPosition;
+    for (const w of watchers) {
+      if (w.active) w.cb(fakePos);
+    }
+
+    expect(service.getCurrentState().points).toHaveLength(1);
+  });
+
+  it('should call foregroundService.pauseLocationUpdates exactly once when pausing', () => {
+    service.startRecording();
+    service.pauseRecording();
+    expect(foregroundService.pauseLocationUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it('should call foregroundService.resumeLocationUpdates exactly once when resuming', () => {
+    service.startRecording();
+    service.pauseRecording();
+    service.resumeRecording();
+    expect(foregroundService.resumeLocationUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not throw when pausing/resuming without a foregroundService injected (backwards compat)', () => {
+    const plainService = createCockpitService(gps, storage);
+    expect(() => {
+      plainService.startRecording();
+      plainService.pauseRecording();
+      plainService.resumeRecording();
     }).not.toThrow();
   });
 });

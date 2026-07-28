@@ -132,3 +132,36 @@ pub fn stop_foreground_service(_app_handle: tauri::AppHandle) -> Result<(), Stri
     }
     Ok(())
 }
+
+/// Pausa la captura nativa de ubicación del foreground service, sin detener el
+/// servicio ni la notificación (AC-020/AC-021). No-op fuera de Android.
+#[tauri::command]
+pub fn pause_recording_location(_app_handle: tauri::AppHandle) -> Result<(), String> {
+    info!("Pausing native location capture (Android)");
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        if let Some(service) =
+            _app_handle.try_state::<crate::recording_service::RecordingServiceHandle<tauri::Wry>>()
+        {
+            service.pause()?;
+        }
+    }
+    Ok(())
+}
+
+/// Reanuda la captura nativa de ubicación del foreground service.
+#[tauri::command]
+pub fn resume_recording_location(_app_handle: tauri::AppHandle) -> Result<(), String> {
+    info!("Resuming native location capture (Android)");
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        if let Some(service) =
+            _app_handle.try_state::<crate::recording_service::RecordingServiceHandle<tauri::Wry>>()
+        {
+            service.resume()?;
+        }
+    }
+    Ok(())
+}

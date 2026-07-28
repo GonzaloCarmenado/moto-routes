@@ -21,4 +21,18 @@ class MainActivity : TauriActivity() {
         }
         startService(intent)
     }
+
+    fun pauseRecordingLocationUpdates() {
+        val intent = Intent(this, RecordingService::class.java).apply {
+            action = RecordingService.ACTION_PAUSE
+        }
+        startService(intent)
+    }
+
+    fun resumeRecordingLocationUpdates() {
+        val intent = Intent(this, RecordingService::class.java).apply {
+            action = RecordingService.ACTION_RESUME
+        }
+        startService(intent)
+    }
 }

@@ -14,11 +14,16 @@ El Cockpit es la pantalla principal de la aplicación, visible al abrirla. Permi
 - [x] AC-008: El chip superior debe ser neutral ("Listo") en reposo, verde/ámbar ("En ruta") grabando, y ámbar tenue ("Pausada") en pausa.
 - [x] AC-009: Todos los elementos interactivos deben tener un hitbox mínimo de 56×56px (para uso con guantes).
 - [x] AC-010: Si no hay permiso de GPS, debe mostrar un overlay con mensaje y botón para solicitar permiso.
-- [x] AC-011: La grabación debe continuar en segundo plano automáticamente, sin necesidad de ningún toggle: al iniciar una ruta se arranca el foreground service Android (notificación persistente), y sigue vivo aunque el usuario bloquee la pantalla o use otras apps.
+- [ ] AC-011: La grabación debe continuar registrando puntos GPS de forma real en segundo plano, sin necesidad de ningún toggle: al iniciar una ruta se arranca el foreground service Android (notificación persistente), y ese propio servicio (no el WebView) debe capturar la ubicación de forma nativa mientras la grabación esté activa, aunque el usuario bloquee la pantalla o use otras apps. Un foreground service que solo mantiene viva la notificación, sin captura nativa de ubicación, **no cumple** este criterio — `navigator.geolocation.watchPosition()` ejecutándose en el WebView no es una fuente fiable de puntos con la pantalla bloqueada (Chromium puede pausar/limitar el WebView en segundo plano aunque el proceso siga vivo).
 - [x] AC-016: Durante la grabación existe un botón "Pausa" para detener/reanudar sin detener la ruta.
 - [ ] AC-017: La app debe detectar paradas automáticas cuando el vehículo está quieto durante un tiempo mínimo.
 - [ ] AC-018: La detección de parada debe ser conservative: mejor tardar hasta 30 segundos en confirmar una parada que generar falsos positivos.
 - [ ] AC-019: Las paradas detectadas deben quedar registradas en la ruta con timestamp, duración y coordenadas.
+- [ ] AC-020: El foreground service Android debe ser la **única** fuente de puntos GPS durante toda la grabación, desde el START hasta el STOP — no solo en segundo plano. Debe iniciar su propia captura de ubicación nativa (vía `FusedLocationProviderClient`, con intervalo objetivo de 1 segundo, análogo al usado hoy por `watchPosition()`) en el mismo instante en que arranca la grabación (AC-003), y debe detener esa captura nativa en el mismo instante en que la grabación se detiene (AC-006) o se pausa (AC-016). `navigator.geolocation.watchPosition()` deja de usarse como fuente de puntos de ruta en todo momento (foreground incluido); no hay conmutación entre dos fuentes durante una misma grabación.
+- [ ] AC-021: Cada ubicación capturada de forma nativa por el foreground service debe emitirse de vuelta al lado Rust/JS vía el mecanismo de eventos de Tauri (canal/evento emitido desde el plugin Android hacia Rust y de ahí a JS — análogo al puente inverso ya existente en `recording_service.rs`/`RecordingServicePlugin.kt` para start/stop). Ese evento alimenta tanto la telemetría en vivo (velocidad, distancia, altitud) como el pipeline de persistencia existente en `cockpit.service.ts`/`cockpit-persist.service.ts` (mismo formato de punto, misma tabla `route_points`), sin crear un segundo camino de guardado paralelo ni duplicar la lógica de persistencia existente.
+- [ ] AC-022: Durante una misma grabación no debe producirse ni pérdida ni duplicación de puntos GPS en `route_points`: al haber una única fuente activa (la captura nativa, ver AC-020) en todo momento mientras la grabación está en curso, no puede haber solapamiento entre `watchPosition()` y la captura nativa generando dos filas para un mismo instante.
+- [ ] AC-023: Si `FusedLocationProviderClient` no está disponible en el dispositivo (Google Play Services ausente, desactualizado o deshabilitado), el foreground service debe recurrir automáticamente a `LocationManager` (proveedor `GPS_PROVIDER`) para seguir capturando puntos de forma nativa, de modo que la grabación en segundo plano no deje de registrar puntos silenciosamente por la sola ausencia de Play Services.
+- [ ] AC-024: Este comportamiento (captura de puntos GPS con pantalla bloqueada) debe verificarse mediante una prueba manual en dispositivo Android real de duración prolongada — varios minutos de trayecto real con la pantalla bloqueada la mayor parte del tiempo, no una prueba corta de segundos. El bug documentado en esta spec (ruta "Prueba", 2026-07-28: `duration=64s`, 1 solo punto GPS con timestamp igual al inicio de la grabación) solo se manifestó en un trayecto real; una verificación previa de pocos segundos había dado (erróneamente) el fix por bueno.
 
 ## Comportamiento Esperado
 
@@ -30,7 +35,7 @@ El Cockpit es la pantalla principal de la aplicación, visible al abrirla. Permi
 ### Escenario: Iniciar grabación de ruta (Happy Path)
 - **Dado** que la app está en reposo mostrando el Cockpit
 - **Cuando** el usuario pulsa el botón maestro
-- **Entonces** el chip cambia a "En ruta", el botón maestro cambia a estilo stop con icono de cuadrado, el botón de pausa se habilita, el GPS comienza a registrar puntos cada 1 segundo
+- **Entonces** el chip cambia a "En ruta", el botón maestro cambia a estilo stop con icono de cuadrado, el botón de pausa se habilita, el foreground service arranca su captura nativa de ubicación y comienza a entregar puntos cada 1 segundo vía evento Tauri (ver AC-020/AC-021)
 
 ### Escenario: Telemetría en tiempo real durante grabación
 - **Dado** que la grabación está activa
@@ -63,9 +68,17 @@ El Cockpit es la pantalla principal de la aplicación, visible al abrirla. Permi
 - **Dado** que el usuario pulsa el botón maestro para iniciar una ruta
 - **Cuando** la grabación arranca
 - **Entonces** se inicia el foreground service Android (notificación persistente "● Grabando ruta...") sin ninguna acción adicional del usuario
-- **Y** si el usuario bloquea la pantalla o cambia de app, el GPS sigue registrando puntos
-- **Cuando** la ruta termina (long press STOP)
-- **Entonces** el foreground service se detiene y la notificación desaparece
+- **Y** en el mismo instante, el propio foreground service arranca su captura de ubicación nativa (`FusedLocationProviderClient`, con fallback a `LocationManager` si Play Services no está disponible) — esta es la única fuente de puntos durante toda la grabación, en foreground y en background; `watchPosition()` del WebView no se usa como fuente de puntos de ruta en ningún momento
+- **Y** cada punto capturado nativamente se entrega al store de la grabación en curso vía evento Tauri (plugin Android → Rust → JS), alimentando tanto la telemetría en vivo como el mismo pipeline de persistencia que usa el resto de puntos de la ruta
+- **Y** si el usuario bloquea la pantalla o cambia de app, la captura nativa sigue registrando puntos de forma autónoma, sin depender de que el WebView esté activo ni requerir ninguna conmutación de fuente
+- **Cuando** la ruta termina (long press STOP) o se pausa
+- **Entonces** la captura nativa de ubicación se detiene junto con el foreground service (en el stop) o se pausa junto con la grabación (en la pausa), y en el stop la notificación desaparece
+
+### Escenario: FusedLocationProviderClient no disponible
+- **Dado** que el dispositivo no tiene Google Play Services disponible o está desactualizado
+- **Cuando** el foreground service intenta iniciar la captura nativa de ubicación al arrancar la grabación
+- **Entonces** debe recurrir automáticamente a `LocationManager` (`GPS_PROVIDER`) como fuente de puntos
+- **Y** la grabación en segundo plano debe seguir registrando puntos GPS sin fallar silenciosamente
 
 ## Diseño Visual
 Ver `specs/ui/design-system.md` para la especificación completa. Resumen:
@@ -76,3 +89,8 @@ Ver `specs/ui/design-system.md` para la especificación completa. Resumen:
 - **Grid stats**: 3 tiles con `--panel` de fondo, borde superior `--rust-line`
 - **Botones**: fondo `--panel`, hitbox 56×56px, transiciones suaves
 - **Tipografía**: Roboto Slab (títulos), Barlow (UI), Barlow Semi Condensed (datos numéricos)
+
+## Notas de Implementación
+- **AC-011 corregido (2026-07-28)**: el fix de PR #47 (`RecordingService.kt` + `RecordingServicePlugin.kt` + `src-tauri/src/recording_service.rs`) arranca un foreground service Android real, pero ese servicio solo llama a `startForeground()` para mostrar la notificación — **no captura ubicación por sí mismo**. La captura de puntos GPS seguía ocurriendo enteramente en JS vía `navigator.geolocation.watchPosition()` (`src/cockpit/cockpit.service.ts`, `createBrowserGpsProvider()`), que Chromium puede pausar/limitar en el WebView en segundo plano aunque el proceso Android no muera. Esto se dio por verificado erróneamente en `memory/context.md` (sesión 2026-07-27) tras una prueba manual corta; una ruta real de 2026-07-28 ("Prueba", `duration=64s`) confirmó el bug con datos de BBDD: solo 1 punto GPS guardado, con timestamp igual al instante de inicio de la grabación.
+- **Estrategia de fix decidida**: mover la captura de ubicación a código nativo Android, dentro del propio `RecordingService.kt`, vía `FusedLocationProviderClient` (con fallback a `LocationManager` si Play Services no está disponible), en vez de depender de `watchPosition()` del WebView. Los puntos capturados nativamente deben llegar de vuelta al lado Rust/JS vía el mecanismo de eventos de Tauri (canal/evento emitido desde el plugin Android hacia Rust y de ahí a JS — análogo al puente inverso ya existente para start/stop), para unificarse con el pipeline de persistencia existente en `cockpit.service.ts`/`cockpit-persist.service.ts`, sin duplicar el guardado.
+- **Verificación (AC-024)**: este tipo de bug solo se manifiesta en un trayecto real de varios minutos con la pantalla bloqueada, no en pruebas cortas de segundos — cualquier verificación de este comportamiento debe hacerse con una prueba manual de duración prolongada en dispositivo Android real antes de darlo por resuelto en `memory/context.md`.

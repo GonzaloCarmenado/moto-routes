@@ -4,11 +4,26 @@ import { MemoryRouteRepository } from '../shared/repositories/memory-route.repos
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import { pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
 import type * as PhotoCaptureAdapter from '../shared/services/photo-capture-adapter.service.js';
+import { isAndroidTauri } from './cockpit-native-gps.service.js';
+import type * as NativeGpsModule from './cockpit-native-gps.service.js';
+import { listen } from '@tauri-apps/api/event';
 
 vi.mock('../shared/services/photo-capture-adapter.service.js', async (importOriginal) => {
   const actual = await importOriginal<typeof PhotoCaptureAdapter>();
   return { ...actual, pickFromGallery: vi.fn() };
 });
+
+// Por defecto se comporta como fuera de Android (regresión de AC-020): los tests
+// del resto del archivo, que no mencionan el provider nativo, siguen ejerciendo
+// createBrowserGpsProvider() sin cambios.
+vi.mock('./cockpit-native-gps.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof NativeGpsModule>();
+  return { ...actual, isAndroidTauri: vi.fn(() => false) };
+});
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn().mockResolvedValue(vi.fn()),
+}));
 
 beforeEach(() => {
   const mockGeolocation = {
@@ -372,6 +387,44 @@ describe('CockpitView - guardar/descartar al parar (AC-003 a AC-006)', () => {
     } finally {
       vi.useRealTimers();
     }
+    document.body.removeChild(cockpit);
+  });
+});
+
+describe('CockpitView - selección de GpsProvider nativo en Android (Fase 2, AC-020)', () => {
+  beforeEach(() => {
+    // El afterEach global del archivo hace vi.restoreAllMocks() tras cada test,
+    // lo que borra el mockResolvedValue configurado en la factory de vi.mock()
+    // para `listen` (un vi.fn() sin implementación "original" a la que volver).
+    // Se re-configura aquí para que cada test de este describe arranque con un
+    // listen() que devuelve una promesa válida, en vez de undefined.
+    vi.mocked(listen).mockResolvedValue(vi.fn());
+  });
+
+  afterEach(() => {
+    vi.mocked(isAndroidTauri).mockReturnValue(false);
+  });
+
+  it('uses the native GPS provider (subscribes to the Tauri location event) when isAndroidTauri() is true', async () => {
+    vi.mocked(isAndroidTauri).mockReturnValue(true);
+
+    const { cockpit, shadowRoot } = await mountCockpit();
+    const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
+    masterBtn.click();
+    await waitRender();
+
+    expect(listen).toHaveBeenCalledWith('recording-service://location', expect.any(Function));
+    document.body.removeChild(cockpit);
+  });
+
+  it('keeps using navigator.geolocation.watchPosition when isAndroidTauri() is false (no regression)', async () => {
+    vi.mocked(isAndroidTauri).mockReturnValue(false);
+    const { cockpit, shadowRoot } = await mountCockpit();
+    const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
+    masterBtn.click();
+    await waitRender();
+
+    expect(navigator.geolocation.watchPosition).toHaveBeenCalled();
     document.body.removeChild(cockpit);
   });
 });
