@@ -1,4 +1,4 @@
-import { BaseElement } from '../shared/base-element.js';
+import { BaseElement } from '../base-element.js';
 import { PHOTO_CAPTURE_EVENT, type CaptureSource, type PhotoCaptureEventDetail } from './photo-capture.types.js';
 import styles from './photo-capture.element.css?inline';
 

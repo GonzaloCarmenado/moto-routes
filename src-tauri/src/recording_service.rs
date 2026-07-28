@@ -88,6 +88,12 @@ impl<R: Runtime> RecordingServiceHandle<R> {
     }
 }
 
+/// No existe hoy ninguna función pura en este archivo fuera de
+/// `#[cfg(target_os = "android")]` que sea unit-testeable con `#[test]` sin
+/// un runtime de Tauri real — `init()` solo construye un `TauriPlugin` cuya
+/// lógica relevante corre dentro de `.setup()`, que requiere un `tauri::App`
+/// real para ejecutarse con sentido. Limitación conocida, ver AC-009 de
+/// `specs/features/deuda-tecnica-auditoria.md`.
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("recording-service")
         .setup(|_app, _api| {

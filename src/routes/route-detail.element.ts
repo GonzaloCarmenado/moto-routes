@@ -2,13 +2,15 @@ import styles from './route-detail.element.css?inline';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { IPhotoRepository } from '../shared/models/photo.repository.js';
 import type { Route, RoutePoint } from '../shared/models/route.types.js';
-import { formatDuration } from '../cockpit/cockpit.transform.js';
+import { formatDuration } from '../shared/utils/format.js';
+import { formatRouteDate } from '../shared/utils/date.js';
+import { buildRouteDisplayName } from '../shared/utils/route-naming.js';
 import '../shared/route-map/route-map.element.js';
 import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from '../shared/route-map/route-map.element.js';
 import type { MapPhoto } from '../shared/route-map/route-map-photos.js';
-import '../photos/photo-capture.element.js';
-import type { PhotoCaptureElement } from '../photos/photo-capture.element.js';
-import { PHOTO_CAPTURE_EVENT, type PhotoCaptureEventDetail } from '../photos/photo-capture.types.js';
+import '../shared/photo-capture/photo-capture.element.js';
+import type { PhotoCaptureElement } from '../shared/photo-capture/photo-capture.element.js';
+import { PHOTO_CAPTURE_EVENT, type PhotoCaptureEventDetail } from '../shared/photo-capture/photo-capture.types.js';
 import { createPhotoRepository } from '../shared/services/photo-storage.service.js';
 import { captureFromCamera, pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
 import { addPhotoToRoute } from './route-detail-photo.service.js';
@@ -218,14 +220,12 @@ class RouteDetail extends BaseElement {
 
     const title = document.createElement('h1');
     title.className = 'detail-title';
-    title.textContent = route.name?.trim()
-      ? route.name
-      : `Ruta ${route.createdAt ? new Date(route.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' }) : ''}`;
+    title.textContent = buildRouteDisplayName(route.name, route.createdAt);
     fragment.appendChild(title);
 
     const date = document.createElement('p');
     date.className = 'detail-date';
-    date.textContent = route.createdAt ? new Date(route.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    date.textContent = formatRouteDate(route.createdAt);
     fragment.appendChild(date);
 
     return fragment;

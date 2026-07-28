@@ -1,0 +1,112 @@
+@import '../styles/tokens.css';
+
+:host {
+  display: inline-block;
+  position: relative;
+}
+
+.photo-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hitbox-min);
+  height: var(--hitbox-min);
+  min-width: var(--hitbox-min);
+  min-height: var(--hitbox-min);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--panel);
+  color: var(--amber);
+  cursor: pointer;
+  transition: background var(--transition-fast),
+              border-color var(--transition-fast);
+
+  &:hover:not(:disabled) {
+    background: var(--amber-soft);
+    border-color: var(--amber);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+}
+
+.photo-btn svg {
+  width: 24px;
+  height: 24px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+}
+
+.photo-btn .spinner {
+  display: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--amber-soft);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: photo-capture-spin 0.7s linear infinite;
+}
+
+.photo-btn.is-loading svg {
+  display: none;
+}
+
+.photo-btn.is-loading .spinner {
+  display: block;
+}
+
+@keyframes photo-capture-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Menu dropdown */
+.photo-menu {
+  position: fixed;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--space-2);
+  display: none;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 180px;
+  box-shadow: var(--shadow-card);
+  z-index: 100;
+}
+
+.photo-menu.menu-open {
+  display: flex;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast);
+
+  &:hover {
+    background: var(--amber-soft);
+    color: var(--amber);
+  }
+
+  & svg {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+    flex-shrink: 0;
+  }
+}

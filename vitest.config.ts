@@ -14,6 +14,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    css: true,
     setupFiles: [resolve(__dirname, 'tests/setup.ts')],
     include: ['src/**/*.spec.ts'],
     exclude: ['src/shared/models/route.repository.spec.ts'],

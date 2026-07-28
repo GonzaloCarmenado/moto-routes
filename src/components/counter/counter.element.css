@@ -1,3 +1,5 @@
+@import '../../shared/styles/tokens.css';
+
 :host {
   display: flex;
   align-items: center;
