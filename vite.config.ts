@@ -8,7 +8,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@tauri-apps/plugin-camera': resolve(__dirname, 'src/shared/tauri-plugins/plugin-camera'),
-      '@tauri-apps/plugin-dialog': resolve(__dirname, 'src/shared/tauri-plugins/plugin-dialog'),
     },
   },
   build: {
