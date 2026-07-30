@@ -1,6 +1,7 @@
 # Decisiones Arquitectónicas (ADRs)
 
 ## ADR-013: Stack desktop con Tauri 2 (Rust + Vite + Web Components)
+
 - **Fecha**: 2026-07-08
 - **Estado**: Aceptada
 - **Contexto**: Se necesita una app móvil/desktop multiplataforma con frontend web y backend nativo para una aplicación de tracking de rutas en moto.
@@ -9,6 +10,7 @@
 - **Consecuencias**: Bundle ligero (~5-10MB) gracias al WebView nativo del SO y Rust compilado. IPC tipado con invoke<T>(). CSP estricto obligatorio. Compatibilidad con Android/iOS usando el mismo código base.
 
 ## ADR-014: Seguridad en Tauri - CSP + permisos mínimos + path validation
+
 - **Fecha**: 2026-07-08
 - **Estado**: Aceptada
 - **Contexto**: Tauri expone APIs del sistema operativo. Sin una configuración cuidadosa, se pueden introducir vulnerabilidades.
@@ -17,6 +19,7 @@
 - **Consecuencias**: Cada nuevo permiso (filesystem, shell, etc.) debe añadirse explícitamente en `capabilities/default.json`. Los comandos Rust deben validar inputs.
 
 ## ADR-015: Rust testing y linting con Clippy + cargo test
+
 - **Fecha**: 2026-07-08
 - **Estado**: Aceptada
 - **Contexto**: El backend Rust necesita su propia suite de testing y linting, separada del frontend.
@@ -25,6 +28,7 @@
 - **Consecuencias**: El pre-commit hook ejecuta toda la suite: ESLint + Clippy + rustfmt + Vitest + cargo test + cargo audit.
 
 ## ADR-016: Filosofía visual "Telemetry & Freedom" - Modo oscuro técnico obligatorio
+
 - **Fecha**: 2026-07-08
 - **Estado**: Aceptada
 - **Contexto**: La app se usa montada en el manillar de una motocicleta, con luz solar directa y vibraciones. Se necesita máxima legibilidad y mínimo deslumbramiento.
@@ -34,6 +38,7 @@
 - **Superseded by**: [[ADR-019]] — la paleta neón "Telemetry & Freedom" fue reemplazada por "Asfalto Nocturno". El principio de fondo (modo oscuro obligatorio, hitbox 56×56px, tokens obligatorios) se mantiene; solo cambia la paleta/tipografía concreta.
 
 ## ADR-017: Adaptación a mobile (Android/iOS) con Tauri 2
+
 - **Fecha**: 2026-07-08
 - **Estado**: Aceptada
 - **Contexto**: El proyecto se concibe como app móvil, aunque la plantilla original tauri-vanilla-ts está orientada a desktop.
@@ -42,6 +47,7 @@
 - **Consecuencias**: Para compilar para Android se necesita Android SDK + NDK. Para iOS se necesita Xcode + macOS. El comando `npm run tauri:android` inicia en dispositivo/emulador Android.
 
 ## ADR-018: Target Android como prioridad
+
 - **Fecha**: 2026-07-08
 - **Estado**: Aceptada
 - **Contexto**: El usuario quiere compilar para Android de momento. iOS queda para más adelante.
@@ -50,6 +56,7 @@
 - **Consecuencias**: Para build Android se requiere ANDROID_HOME, Android SDK 34+, NDK, Java 17+. El comando `npx tauri android init` genera la estructura nativa en `src-tauri/gen/android/`. Los scripts `npm run tauri:android` y `npm run tauri:android:build` están disponibles.
 
 ## ADR-019: Reemplazo de filosofía visual — "Asfalto Nocturno" sustituye a "Telemetry & Freedom"
+
 - **Fecha**: 2026-07-11
 - **Estado**: Aceptada
 - **Contexto**: El usuario entregó un paquete de diseño completo (`moto-routes-design/`: screens de referencia, `DESIGN_PHILOSOPHY.md`, `STYLE_GUIDE.html`, `css/global.css`) que redefine la identidad visual de la app. La filosofía anterior ([[ADR-016]], "Telemetry & Freedom": dial circular, negro puro, acentos neón verde/rojo/azul, Segoe UI) queda sustituida por "Asfalto Nocturno": cuero oscuro cálido, ámbar como único acento vivo, óxido de apoyo, tipografía de señalética (Roboto Slab + Barlow + Barlow Semi Condensed tabular). El único componente construido en `src/` era el cockpit (grabación de ruta), correspondiente a `moto-routes-design/screens/grabacion-ruta.html`.
@@ -58,6 +65,7 @@
 - **Consecuencias**: Todo trabajo de UI futuro (listado de rutas, detalle de ruta, garaje, etc.) debe partir de los tokens y componentes documentados en `specs/ui/design-system.md` v2, no de los tokens `--color-*`/`--glow-*` antiguos (eliminados). Cualquier regla de estilo pensada como "global" debe vivir en `tokens.css`, no en `src/index.css` — un Shadow DOM nunca hereda selectores de una hoja de estilos del documento ligero, solo lo que llega vía `@import` dentro del propio `*.element.css` del componente. Los componentes de UI (`.chip`, `.stat-tile`, `.control-btn`, etc.) permanecen en `cockpit.element.css` hasta que una segunda pantalla los reutilice, momento en el que se promueven a `src/shared/` (regla ya existente en `specs/ui/frontend-conventions.md`).
 
 ## ADR-020: Persistencia real de fotos de ruta en Android — plugin-fs real, lectura vía readFile (no convertFileSrc), ruta insertada como 'active' antes de grabar
+
 - **Fecha**: 2026-07-20
 - **Estado**: Aceptada
 - **Contexto**: Las fotos de ruta (feature `fotos-ruta`, ver [[fotos-ruta]]) parecían subir sin error pero no se veían ni persistían de verdad en Android. Investigación en varias rondas reveló tres bugs independientes y acumulativos:
@@ -72,6 +80,7 @@
 - **Consecuencias**: Cualquier flujo futuro que cree filas relacionadas con una ruta antes de que esta "termine" (fotos, y en el futuro quizá paradas en tiempo real) debe apoyarse en este patrón insertar-activa/actualizar-al-parar, no asumir que la ruta solo existe en BBDD al guardarse. Los rechazos de `invoke()` de Tauri no son instancias de `Error` de JS (suelen ser strings/objetos planos) — usar `toErrorMessage()` (`src/shared/utils/errors.ts`) en vez de `err instanceof Error ? err.message : fallback`, que se comió el mensaje real del primer intento de diagnóstico en esta misma sesión.
 
 ## ADR-021: Cierre de `fotos-ruta` — quality gates rotos sin detectar, gate de cobertura alineado a 80%, adopción de Claude Code en paralelo a Cline
+
 - **Fecha**: 2026-07-22
 - **Estado**: Aceptada
 - **Contexto**: Al cerrar la ronda de trabajo de `fotos-ruta` (ver [[fotos-ruta]]) se pidió comprobar ESLint, tests y el gate de cobertura antes de abrir PR. Al ejecutar `pnpm lint` aparecieron ~24 "fatal parsing error" — `tsconfig.json` excluía `**/*.spec.ts`, y el `projectService` de `typescript-eslint` no puede tipar un fichero que no pertenece a ningún proyecto TS. Al arreglarlo y limpiar los warnings reales que salieron a la luz, se comprobó el lado Rust: `clippy.toml` tenía una clave `max_fn_params` que no existe en la versión de Clippy instalada (rompía la compilación antes de llegar a lintar nada), y además `cargo build`/`clippy`/`test` fallaban por separado porque `src-tauri/icons/icon.ico` (y el resto de iconos del bundle desktop) eran placeholders de 22-70 bytes que el compilador de recursos de Windows (RC.EXE) rechazaba. Ninguno de los tres bugs se había detectado antes porque el pre-commit hook (`.husky/pre-commit`) solo ejecutaba ESLint + Vitest, pese a que la documentación (ADR-015, `docs/06-seguridad.md`) siempre dijo que cubría también Rust.
@@ -87,6 +96,7 @@
 - **Consecuencias**: `pnpm lint`, `pnpm test:coverage`, `pnpm rust:lint`, `pnpm rust:format` y `pnpm rust:test` pasan limpios y ahora si alguno se rompe, el pre-commit lo va a atrapar de verdad. Cualquier fichero de test nuevo debe seguir dentro de `src/` (ya lo estaba) para quedar cubierto por `tsconfig.json`; cualquier tipo/interfaz puramente declarativo nuevo bajo `shared/models/` debe añadirse también a la lista de exclusión de `vitest.config.ts` si no tiene código ejecutable, o el coverage lo contará como "0%" y arrastrará la media hacia abajo de forma engañosa. Quedan 5 issues documentados en `specs/features/fotos-ruta.review.md` (popup de marcador, desagrupación de cluster al zoom, swipe en el visor, test de EXIF con GPS real, y la desviación de AC-007 centroide-vs-último-punto) para una iteración siguiente.
 
 ## ADR-022: Refactor `mejoras-tecnicas` — BaseElement unificado, eventos centralizados, servicio de foto deduplicado
+
 - **Fecha**: 2026-07-22
 - **Estado**: Aceptada
 - **Contexto**: Tras cerrar `fotos-ruta`, se decidió una ronda de mejoras dividida en dos specs: una técnica (refactor sin cambio de comportamiento) y otra de usabilidad. Ver [[mejoras-tecnicas]]. La técnica debía ir primero porque la de usabilidad necesitaría un módulo de feedback y una galería compartida, y convenía que la base (clase base, tokens, helper de DOM) ya estuviera unificada.
@@ -95,6 +105,7 @@
 - **Consecuencias**: Cualquier componente nuevo debe extender `BaseElement` y usar `renderShadow`. Cualquier evento de navegación nuevo se añade a `app-events.ts`, nunca como string suelto. El pipeline de foto compartido (`photo-persist.service.ts`) es la única vía de "validar+geolocalizar+guardar+persistir" — los flujos específicos (cockpit, detalle) solo aportan la estrategia de fallback de ubicación y cómo notifican el resultado. Verificado visualmente (Cypress + screenshots) en cockpit y listado, no solo con tests unitarios.
 
 ## ADR-023: `mejoras-usabilidad` — flujo de parada en dos fases, y el borrado de rutas nunca había cascadeado de verdad
+
 - **Fecha**: 2026-07-22
 - **Estado**: Aceptada
 - **Contexto**: Ver [[mejoras-usabilidad]]. Al implementar el borrado de rutas (AC-008) y el descarte al parar (AC-005) — ambas, primera vez que `IRouteRepository.delete()`/`IPhotoRepository.delete()` se llaman desde la UI real, no solo desde tests de contrato — se descubrió que el `ON DELETE CASCADE` del esquema SQLite (`route_points`/`route_stops`/`photos` → `routes`) era inerte: SQLite tiene `foreign_keys` en `OFF` por defecto (es una pragma **por conexión**, no por fichero) y la app nunca lo activaba. En producción (Android), borrar una ruta habría dejado huérfanos sus puntos/paradas/fotos.
@@ -107,6 +118,7 @@
 - **Consecuencias**: Cualquier borrado futuro de una ruta debe pasar por `deleteRouteAndPhotos`, nunca por `routeRepo.delete()` a pelo (se perdería la limpieza de fotos en el backend Memory). El API de `CockpitService` para parar es ahora de tres pasos (`prepareStop`→`confirmSaveRecording`|`discardStop`), no uno — cualquier otro llamador futuro del flujo de parada debe seguir esa secuencia, no puede saltarse `prepareStop()`. Pendiente verificar en dispositivo Android real que el pragma cascada de verdad `route_points`/`route_stops` (los tests usan un mock de `SqlDb` en JS, no SQLite real — ver ISSUE-001 de `specs/features/mejoras-usabilidad.review.md`).
 
 ## ADR-025: `mejoras-guardado-rutas` — diálogo propio `cockpit-save-route-dialog` en vez de ampliar `<confirm-dialog>`
+
 - **Fecha**: 2026-07-27
 - **Estado**: Aceptada
 - **Contexto**: Ver [[mejoras-guardado-rutas]]. AC-001 a AC-009 piden que el diálogo "¿Guardar la ruta?" (mostrado tras el long-press de parada, `resolveStopDecision` en `cockpit-stop.service.ts`) incluya un campo de texto para el nombre de la ruta. El componente compartido `<confirm-dialog>` (`src/shared/feedback/confirm-dialog.element.ts`) no soporta hoy un input embebido en `ConfirmDialogOptions`, y lo usan 3 consumidores más (`route-list.element.ts`, `photo-delete.service.ts`, y el propio flujo de parada) con un contrato `Promise<string | null>` cubierto por 8+ tests, marcado como "CRÍTICO en review" en `mejoras-usabilidad.md`.
@@ -115,6 +127,7 @@
 - **Consecuencias**: Hay duplicación deliberada del fragmento de focus-trap/overlay/dialog entre `confirm-dialog.element.ts` y `cockpit-save-route-dialog.element.ts` — cualquier cambio futuro en el patrón de foco/accesibilidad de uno debe revisarse también en el otro hasta que, si aparece un tercer caso, se justifique extraer un helper común a `shared/feedback/` o `shared/`. `<confirm-dialog>` no cambia su contrato en absoluto — los 3 consumidores existentes y sus tests quedan intactos.
 
 ## ADR-026: `deuda-tecnica-auditoria` AC-007 — token `--amber-glow` para el resplandor ámbar puntual, no contradice ADR-019
+
 - **Fecha**: 2026-07-28
 - **Estado**: Aceptada
 - **Contexto**: Ver [[deuda-tecnica-auditoria]]. La auditoría técnica encontró 6 literales `oklch(...)` hardcodeados (5 en `cockpit.element.css`, 1 en `nav-bar.element.css`) sobrevivientes de antes de ADR-019 ("Asfalto Nocturno" sustituye a "Telemetry & Freedom", que prohíbe explícitamente "neón/glow" como lenguaje visual difuso). Estos literales no compartían el mismo valor exacto (variaban entre `oklch(60% 0.17 45 / 0.4)`, `oklch(70% 0.17 45 / 0.8)`, `oklch(70% 0.17 45 / 0.35)` y `oklch(60% 0.17 45 / 0.45)` ×2), así que un único token no puede reproducir bit a bit las 4 combinaciones de lightness/alpha sin sintaxis de color relativo (`oklch(from var(...) ...)`).
@@ -123,6 +136,7 @@
 - **Consecuencias**: Cualquier resplandor ámbar futuro (nuevo estado activo, nuevo componente) reutiliza `--amber-glow`, nunca introduce un literal `oklch(...)` nuevo. `cockpit.element.css` y `nav-bar.element.css` quedan sin ningún literal de color hardcodeado.
 
 ## ADR-024: AC-007 de `fotos-ruta` — se confirma el centroide de la ruta como fallback de ubicación, no "la última ubicación conocida"
+
 - **Fecha**: 2026-07-26
 - **Estado**: Aceptada
 - **Contexto**: El review de `fotos-ruta` ([[fotos-ruta-review]], ISSUE-005) dejó anotado que AC-007 pedía literalmente "la última ubicación GPS conocida de la ruta" para fotos sin EXIF añadidas fuera de una grabación activa, pero `extractPhotoLocation()`/`route-detail-photo.service.ts` ya implementaban (y AC-013, ya aprobada y testeada, ya documentaba) el centroide — promedio de lat/lon de **todos** los puntos de la ruta — como ese fallback. Era una desviación de diseño nunca registrada formalmente como ADR, solo anotada como nota al margen en la spec.
@@ -131,6 +145,7 @@
 - **Consecuencias**: `route-detail-photo.service.ts`/`extractPhotoLocation()` no cambian. Cualquier persona que lea AC-007 y AC-013 en `fotos-ruta.md` las verá coherentes entre sí, sin desviación implícita sin explicar.
 
 ## ADR-027: Elección de framework SDD — evaluación de GitHub Spec Kit, OpenSpec y BMAD frente al SDD propio
+
 - **Fecha**: 2026-07-30
 - **Estado**: **Propuesta** (pendiente de ratificación del equipo — al decidir, cambiar a `Aceptada` y fijar el framework elegido)
 - **Contexto**: Hasta hoy el proyecto usa un **SDD propio, hecho a medida** (documentado en `docs/01`–`07`, `CLAUDE.md`, `.clinerules`, `agents/` y `.claude/`), no un framework externo. Nació para **DeepSeek + Cline** y desde [[ADR-021]] se sirve además a **Claude Code** sobre el mismo `specs/` + `memory/`. Funciona (6 fases: Spec→Plan→Tasks→Impl→Review→Test, TDD estricto, quality gates en pre-commit, memoria persistente), pero todo su mantenimiento recae en el equipo: cada mejora del flujo la escribimos y sostenemos nosotros, sin comunidad ni actualizaciones externas. En 2026 el ecosistema SDD ha madurado mucho (30+ frameworks catalogados). Antes de seguir invirtiendo en el flujo propio conviene decidir formalmente si adoptamos un estándar mantenido por una comunidad o seguimos con el nuestro. Esta ADR evalúa los **tres frameworks SDD más consolidados** del momento (Spec Kit, OpenSpec, BMAD) junto al SDD propio, para elegir uno y descartar el resto.
@@ -144,9 +159,9 @@
   6. **Gates de calidad integrados** (review obligatorio, TDD, cobertura) — el proyecto ya los exige y no quiere perderlos.
 
 - **Opciones evaluadas**:
-  - **A — GitHub Spec Kit** (github/spec-kit). CLI en Python. Flujo de 4 fases: **Specify → Plan → Tasks → Implement**. Concepto central de *"constitution"*: un fichero de principios no negociables que heredan todas las specs (equivalente conceptual a nuestro `CLAUDE.md`). Soporta 30+ agentes (Claude Code, Copilot, Gemini CLI…). El más adoptado con diferencia (**124.657 ★** en GitHub, a 30-jul-2026). *Contras*: setup opinado y front-loaded; los cambios upstream rompen scripts antiguos; requiere disciplina de "constitution".
-  - **B — OpenSpec** (Fission-AI/OpenSpec). Ligero y **CLI-agnóstico** (funciona incluso con agentes sin soporte nativo, vía `AGENTS.md`). Flujo de cambios: **Propose → Apply → Archive**, con **delta specs** (ADDED/MODIFIED/REMOVED en estilo EARS) que documentan solo lo que cambia; al archivar, los deltas se funden en la spec viva. Separa `openspec/specs/` (verdad actual) de `openspec/changes/` (propuestas). Pensado para **brownfield** y velocidad, baja ceremonia (**63.215 ★**). *Contras*: poco andamiaje de handoff entre roles; **sin gates de review/compliance por defecto**.
-  - **C — BMAD-METHOD** (bmad-code-org). Orquesta 12+ agentes como un **equipo ágil simulado**: Analyst → PM → Architect → Dev → QA, produciendo PRD, arquitectura, epics y stories como artefactos versionados (sirven de evidencia de auditoría). Multi-IDE (Claude Code, Cursor, Copilot, Windsurf), MIT (**51.303 ★**). *Contras*: **la opción más cara en tokens (~$800–2.000+/dev/mes según terceros)**, setup pesado, lento en tareas pequeñas, fricción en legacy. Orientado a plataformas greenfield complejas y entornos regulados.
+  - **A — GitHub Spec Kit** (github/spec-kit). CLI en Python. Flujo de 4 fases: **Specify → Plan → Tasks → Implement**. Concepto central de *"constitution"*: un fichero de principios no negociables que heredan todas las specs (equivalente conceptual a nuestro `CLAUDE.md`). Soporta 30+ agentes (Claude Code, Copilot, Gemini CLI…). El más adoptado con diferencia (**124.657** en GitHub, a 30-jul-2026). *Contras*: setup opinado y front-loaded; los cambios upstream rompen scripts antiguos; requiere disciplina de "constitution".
+  - **B — OpenSpec** (Fission-AI/OpenSpec). Ligero y **CLI-agnóstico** (funciona incluso con agentes sin soporte nativo, vía `AGENTS.md`). Flujo de cambios: **Propose → Apply → Archive**, con **delta specs** (ADDED/MODIFIED/REMOVED en estilo EARS) que documentan solo lo que cambia; al archivar, los deltas se funden en la spec viva. Separa `openspec/specs/` (verdad actual) de `openspec/changes/` (propuestas). Pensado para **brownfield** y velocidad, baja ceremonia (**63.215**). *Contras*: poco andamiaje de handoff entre roles; **sin gates de review/compliance por defecto**.
+  - **C — BMAD-METHOD** (bmad-code-org). Orquesta 12+ agentes como un **equipo ágil simulado**: Analyst → PM → Architect → Dev → QA, produciendo PRD, arquitectura, epics y stories como artefactos versionados (sirven de evidencia de auditoría). Multi-IDE (Claude Code, Cursor, Copilot, Windsurf), MIT (**51.303**). *Contras*: **la opción más cara en tokens (~$800–2.000+/dev/mes según terceros)**, setup pesado, lento en tareas pequeñas, fricción en legacy. Orientado a plataformas greenfield complejas y entornos regulados.
   - **D — SDD propio (statu quo)**. Ya integrado, dual-tool, con review obligatorio + TDD + gates en Husky + memoria persistente. *Contras*: 100% auto-mantenido, sin comunidad ni evolución externa; reinventa lo que ya existe estandarizado.
 
   | Framework | ★ GitHub (30-jul-2026) | Enfoque | Multi-agente (Cline+CC) | Tokens | Ceremonia | Brownfield | Gates review/TDD | Veredicto |
