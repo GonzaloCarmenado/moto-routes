@@ -8,8 +8,21 @@ const DARK_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
 const ROUTE_SOURCE_ID = 'route-line';
 const ROUTE_LAYER_ID = 'route-line-layer';
 const AMBER_FALLBACK = '#d4880f';
+// Aproximación en rgb de --ink-soft (oklch(70% 0.015 55)) — fallback solo
+// para el caso extremo en que resolveToken() no pueda leer el token (sin
+// shadowRoot todavía).
+const ROAD_CONTRAST_FALLBACK = '#b3a894';
+// Icono de pin para los marcadores de inicio/fin (AC-010): `fill="currentColor"`
+// deja que el color lo decida el CSS del marcador (`--start`/`--end`), nunca
+// un valor fijo en el propio SVG (AC-011).
+const ROUTE_MARKER_PIN_SVG =
+  '<svg viewBox="0 0 24 30" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+  '<path fill="currentColor" d="M12 0C5.373 0 0 5.373 0 12c0 9 12 18 12 18s12-9 12-18C24 5.373 18.627 0 12 0z' +
+  'M12 16.5A4.5 4.5 0 1 1 12 7.5a4.5 4.5 0 0 1 0 9z" fill-rule="evenodd"/>' +
+  '</svg>';
 
 import { addPhotoMarkers, photoClusterRadiusForZoom, type MapPhoto } from './route-map-photos.js';
+import { buildRoadContrastOverrides } from './route-map-contrast.js';
 import { BaseElement } from '../base-element.js';
 
 /**
@@ -28,6 +41,7 @@ class RouteMap extends BaseElement {
   private _photos: MapPhoto[] = [];
   private mapInstance: maplibregl.Map | null = null;
   private photoMarkers: maplibregl.Marker[] = [];
+  private skeletonElement: HTMLElement | null = null;
 
   set points(value: RouteMapPoint[]) {
     this._points = value;
@@ -62,6 +76,7 @@ class RouteMap extends BaseElement {
 
   private destroyMap(): void {
     this.photoMarkers = [];
+    this.skeletonElement = null;
     if (this.mapInstance) {
       this.mapInstance.remove();
       this.mapInstance = null;
@@ -89,6 +104,19 @@ class RouteMap extends BaseElement {
     const mapRoot = document.createElement('div');
     mapRoot.className = 'maplibre-root';
     container.appendChild(mapRoot);
+
+    // Skeleton de carga (AC-005, AC-006, AC-023): tapa `mapRoot` mientras
+    // MapLibre aún no ha disparado `load` (tiles todavía sin pintar), en vez
+    // de dejar el contenedor vacío o un flash en blanco. Va DESPUÉS de
+    // `mapRoot` en el DOM para pintarse encima (ambos son `position:
+    // absolute`, sin z-index explícito) — se quita del DOM en cuanto `load`
+    // se dispara (ver initMap), sin necesidad de ocultar mapRoot.
+    const skeleton = document.createElement('div');
+    skeleton.className = 'route-map-skeleton';
+    skeleton.setAttribute('data-cy', 'route-map-skeleton');
+    container.appendChild(skeleton);
+    this.skeletonElement = skeleton;
+
     this.renderShadow(sheet, container);
 
     requestAnimationFrame(() => {
@@ -103,11 +131,21 @@ class RouteMap extends BaseElement {
       style: DARK_STYLE_URL,
       center: [first.lng, first.lat],
       zoom: 12,
-      attributionControl: false,
+      // AC-008/AC-024: revierte el `attributionControl: false` previo — la
+      // licencia de OpenFreeMap/OSM exige mostrar el crédito. `compact: true`
+      // (opción nativa de MapLibre) lo colapsa en un botón "i" discreto en
+      // vez de dejar el texto completo siempre visible (AC-009, estilo
+      // afinado además vía CSS — ver override de `.maplibregl-ctrl-attrib`).
+      attributionControl: { compact: true },
     });
     this.mapInstance = map;
 
     map.on('load', () => {
+      // Quita el skeleton ANTES de dibujar la ruta/marcadores (AC-006): así
+      // no queda un frame con el skeleton y el mapa ya pintado superpuestos.
+      this.skeletonElement?.remove();
+      this.skeletonElement = null;
+      this.applyContrastOverrides(map);
       this.drawRoute(map, points);
       this.renderPhotoMarkers();
     });
@@ -135,6 +173,25 @@ class RouteMap extends BaseElement {
     this.emit<RouteMapPhotoSelectDetail>(ROUTE_MAP_PHOTO_SELECT_EVENT, { photo });
   }
 
+  // AC-001/AC-004: aumenta el contraste de las capas de carretera del estilo
+  // `dark` (casi indistinguibles del fondo por defecto) con un tono
+  // cálido/neutro de la paleta "Asfalto Nocturno" (--ink-soft), sin
+  // sustituir el estilo base ni tocar el color del trazado (--amber).
+  // AC-003: cada override va en su propio try/catch — si el estilo de
+  // terceros renombra/quita una capa, ese fallo aislado no debe abortar el
+  // resto de overrides ni el resto del ciclo de vida del mapa (trazado,
+  // marcadores, fitBounds siguen dibujándose con normalidad).
+  private applyContrastOverrides(map: maplibregl.Map): void {
+    const color = this.resolveToken('--ink-soft', ROAD_CONTRAST_FALLBACK);
+    for (const { layerId, property, value } of buildRoadContrastOverrides(color)) {
+      try {
+        map.setPaintProperty(layerId, property, value);
+      } catch {
+        // Capa no existente en el estilo cargado — ver comentario de arriba.
+      }
+    }
+  }
+
   private drawRoute(map: maplibregl.Map, points: RouteMapPoint[]): void {
     const amber = this.resolveToken('--amber', AMBER_FALLBACK);
 
@@ -160,9 +217,16 @@ class RouteMap extends BaseElement {
     }
   }
 
+  // AC-010/AC-025: sustituye el círculo CSS plano anterior por un icono tipo
+  // pin (SVG inline, `fill="currentColor"`) con mejor legibilidad sobre el
+  // mapa oscuro. El color base sigue viniendo de `.route-map-marker--start`/
+  // `--end` (AC-011: `color: var(--success)`/`var(--amber)`, nunca
+  // hardcodeado) — el SVG solo hereda ese color vía `currentColor`, no fija
+  // ninguno propio.
   private addMarker(map: maplibregl.Map, point: RouteMapPoint, kind: 'start' | 'end'): void {
     const el = document.createElement('div');
-    el.className = `route-map-marker route-map-marker--${kind}`;
+    el.className = `route-map-marker route-map-marker--pin route-map-marker--${kind}`;
+    el.innerHTML = ROUTE_MARKER_PIN_SVG;
     new maplibregl.Marker({ element: el }).setLngLat([point.lng, point.lat]).addTo(map);
   }
 
