@@ -92,11 +92,12 @@ Riesgo controlado: 346 tests (todos verdes), cobertura 94.44% líneas / 88.47% b
 
 ## ⚠️ Issues Encontrados
 
-### ISSUE-001: Verificación visual/Cypress y confirmación en Android real, pendientes
+### ISSUE-001: Verificación visual/Cypress y confirmación en Android real, pendientes — ✅ RESUELTO (2026-07-31)
 - **Severidad**: BAJA
 - **AC afectado**: AC-013 (hitbox real), y de forma más general la migración `ALTER TABLE` en un dispositivo con SQLite real (no solo el mock `SqlDb`)
-- **Descripción**: El plan (`specs/features/mejoras-fotos-mapa.plan.md`, sección "Verificación final") deja explícitamente sin marcar: verificación visual de pestañas/cuadrícula/popup/trazado en Cypress o `/run`, y confirmación en dispositivo Android real de que `ALTER TABLE routes ADD COLUMN preview_polyline TEXT` no falla contra una base de datos ya existente con datos reales. `memory/context.md` documenta esto honestamente como pendiente, coherente con el precedente ya aceptado en ADR-023/`mejoras-usabilidad` (ISSUE-001 de esa spec, resuelto después con verificación real en dispositivo).
-- **Recomendación**: No bloqueante para este review (mismo criterio aplicado en `mejoras-usabilidad`), pero debe cerrarse antes de considerar la feature completamente lista para producción — igual que se hizo allí. Repetir el mismo procedimiento de extracción de BBDD (`scripts/pull-db.ps1`) usado para verificar ADR-023, esta vez confirmando que una fila `routes` preexistente conserva sus valores tras el `ALTER TABLE` real de SQLite en Android.
+- **Descripción**: El plan (`specs/features/mejoras-fotos-mapa.plan.md`, sección "Verificación final") dejaba explícitamente sin marcar: verificación visual de pestañas/cuadrícula/popup/trazado en Cypress o `/run`, y confirmación en dispositivo Android real de que `ALTER TABLE routes ADD COLUMN preview_polyline TEXT` no falla contra una base de datos ya existente con datos reales. `memory/context.md` documentaba esto honestamente como pendiente, coherente con el precedente ya aceptado en ADR-023/`mejoras-usabilidad` (ISSUE-001 de esa spec, resuelto después con verificación real en dispositivo).
+- **Resolución**: Confirmado por el usuario — cerrado sin acción adicional pendiente.
+- **Recomendación**: Ninguna, issue cerrado.
 
 ### ISSUE-002: Sin ADR nuevo para esta feature
 - **Severidad**: BAJA (informativo, no bloqueante)
