@@ -23,6 +23,7 @@ const ROUTE_MARKER_PIN_SVG =
 
 import { addPhotoMarkers, photoClusterRadiusForZoom, type MapPhoto } from './route-map-photos.js';
 import { buildRoadContrastOverrides } from './route-map-contrast.js';
+import { createFullscreenToggle, type FullscreenToggle } from './route-map-fullscreen.js';
 import { BaseElement } from '../base-element.js';
 
 /**
@@ -42,6 +43,7 @@ class RouteMap extends BaseElement {
   private mapInstance: maplibregl.Map | null = null;
   private photoMarkers: maplibregl.Marker[] = [];
   private skeletonElement: HTMLElement | null = null;
+  private fullscreenToggle: FullscreenToggle | null = null;
 
   set points(value: RouteMapPoint[]) {
     this._points = value;
@@ -77,6 +79,13 @@ class RouteMap extends BaseElement {
   private destroyMap(): void {
     this.photoMarkers = [];
     this.skeletonElement = null;
+    // El listener de `fullscreenchange` del botón vive en `document`, no en el
+    // contenedor del mapa — hay que quitarlo explícitamente aquí (llamado
+    // también desde `disconnectedCallback`) para no acumular listeners
+    // huérfanos entre montajes/desmontajes de `<route-map>` (p. ej. al
+    // navegar entre rutas en `<route-detail>`).
+    this.fullscreenToggle?.destroy();
+    this.fullscreenToggle = null;
     if (this.mapInstance) {
       this.mapInstance.remove();
       this.mapInstance = null;
@@ -120,14 +129,14 @@ class RouteMap extends BaseElement {
     this.renderShadow(sheet, container);
 
     requestAnimationFrame(() => {
-      this.initMap(mapRoot, this._points);
+      this.initMap(mapRoot, container, this._points);
     });
   }
 
-  private initMap(container: HTMLElement, points: RouteMapPoint[]): void {
+  private initMap(mapRoot: HTMLElement, outerContainer: HTMLElement, points: RouteMapPoint[]): void {
     const first = points[0]!;
     const map = new maplibregl.Map({
-      container,
+      container: mapRoot,
       style: DARK_STYLE_URL,
       center: [first.lng, first.lat],
       zoom: 12,
@@ -139,6 +148,23 @@ class RouteMap extends BaseElement {
       attributionControl: { compact: true },
     });
     this.mapInstance = map;
+
+    // AC-013/AC-026: controles de zoom +/- siempre visibles (sin depender de
+    // hover ni gestos). 'top-left' evita competir con el botón de pantalla
+    // completa, que se coloca en 'top-right' (Paso 6) — AC-015 (posición).
+    map.addControl(new maplibregl.NavigationControl(), 'top-left');
+
+    // AC-016 a AC-021: el botón de pantalla completa se añade sobre el
+    // contenedor EXTERIOR (`outerContainer`, no `mapRoot`) porque debe ser ese
+    // elemento el que entre en pantalla completa vía la Fullscreen API — así
+    // el mapa (incluidos los controles de zoom/atribución que MapLibre monta
+    // dentro de `mapRoot`) y este botón, ambos descendientes suyos, se ven con
+    // normalidad una vez en pantalla completa. Degrada a `null` sin error si
+    // la Fullscreen API no está soportada (AC-020).
+    this.fullscreenToggle = createFullscreenToggle(outerContainer, map);
+    if (this.fullscreenToggle) {
+      outerContainer.appendChild(this.fullscreenToggle.element);
+    }
 
     map.on('load', () => {
       // Quita el skeleton ANTES de dibujar la ruta/marcadores (AC-006): así

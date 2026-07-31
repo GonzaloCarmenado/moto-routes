@@ -93,7 +93,7 @@
   - `MODIFICAR src/shared/route-map/route-map.element.spec.ts`.
 - **Notas**: Los marcadores de foto/cluster (`.route-map-marker--photo`/`--cluster`) **no se tocan** — son de `mejoras-fotos-mapa` y están fuera de alcance de esta spec (Constraints). Confirmar que el nuevo estilo de pin no afecta al selector base `.route-map-marker` compartido con esas clases (usar clases específicas nuevas en vez de modificar la clase raíz si hay riesgo de colisión).
 
-## Paso 5: Controles de zoom
+## Paso 5: Controles de zoom [x]
 
 - **Issue**: https://github.com/GonzaloCarmenado/moto-routes/issues/58
 - **Objetivo**: Añadir `NavigationControl` (o control equivalente) siempre visible, con hitbox 56×56px, en una esquina que no compita con el botón de pantalla completa.
@@ -110,7 +110,7 @@
   - `MODIFICAR src/shared/route-map/route-map.element.spec.ts`.
 - **Notas**: Verificar el nombre de clase real de los botones de `NavigationControl` contra `maplibre-gl/dist/maplibre-gl.css` (histórico: `.maplibregl-ctrl-group button`), igual que en el Paso 2 para atribución.
 
-## Paso 6: Botón de pantalla completa
+## Paso 6: Botón de pantalla completa [x]
 
 - **Issue**: https://github.com/GonzaloCarmenado/moto-routes/issues/59
 - **Objetivo**: Botón integrado (hitbox 56×56, `aria-label` dinámico) que invoca la Fullscreen API real sobre el contenedor del mapa, preserva centro/zoom vía `map.resize()`, se sincroniza con `fullscreenchange` (botón y Esc), degrada sin error si no hay soporte, y no anima si `prefers-reduced-motion` está activo.

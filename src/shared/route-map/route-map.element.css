@@ -63,6 +63,71 @@
   color: var(--ink-faint);
 }
 
+/* Controles de zoom (AC-013, AC-014, AC-015): MapLibre coloca el
+   NavigationControl en 'top-left' (ver route-map.element.ts) con botones de
+   ~29x29px por defecto — se amplía su hitbox a 56x56 (uso con guantes) sin
+   desbordar el contenedor de 200px de alto. La esquina 'top-left' deja
+   'top-right' libre para el botón de pantalla completa (Paso 6), evitando el
+   solape entre ambos controles. */
+.maplibregl-ctrl-group button {
+  min-width: var(--hitbox-min);
+  min-height: var(--hitbox-min);
+}
+
+/* Botón de pantalla completa (AC-016 a AC-021): esquina superior derecha,
+   opuesta a los controles de zoom ('top-left', Paso 5) y separada de la
+   atribución (esquina inferior, Paso 2) — evita solapes entre los tres.
+   Hitbox mínima 56x56 (uso con guantes de moto). El icono usa dos capas
+   superpuestas (entrar/salir, ver route-map-fullscreen.ts) intercambiadas
+   vía `opacity`/`transition` controlada por la clase `--fullscreen` — así la
+   transición se apoya en el override global de `prefers-reduced-motion` de
+   tokens.css (sin @media propio, mismo patrón que el skeleton del Paso 1),
+   en vez de un swap de `innerHTML` sin transición posible. */
+.route-map-fullscreen-toggle {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  min-width: var(--hitbox-min);
+  min-height: var(--hitbox-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--shadow-btn);
+  cursor: pointer;
+  padding: 0;
+}
+
+.route-map-fullscreen-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.route-map-fullscreen-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.route-map-fullscreen-icon--enter {
+  opacity: 1;
+}
+
+.route-map-fullscreen-toggle--fullscreen .route-map-fullscreen-icon--enter {
+  opacity: 0;
+}
+
+.route-map-fullscreen-toggle--fullscreen .route-map-fullscreen-icon--exit {
+  opacity: 1;
+}
+
 .map-empty {
   position: absolute;
   inset: 0;
