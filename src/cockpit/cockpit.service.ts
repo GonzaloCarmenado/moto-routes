@@ -107,6 +107,25 @@ interface ServiceStore {
   state: CockpitState;
   listeners: Set<StateListener>;
   lastPoint: RoutePoint | null;
+  /** Instante real (Date.now()) en que empezó la grabación. `null` si no hay grabación en curso.
+   * `elapsedTime` se deriva de este reloj real en vez de contar ticks de `setInterval`, porque
+   * Chromium puede pausar/retrasar los intervalos en segundo plano (mismo motivo por el que el
+   * GPS ya usa eventos nativos, ver cockpit-native-gps.service.ts) — contar ticks hacía que el
+   * cronómetro se quedara muy por detrás del tiempo real tras un rato con la pantalla bloqueada. */
+  recordingStartedAt: number | null;
+  /** Suma de todos los intervalos de pausa ya cerrados (ms). */
+  pausedMs: number;
+  /** Instante en que empezó la pausa actual, o `null` si no está pausado. */
+  pausedSince: number | null;
+}
+
+/** Tiempo transcurrido real (segundos) desde el inicio de la grabación, descontando pausas.
+ * Se recalcula desde el reloj de pared en cada llamada (tick o punto GPS nuevo) en vez de
+ * arrastrar un contador, para que se autocorrija aunque el intervalo de 1s se haya retrasado. */
+function computeElapsedSeconds(store: ServiceStore): number {
+  if (store.recordingStartedAt == null) return store.state.elapsedTime;
+  const pausedMs = store.pausedSince != null ? store.pausedMs + (Date.now() - store.pausedSince) : store.pausedMs;
+  return Math.floor((Date.now() - store.recordingStartedAt - pausedMs) / 1000);
 }
 
 function notify(store: ServiceStore): void {
@@ -145,7 +164,8 @@ function addPoint(store: ServiceStore, point: RoutePoint): void {
   store.lastPoint = point;
 
   const totalDistance = store.state.totalDistance + distanceDelta;
-  const avgSpeed = calculateAvgSpeed(totalDistance, store.state.elapsedTime || 1);
+  const elapsedTime = computeElapsedSeconds(store);
+  const avgSpeed = calculateAvgSpeed(totalDistance, elapsedTime || 1);
   const stopResult = detectStop(point.speed, store.state.stopTimer, store.state.stopState);
 
   store.state = {
@@ -154,6 +174,7 @@ function addPoint(store: ServiceStore, point: RoutePoint): void {
     currentSpeed: point.speed,
     avgSpeed,
     totalDistance,
+    elapsedTime,
     altitude: point.alt,
     gpsSignalLost: false,
     gpsLostTimer: 0,
@@ -222,11 +243,14 @@ function startRecordingAction(
     gpsSignalLost: false, gpsLostTimer: 0,
   };
   store.lastPoint = null;
+  store.recordingStartedAt = Date.now();
+  store.pausedMs = 0;
+  store.pausedSince = null;
   notify(store);
   persistRouteOnStart(repository, store.state);
   triggerForegroundService(foregroundService, true);
   loop.startTick(() => {
-    store.state = { ...store.state, elapsedTime: store.state.elapsedTime + 1 };
+    store.state = { ...store.state, elapsedTime: computeElapsedSeconds(store) };
     notify(store);
   });
   loop.startWatch((point) => { addPoint(store, point); });
@@ -238,6 +262,7 @@ function prepareStopAction(
   foregroundService: ForegroundServiceProvider | undefined,
 ): RouteMetadata | null {
   if (store.state.status === 'idle') return null;
+  store.state = { ...store.state, elapsedTime: computeElapsedSeconds(store) };
   loop.stopTick();
   loop.stopWatch();
   triggerForegroundService(foregroundService, false);
@@ -247,11 +272,17 @@ function prepareStopAction(
 function confirmSaveRecordingAction(store: ServiceStore, repository: IRouteRepository | undefined, name: string): void {
   persistRouteOnStop(repository, store.state, name);
   store.state = { ...createInitialState(), hasGpsPermission: store.state.hasGpsPermission };
+  store.recordingStartedAt = null;
+  store.pausedMs = 0;
+  store.pausedSince = null;
   notify(store);
 }
 
 function discardStopAction(store: ServiceStore): void {
   store.state = { ...createInitialState(), hasGpsPermission: store.state.hasGpsPermission };
+  store.recordingStartedAt = null;
+  store.pausedMs = 0;
+  store.pausedSince = null;
   notify(store);
 }
 
@@ -261,7 +292,8 @@ function pauseRecordingAction(
   foregroundService: ForegroundServiceProvider | undefined,
 ): void {
   if (store.state.status !== 'recording') return;
-  store.state = { ...store.state, status: 'paused' };
+  store.state = { ...store.state, status: 'paused', elapsedTime: computeElapsedSeconds(store) };
+  store.pausedSince = Date.now();
   loop.stopTick();
   loop.stopWatch();
   triggerLocationPause(foregroundService, true);
@@ -274,10 +306,14 @@ function resumeRecordingAction(
   foregroundService: ForegroundServiceProvider | undefined,
 ): void {
   if (store.state.status !== 'paused') return;
+  if (store.pausedSince != null) {
+    store.pausedMs += Date.now() - store.pausedSince;
+    store.pausedSince = null;
+  }
   store.state = { ...store.state, status: 'recording' };
   triggerLocationPause(foregroundService, false);
   loop.startTick(() => {
-    store.state = { ...store.state, elapsedTime: store.state.elapsedTime + 1 };
+    store.state = { ...store.state, elapsedTime: computeElapsedSeconds(store) };
     notify(store);
   });
   loop.startWatch((point) => { addPoint(store, point); });
@@ -290,7 +326,14 @@ export function createCockpitService(
   repository?: IRouteRepository,
   foregroundService?: ForegroundServiceProvider,
 ): CockpitService {
-  const store: ServiceStore = { state: createInitialState(), listeners: new Set(), lastPoint: null };
+  const store: ServiceStore = {
+    state: createInitialState(),
+    listeners: new Set(),
+    lastPoint: null,
+    recordingStartedAt: null,
+    pausedMs: 0,
+    pausedSince: null,
+  };
   const loop = createRecordingLoop(gps);
 
   return {
