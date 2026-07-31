@@ -32,6 +32,14 @@ describe('route-map attribution control styling (AC-009)', () => {
   });
 });
 
+describe('route-map zoom controls hitbox (AC-014)', () => {
+  it('zoom control buttons have a minimum 56x56 hitbox, overriding MapLibre\'s default size', () => {
+    expect(styles).toMatch(
+      /\.maplibregl-ctrl-group button\s*\{[^}]*min-width:\s*var\(--hitbox-min\)[^}]*min-height:\s*var\(--hitbox-min\)/,
+    );
+  });
+});
+
 describe('route-map start/end markers use design tokens, not hardcoded colors (AC-011)', () => {
   it('.route-map-marker--start resolves --success as its base color', () => {
     expect(styles).toMatch(/\.route-map-marker--start\s*\{[^}]*color:\s*var\(--success\)/);
@@ -39,5 +47,19 @@ describe('route-map start/end markers use design tokens, not hardcoded colors (A
 
   it('.route-map-marker--end resolves --amber as its base color', () => {
     expect(styles).toMatch(/\.route-map-marker--end\s*\{[^}]*color:\s*var\(--amber\)/);
+  });
+});
+
+describe('route-map fullscreen button styling (AC-016)', () => {
+  it('has a minimum 56x56 hitbox', () => {
+    expect(styles).toMatch(
+      /\.route-map-fullscreen-toggle\s*\{[^}]*min-width:\s*var\(--hitbox-min\)[^}]*min-height:\s*var\(--hitbox-min\)/,
+    );
+  });
+});
+
+describe('route-map fullscreen icon respects prefers-reduced-motion (AC-021)', () => {
+  it('the icon transition relies on the global reduced-motion override, no exemption of its own', () => {
+    expect(styles).toMatch(/\.route-map-fullscreen-icon\s*\{[^}]*transition:/);
   });
 });

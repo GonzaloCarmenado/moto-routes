@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const {
   addSource, addLayer, fitBounds, remove, mapCtor, markerCtor, markerRemove, popupCtor, mapOn, getZoom, flyTo,
-  setPaintProperty,
+  setPaintProperty, addControl, NavigationControlMock, resize, setCenter, jumpTo,
 } = vi.hoisted(() => {
   const addSourceFn = vi.fn();
   const addLayerFn = vi.fn();
@@ -11,6 +11,17 @@ const {
   const getZoomFn = vi.fn(() => 12);
   const flyToFn = vi.fn();
   const setPaintPropertyFn = vi.fn();
+  const addControlFn = vi.fn();
+  const resizeFn = vi.fn();
+  const setCenterFn = vi.fn();
+  const jumpToFn = vi.fn();
+  // Constructor mockeado de `maplibregl.NavigationControl` (AC-013, AC-026) —
+  // solo necesita ser distinguible como instancia en `addControl`, no
+  // reproducir ningún comportamiento real de MapLibre. Función en vez de
+  // `class` vacía para no disparar `@typescript-eslint/no-extraneous-class`.
+  function NavigationControlMockClass(this: object): void {
+    Object.assign(this, {});
+  }
   // Solo registra el callback — no lo invoca. Antes este mock invocaba `load`
   // de forma síncrona e incondicional al registrarlo, lo que hacía imposible
   // testear ningún estado "antes de load" (p. ej. el skeleton de carga,
@@ -26,6 +37,15 @@ const {
     getZoom: getZoomFn,
     flyTo: flyToFn,
     setPaintProperty: setPaintPropertyFn,
+    addControl: addControlFn,
+    // AC-018/AC-019/AC-027/AC-028: el botón de pantalla completa solo debe
+    // invocar `resize()` — nunca recolocar la cámara manualmente (`resize()`
+    // de MapLibre ya preserva centro/zoom internamente). `setCenter`/`jumpTo`
+    // se mockean únicamente para poder afirmar que NO se llaman (test de
+    // guarda).
+    resize: resizeFn,
+    setCenter: setCenterFn,
+    jumpTo: jumpToFn,
   };
   const mapCtorFn = vi.fn((_options: { center: [number, number] }) => mockMapInstance);
 
@@ -73,6 +93,11 @@ const {
     getZoom: getZoomFn,
     flyTo: flyToFn,
     setPaintProperty: setPaintPropertyFn,
+    addControl: addControlFn,
+    NavigationControlMock: NavigationControlMockClass,
+    resize: resizeFn,
+    setCenter: setCenterFn,
+    jumpTo: jumpToFn,
   };
 });
 
@@ -81,16 +106,19 @@ vi.mock('maplibre-gl', () => ({
     Map: mapCtor,
     Marker: markerCtor,
     Popup: popupCtor,
+    NavigationControl: NavigationControlMock,
   },
   Map: mapCtor,
   Marker: markerCtor,
   Popup: popupCtor,
+  NavigationControl: NavigationControlMock,
 }));
 
 import './route-map.element.js';
 import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from './route-map.element.js';
 import type { MapPhoto } from './route-map-photos.js';
 import { ROAD_LAYER_IDS } from './route-map-contrast.js';
+import { FULLSCREEN_ENTER_LABEL, FULLSCREEN_EXIT_LABEL } from './route-map-fullscreen.js';
 
 type RouteMapEl = HTMLElement & { points: { lat: number; lng: number }[]; photos: MapPhoto[] };
 
@@ -170,6 +198,10 @@ describe('route-map', () => {
     mapOn.mockClear();
     flyTo.mockClear();
     setPaintProperty.mockReset();
+    addControl.mockClear();
+    resize.mockClear();
+    setCenter.mockClear();
+    jumpTo.mockClear();
     getZoom.mockReturnValue(12);
     document.body.querySelectorAll('.route-map-photo-popup').forEach((el) => { el.remove(); });
   });
@@ -404,6 +436,157 @@ describe('route-map', () => {
       expect(addLayer).toHaveBeenCalled();
       expect(fitBounds).toHaveBeenCalled();
       expect(markerCtor).toHaveBeenCalledTimes(2);
+
+      document.body.removeChild(el);
+    });
+  });
+
+  describe('controles de zoom (AC-013, AC-014, AC-015, AC-026)', () => {
+    it('adds a NavigationControl to the map, positioned in a corner distinct from the fullscreen button', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+
+      expect(addControl).toHaveBeenCalledWith(expect.any(NavigationControlMock), 'top-left');
+
+      document.body.removeChild(el);
+    });
+  });
+
+  describe('botón de pantalla completa (AC-016 a AC-021, AC-027 a AC-029)', () => {
+    // Baseline real de jsdom (normalmente sin soporte de Fullscreen API), para
+    // poder restaurarlo tras cada test y no filtrar el mock a otros bloques
+    // de este mismo archivo (p. ej. "controles de zoom", que se ejecuta antes).
+    const originalFullscreenEnabled = Object.getOwnPropertyDescriptor(document, 'fullscreenEnabled');
+    const originalRequestFullscreen = HTMLElement.prototype.requestFullscreen;
+
+    function findFullscreenButton(el: RouteMapEl): HTMLButtonElement | null {
+      return el.shadowRoot!.querySelector('[data-cy="route-map-fullscreen-toggle"]');
+    }
+
+    function findFullscreenContainer(el: RouteMapEl): HTMLElement {
+      return el.shadowRoot!.querySelector('[data-cy="route-map-container"]') as HTMLElement;
+    }
+
+    // El navegador dispara `fullscreenchange` tanto al pulsar el botón como al
+    // salir vía Esc (AC-019) — se simula fijando `document.fullscreenElement`
+    // (jsdom no implementa la Fullscreen API real) y disparando el evento.
+    function simulateFullscreenChange(toElement: Element | null): void {
+      Object.defineProperty(document, 'fullscreenElement', { value: toElement, configurable: true });
+      document.dispatchEvent(new Event('fullscreenchange'));
+    }
+
+    beforeEach(() => {
+      Object.defineProperty(document, 'fullscreenEnabled', { value: true, configurable: true });
+      HTMLElement.prototype.requestFullscreen = vi.fn().mockResolvedValue(undefined);
+      document.exitFullscreen = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true });
+    });
+
+    afterEach(() => {
+      if (originalFullscreenEnabled) {
+        Object.defineProperty(document, 'fullscreenEnabled', originalFullscreenEnabled);
+      } else {
+        delete (document as { fullscreenEnabled?: unknown }).fullscreenEnabled;
+      }
+      if (originalRequestFullscreen) {
+        HTMLElement.prototype.requestFullscreen = originalRequestFullscreen;
+      } else {
+        delete (HTMLElement.prototype as { requestFullscreen?: unknown }).requestFullscreen;
+      }
+      Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true });
+    });
+
+    it('shows the button with hitbox/aria-label and calls requestFullscreen() on the container when clicked in normal state', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+      const container = findFullscreenContainer(el);
+      const button = findFullscreenButton(el);
+
+      expect(button).not.toBeNull();
+      expect(button!.getAttribute('aria-label')).toBe(FULLSCREEN_ENTER_LABEL);
+
+      button!.click();
+
+      expect(container.requestFullscreen).toHaveBeenCalledOnce();
+
+      document.body.removeChild(el);
+    });
+
+    it("after simulating fullscreenchange entering fullscreen, calls map.resize() and updates the button's aria-label to the exit state", async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+      const container = findFullscreenContainer(el);
+      const button = findFullscreenButton(el)!;
+
+      simulateFullscreenChange(container);
+      await waitRender();
+
+      expect(resize).toHaveBeenCalledOnce();
+      expect(button.getAttribute('aria-label')).toBe(FULLSCREEN_EXIT_LABEL);
+
+      document.body.removeChild(el);
+    });
+
+    it('clicking the button while already in fullscreen calls document.exitFullscreen()', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+      const container = findFullscreenContainer(el);
+      const button = findFullscreenButton(el)!;
+
+      simulateFullscreenChange(container);
+      await waitRender();
+
+      button.click();
+
+      expect(document.exitFullscreen).toHaveBeenCalledOnce();
+
+      document.body.removeChild(el);
+    });
+
+    it('after simulating fullscreenchange exiting fullscreen (e.g. via Esc), calls map.resize() again and restores the original aria-label', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+      const container = findFullscreenContainer(el);
+      const button = findFullscreenButton(el)!;
+
+      simulateFullscreenChange(container);
+      await waitRender();
+      simulateFullscreenChange(null);
+      await waitRender();
+
+      expect(resize).toHaveBeenCalledTimes(2);
+      expect(button.getAttribute('aria-label')).toBe(FULLSCREEN_ENTER_LABEL);
+
+      document.body.removeChild(el);
+    });
+
+    it('does not call any map center/zoom-changing method (setCenter/jumpTo) when entering or exiting fullscreen — only resize()', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+      const container = findFullscreenContainer(el);
+
+      simulateFullscreenChange(container);
+      await waitRender();
+      simulateFullscreenChange(null);
+      await waitRender();
+
+      expect(setCenter).not.toHaveBeenCalled();
+      expect(jumpTo).not.toHaveBeenCalled();
+      expect(resize).toHaveBeenCalled();
+
+      document.body.removeChild(el);
+    });
+
+    it('does not render the fullscreen button when document.fullscreenEnabled is false', async () => {
+      Object.defineProperty(document, 'fullscreenEnabled', { value: false, configurable: true });
+
+      const el = await mountRouteMap(MADRID_POINTS);
+
+      expect(findFullscreenButton(el)).toBeNull();
+
+      document.body.removeChild(el);
+    });
+
+    it('does not render the fullscreen button when the container lacks requestFullscreen', async () => {
+      delete (HTMLElement.prototype as { requestFullscreen?: unknown }).requestFullscreen;
+
+      const el = await mountRouteMap(MADRID_POINTS);
+
+      expect(findFullscreenButton(el)).toBeNull();
 
       document.body.removeChild(el);
     });

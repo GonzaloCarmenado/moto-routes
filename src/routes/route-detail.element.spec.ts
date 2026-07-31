@@ -27,6 +27,15 @@ const { mapCtor, mapFitBounds, mapFlyTo } = vi.hoisted(() => {
     addLayer: vi.fn(),
     getZoom: vi.fn(() => 12),
     flyTo: flyToFn,
+    // addControl (Paso 5) y setPaintProperty (Paso 3) — este mock local se
+    // había quedado desactualizado respecto al mock compartido de
+    // route-map.element.spec.ts, y `map.addControl(...)` (llamado siempre,
+    // sin try/catch, en initMap) lanzaba una excepción no controlada al
+    // faltar en este objeto (descubierto al validar la suite completa del
+    // Paso 6 de mejoras-visuales-mapa).
+    addControl: vi.fn(),
+    setPaintProperty: vi.fn(),
+    resize: vi.fn(),
     on: vi.fn((event: string, cb: () => void) => {
       if (event === 'load') cb();
     }),
@@ -47,11 +56,18 @@ vi.mock('maplibre-gl', () => {
     addTo: vi.fn().mockReturnThis(),
     remove: vi.fn(),
   }));
+  // NavigationControl (Paso 5) — este mock local se había quedado
+  // desactualizado respecto al mock compartido de route-map.element.spec.ts;
+  // sin él, `new maplibregl.NavigationControl()` en initMap lanzaba una
+  // excepción no controlada (descubierto al validar la suite completa del
+  // Paso 6 de mejoras-visuales-mapa).
+  const navigationControlFn = vi.fn();
   return {
-    default: { Map: mapCtor, Marker: markerFn, Popup: popupFn },
+    default: { Map: mapCtor, Marker: markerFn, Popup: popupFn, NavigationControl: navigationControlFn },
     Map: mapCtor,
     Marker: markerFn,
     Popup: popupFn,
+    NavigationControl: navigationControlFn,
   };
 });
 
