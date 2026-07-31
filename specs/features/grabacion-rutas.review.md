@@ -26,9 +26,9 @@
 | AC-014 | (retirado — el toggle "Modo Invisible" se eliminó, ver nota de cierre) | — | — |
 | AC-015 | (retirado — el toggle "Modo Invisible" se eliminó, ver nota de cierre) | — | — |
 | AC-016 | Botón Pausa/Reanudar | `cockpit.service.spec.ts` → pauseRecording/resumeRecording | ✅ Cubierto |
-| AC-017 | Detección automática paradas | `cockpit.transform.spec.ts` → detectStop | ✅ Cubierto |
-| AC-018 | Algoritmo conservativo (30s) | `cockpit.transform.spec.ts` → detectStop timer scenarios | ✅ Cubierto |
-| AC-019 | Paradas registradas con timestamp | `cockpit.transform.spec.ts` → detectStop state changes | ✅ Cubierto |
+| AC-017 | Detección automática paradas | `cockpit.transform.spec.ts` → detectStop | ⚠️ Cubierto solo a nivel de algoritmo (ver nota de cierre) |
+| AC-018 | Algoritmo conservativo (30s) | `cockpit.transform.spec.ts` → detectStop timer scenarios | ⚠️ Cubierto solo a nivel de algoritmo (ver nota de cierre) |
+| AC-019 | Paradas registradas con timestamp | `cockpit.transform.spec.ts` → detectStop state changes | ❌ NO cubierto — nunca se persiste (ver nota de cierre) |
 
 ## Tests Generados en esta Sesión
 
@@ -51,6 +51,31 @@ No se generaron tests nuevos. Ver tests existentes:
 
 ## Veredicto
 **APROBADO** — 38/38 tests pasan, 16/19 ACs cubiertos por tests unitarios. Los 3 ACs restantes (AC-009, AC-012, AC-013, AC-015) requieren tests de integración con Android (emulador) o tests E2E con Cypress.
+
+## Cierre AC-017/AC-018/AC-019 (2026-07-31) — corrección: NO están cubiertos, se cierran como pendientes de spec futura
+
+Esta tabla marcaba AC-017/018/019 como "✅ Cubierto" citando únicamente
+`cockpit.transform.spec.ts → detectStop`. Esa cita solo prueba el algoritmo
+puro de detección (conservador, ventana de hasta 30s) — no prueba nada sobre
+persistencia ni sobre el criterio real de los AC ("paradas... registradas en
+la ruta con timestamp, duración y coordenadas").
+
+Verificado directamente en el código (2026-07-31): `buildStops()` en
+`src/cockpit/cockpit-persist.service.ts` devuelve siempre `[]` con el
+comentario explícito "Por ahora sin detección de paradas implementada", y
+`persistRouteOnStop()` guarda ese array vacío en cada ruta. La tabla
+`route_stops` y los métodos `save()`/`getStopsByRouteId()` del repositorio
+SQLite existen y funcionan, pero **nunca reciben una fila real** porque nada
+en producción construye un `RouteStop`. La única detección que se ejecuta hoy
+es en memoria durante la grabación (`stopState`/`stopTimer` en
+`cockpit.service.ts`, puramente para UI) y, para visualización, el recálculo
+al vuelo de `timeline-ruta` (que explícitamente no persiste nada nuevo).
+
+**Decisión**: se cierra esta discrepancia dejando AC-017/018/019 marcados
+honestamente como no cubiertos (algoritmo sí, persistencia no). No se
+implementa aquí. La persistencia real de paradas (con lo que implique de
+diccionario de datos, migraciones y contrato de `IRouteRepository`) se
+abordará en una spec nueva y dedicada, no como fix suelto sobre esta.
 
 ## Cierre AC-012/AC-013 (2026-07-27) — bug real encontrado, no solo falta de cobertura
 
