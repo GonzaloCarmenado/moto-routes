@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const {
   addSource, addLayer, fitBounds, remove, mapCtor, markerCtor, markerRemove, popupCtor, mapOn, getZoom, flyTo,
+  setPaintProperty,
 } = vi.hoisted(() => {
   const addSourceFn = vi.fn();
   const addLayerFn = vi.fn();
@@ -9,9 +10,13 @@ const {
   const removeFn = vi.fn();
   const getZoomFn = vi.fn(() => 12);
   const flyToFn = vi.fn();
-  const onFn = vi.fn((event: string, cb: () => void) => {
-    if (event === 'load') cb();
-  });
+  const setPaintPropertyFn = vi.fn();
+  // Solo registra el callback — no lo invoca. Antes este mock invocaba `load`
+  // de forma síncrona e incondicional al registrarlo, lo que hacía imposible
+  // testear ningún estado "antes de load" (p. ej. el skeleton de carga,
+  // AC-005/AC-006/AC-023). Ahora el disparo es explícito vía `triggerLoad()`,
+  // igual que ya existe `triggerZoomEnd()` para 'zoomend'.
+  const onFn = vi.fn();
   const mockMapInstance = {
     addSource: addSourceFn,
     addLayer: addLayerFn,
@@ -20,6 +25,7 @@ const {
     on: onFn,
     getZoom: getZoomFn,
     flyTo: flyToFn,
+    setPaintProperty: setPaintPropertyFn,
   };
   const mapCtorFn = vi.fn((_options: { center: [number, number] }) => mockMapInstance);
 
@@ -66,6 +72,7 @@ const {
     mapOn: onFn,
     getZoom: getZoomFn,
     flyTo: flyToFn,
+    setPaintProperty: setPaintPropertyFn,
   };
 });
 
@@ -83,6 +90,7 @@ vi.mock('maplibre-gl', () => ({
 import './route-map.element.js';
 import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from './route-map.element.js';
 import type { MapPhoto } from './route-map-photos.js';
+import { ROAD_LAYER_IDS } from './route-map-contrast.js';
 
 type RouteMapEl = HTMLElement & { points: { lat: number; lng: number }[]; photos: MapPhoto[] };
 
@@ -113,11 +121,23 @@ function makePhoto(id: string, lat: number, lng: number, objectUrl?: string): Ma
   };
 }
 
-async function mountRouteMap(points: { lat: number; lng: number }[]): Promise<RouteMapEl> {
+/**
+ * Monta `<route-map>` sin disparar el evento `load` del mock de MapLibre —
+ * deja al componente en el estado "cargando" (skeleton visible). Solo para
+ * el test del skeleton (AC-005, AC-006, AC-007, AC-023); el resto de tests
+ * sigue usando `mountRouteMap()`, que dispara `load` automáticamente.
+ */
+async function mountRouteMapWithoutLoad(points: { lat: number; lng: number }[]): Promise<RouteMapEl> {
   const el = document.createElement('route-map') as RouteMapEl;
   el.points = points;
   document.body.appendChild(el);
   await waitRender();
+  return el;
+}
+
+async function mountRouteMap(points: { lat: number; lng: number }[]): Promise<RouteMapEl> {
+  const el = await mountRouteMapWithoutLoad(points);
+  triggerLoad();
   return el;
 }
 
@@ -132,6 +152,11 @@ function triggerZoomEnd(): void {
   (zoomendCall?.[1] as (() => void) | undefined)?.();
 }
 
+function triggerLoad(): void {
+  const loadCall = mapOn.mock.calls.find(([event]) => event === 'load');
+  (loadCall?.[1] as (() => void) | undefined)?.();
+}
+
 describe('route-map', () => {
   beforeEach(() => {
     mapCtor.mockClear();
@@ -144,6 +169,7 @@ describe('route-map', () => {
     remove.mockClear();
     mapOn.mockClear();
     flyTo.mockClear();
+    setPaintProperty.mockReset();
     getZoom.mockReturnValue(12);
     document.body.querySelectorAll('.route-map-photo-popup').forEach((el) => { el.remove(); });
   });
@@ -203,6 +229,7 @@ describe('route-map', () => {
       el.photos = [makePhoto('p1', 40.4168, -3.7038)];
       document.body.appendChild(el);
       await waitRender();
+      triggerLoad();
 
       expect(findMarkerElements('photo-marker')).toHaveLength(1);
 
@@ -283,6 +310,100 @@ describe('route-map', () => {
       expect(markerRemove.mock.calls.length).toBeGreaterThan(previousMarkerRemovals);
       expect(findMarkerElements('photo-cluster')).toHaveLength(0);
       expect(findMarkerElements('photo-marker')).toHaveLength(2);
+
+      document.body.removeChild(el);
+    });
+  });
+
+  describe('atribución OpenFreeMap/OSM (AC-008, AC-009, AC-024)', () => {
+    it('constructs the map with a real (compact) attribution control instead of false', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+
+      const options = mapCtor.mock.calls[0]?.[0] as { attributionControl?: unknown };
+      expect(options.attributionControl).not.toBe(false);
+      expect(options.attributionControl).toEqual({ compact: true });
+
+      document.body.removeChild(el);
+    });
+  });
+
+  describe('skeleton de carga (AC-005, AC-006, AC-007, AC-023)', () => {
+    it('shows the loading skeleton while load has not fired yet, and hides it once load fires', async () => {
+      const el = await mountRouteMapWithoutLoad(MADRID_POINTS);
+
+      const root = el.shadowRoot!;
+      expect(root.querySelector('[data-cy="route-map-skeleton"]')).not.toBeNull();
+
+      triggerLoad();
+      await waitRender();
+
+      expect(root.querySelector('[data-cy="route-map-skeleton"]')).toBeNull();
+
+      document.body.removeChild(el);
+    });
+  });
+
+  describe('marcadores de inicio/fin (AC-010, AC-011, AC-012, AC-025)', () => {
+    function findStartEndMarkerElements(): { start: HTMLElement | undefined; end: HTMLElement | undefined } {
+      const elements = markerCtor.mock.calls.map(([options]) => options.element);
+      return {
+        start: elements.find((element) => element.classList.contains('route-map-marker--start')),
+        end: elements.find((element) => element.classList.contains('route-map-marker--end')),
+      };
+    }
+
+    it('start and end markers use the new pin-icon markup instead of a plain circle', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+
+      const { start, end } = findStartEndMarkerElements();
+
+      expect(start).toBeDefined();
+      expect(end).toBeDefined();
+      expect(start!.classList.contains('route-map-marker--pin')).toBe(true);
+      expect(end!.classList.contains('route-map-marker--pin')).toBe(true);
+      expect(start!.querySelector('svg')).not.toBeNull();
+      expect(end!.querySelector('svg')).not.toBeNull();
+
+      document.body.removeChild(el);
+    });
+
+    it('keeps exactly 2 start/end markers and their route-map-marker--start/--end classes after the pin-icon change (regression)', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+
+      expect(markerCtor).toHaveBeenCalledTimes(2);
+      const { start, end } = findStartEndMarkerElements();
+      expect(start).toBeDefined();
+      expect(end).toBeDefined();
+
+      document.body.removeChild(el);
+    });
+  });
+
+  describe('contraste visual de capas de carretera (AC-001, AC-002, AC-003, AC-004, AC-022)', () => {
+    it('calls setPaintProperty for at least one road layer after load, with a color different from a placeholder/blue tone', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+
+      expect(setPaintProperty.mock.calls.length).toBeGreaterThan(0);
+      for (const [layerId, property, value] of setPaintProperty.mock.calls) {
+        expect(ROAD_LAYER_IDS).toContain(layerId);
+        expect(property).toBe('line-color');
+        expect(String(value)).not.toMatch(/blue|azure|#0000ff/i);
+      }
+
+      document.body.removeChild(el);
+    });
+
+    it('does not throw and still draws the route, markers and fitBounds when setPaintProperty throws for a given layer id', async () => {
+      setPaintProperty.mockImplementation(() => {
+        throw new Error('layer not found in style');
+      });
+
+      const el = await mountRouteMap(MADRID_POINTS);
+
+      expect(addSource).toHaveBeenCalled();
+      expect(addLayer).toHaveBeenCalled();
+      expect(fitBounds).toHaveBeenCalled();
+      expect(markerCtor).toHaveBeenCalledTimes(2);
 
       document.body.removeChild(el);
     });
