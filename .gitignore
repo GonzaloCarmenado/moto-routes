@@ -30,6 +30,11 @@ cypress/screenshots/
 cypress/videos/
 cypress/downloads/
 
+# Documentación generada
+docs/api/
+docs/.vitepress/dist/
+docs/reference/
+
 # OS
 Thumbs.db
 Desktop.ini

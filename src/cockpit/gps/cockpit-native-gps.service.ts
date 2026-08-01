@@ -68,6 +68,9 @@ export function selectGpsProvider(isAndroid: boolean, native: GpsProvider, brows
   return isAndroid ? native : browser;
 }
 
+/** Crea un `GpsProvider` que usa el evento nativo Android `recording-service://location`
+ * (escuchado vía `listen`) y delega en `fallback` para las operaciones que el
+ * servicio nativo no cubre (getCurrentPosition, permisos). */
 export function createNativeGpsProvider(fallback: GpsProvider): GpsProvider {
   return {
     getCurrentPosition: () => fallback.getCurrentPosition(),

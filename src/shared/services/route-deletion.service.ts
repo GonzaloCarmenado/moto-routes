@@ -13,6 +13,10 @@ import type { IRouteRepository } from '../models/route.repository.js';
 import type { IPhotoRepository } from '../models/photo.repository.js';
 import { deletePhotoFile } from './photo-storage.service.js';
 
+/**
+ * Elimina una ruta junto con todas sus fotos asociadas (archivos + filas),
+ * garantizando el mismo resultado en SQLite (cascade) y en memoria.
+ */
 export async function deleteRouteAndPhotos(
   routeRepo: IRouteRepository,
   photoRepo: IPhotoRepository,

@@ -33,8 +33,9 @@
 ## Código
 - Seguir las convenciones definidas en memory/context.md
 - Usar tipos estrictos si el lenguaje lo permite
-- Documentar solo lo necesario (el código debe ser auto-documentado)
+- **Todo símbolo exportado (clase, función, constante, tipo) debe tener JSDoc conciso (qué/porqué, no cómo) — el pre-commit lo verifica con `eslint-plugin-jsdoc` (`publicOnly: true`). Archivos `*.spec.ts` exentos**
 - No hacer over-engineering: implementar solo lo que pide la spec
+- La documentación del proyecto se genera con `pnpm docs` (VitePress en `docs/`, API reference en `docs/api/`, Rust en `src-tauri/target/doc/`) — consultarla antes de implementar
 
 ## Tests E2E (Cypress)
 - Todo elemento interactivo debe tener `data-cy="contexto-tipo-accion"` único

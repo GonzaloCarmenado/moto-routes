@@ -320,6 +320,9 @@ function resumeRecordingAction(
   notify(store);
 }
 
+/** Crea el servicio de estado del cockpit con sus providers y listeners.
+ * Es la única forma recomendada de instanciar `CockpitService` (el estado vive
+ * en un closure interno). */
 export function createCockpitService(
   gps: GpsProvider,
   _storage: StorageProvider,

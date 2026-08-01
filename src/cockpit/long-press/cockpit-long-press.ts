@@ -14,6 +14,8 @@ export interface LongPressController {
   cleanup(): void;
 }
 
+/** Crea el controlador de long-press para el botón maestro: arranca un temporizador
+ * y anima el arco; al completarse llama a `onComplete`. Devuelve `{ press, release, cleanup }`. */
 export function createLongPressController(
   durationMs: number,
   arcCircumference: number,

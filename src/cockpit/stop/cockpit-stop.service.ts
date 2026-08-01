@@ -43,6 +43,12 @@ export interface ResolveStopDecisionParams {
   getPhotoRepo: () => Promise<IPhotoRepository>;
 }
 
+/**
+ * Resuelve la decisión de parada: muestra el diálogo guardar/descartar con los
+ * metadatos congelados de `prepareStop()` y aplica la elección del usuario
+ * (guardar con nombre, descartar y borrar, o mantener). Es el flujo de parada
+ * en dos fases de ADR-023.
+ */
 export async function resolveStopDecision(params: ResolveStopDecisionParams): Promise<void> {
   const { metadata, routeId, service, routeRepo, getPhotoRepo } = params;
   const { choice, name } = await decideStopOutcome(metadata);

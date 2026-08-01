@@ -11,6 +11,7 @@
 const MIN_TARGET_POINTS = 20;
 const MAX_TARGET_POINTS = 40;
 
+/** Punto GPS con latitud/longitud (entrada de `simplifyPolyline`). */
 export interface PolylinePoint {
   lat: number;
   lng: number;

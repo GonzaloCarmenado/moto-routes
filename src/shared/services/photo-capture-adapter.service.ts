@@ -7,8 +7,10 @@
  * (ver ADR-027 / spec fotos-ruta.md AC-022).
  */
 
+/** Resultado de captura desde cámara: el archivo o `null` si se cancela. */
 export type CaptureResult = File | null;
 
+/** Detecta si la app corre dentro de Tauri (web/desktop/Android nativo). */
 export function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
@@ -31,6 +33,10 @@ export async function pickFromGallery(): Promise<File[]> {
   return captureFromInput({ useCamera: false, multiple: true });
 }
 
+/**
+ * Valida una foto antes de persistirla: formato JPEG/PNG y tamaño ≤ 20 MB.
+ * Devuelve mensaje de error legible o `null` si es válida.
+ */
 export function validatePhoto(file: File): string | null {
   const validTypes = ['image/jpeg', 'image/png'];
   if (!validTypes.includes(file.type)) {

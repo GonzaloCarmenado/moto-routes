@@ -67,6 +67,9 @@ interface ShadowRootWithFullscreen {
   fullscreenElement?: Element | null;
 }
 
+/** Comprueba si `container` está en pantalla completa, manejando correctamente
+ * el retarget de `document.fullscreenElement` hacia el host del Shadow DOM
+ * (ver comentario de cabecera). */
 export function isElementFullscreen(container: HTMLElement): boolean {
   const root = container.getRootNode();
   if (root instanceof ShadowRoot) {
