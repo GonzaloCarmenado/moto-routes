@@ -1,10 +1,13 @@
+/** Punto geográfico de entrada para la transformación del mapa. */
 export interface RouteMapPoint {
   lat: number;
   lng: number;
 }
 
+/** Tupla [lng, lat] en orden GeoJSON (longitud primero). */
 export type LngLat = [number, number];
 
+/** Feature GeoJSON LineString que consume MapLibre para pintar la ruta. */
 export interface RouteLineFeature {
   type: 'Feature';
   properties: Record<string, never>;
@@ -14,6 +17,7 @@ export interface RouteLineFeature {
   };
 }
 
+/** Convierte los puntos de ruta a una Feature GeoJSON LineString para MapLibre. */
 export function toGeoJSON(points: readonly RouteMapPoint[]): RouteLineFeature {
   return {
     type: 'Feature',
@@ -77,6 +81,7 @@ function linearToSrgb8bit(channel: number): number {
   return Math.round(Math.min(Math.max(encoded, 0), 1) * 255);
 }
 
+/** Calcula los límites geográficos (suroeste, noreste) de los puntos; `null` si no hay puntos. */
 export function computeBounds(points: readonly RouteMapPoint[]): [LngLat, LngLat] | null {
   if (points.length === 0) return null;
 

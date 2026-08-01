@@ -55,6 +55,8 @@ TypeScript 5.7 strict + Vite 6 + Web Components nativos (frontend), Rust + Tauri
 - Separación estricta: `.element.ts` + `.element.css` + `.service.ts` + `.transform.ts` + `.types.ts`.
 - Prohibido CSS inline salvo animación/posicionamiento dinámico justificado.
 - Componentes compartidos van en `src/shared/`, nunca duplicados entre dominios — si dudas si algo es shared, pregunta antes de crear un componente nuevo.
+- **Todo símbolo exportado (clase, función, constante, tipo) debe tener JSDoc conciso (qué/porqué, no cómo) — el pre-commit lo verifica con `eslint-plugin-jsdoc` (`publicOnly: true`). Archivos `*.spec.ts` exentos.**
+- La documentación del proyecto se genera con `pnpm docs` (VitePress en `docs/`, API reference en `docs/api/`, Rust en `src-tauri/target/doc/`) — consúltala antes de implementar.
 - **`data-cy` obligatorio**: todo elemento interactivo o que un test E2E pueda necesitar localizar (botón, input, select, checkbox, link, fila de tabla, contenedor de estado — loading/empty/error) lleva un atributo `data-cy="<contexto>-<tipo>-<accion>"` único y semántico, añadido en el propio `.element.ts` al crearlo — no se añade a posteriori solo cuando un test lo pide. Regla absoluta, sin excepciones: nunca selectores de clase, ID o posición DOM en tests. Detalle y ejemplos: `docs/07-cypress-e2e.md`.
 - Detalle completo: `specs/ui/frontend-conventions.md`.
 

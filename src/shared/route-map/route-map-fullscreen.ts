@@ -11,7 +11,9 @@
 
 import type * as maplibregl from 'maplibre-gl';
 
+/** Texto accesible del botón en estado "entrar a pantalla completa". */
 export const FULLSCREEN_ENTER_LABEL = 'Ver mapa a pantalla completa';
+/** Texto accesible del botón en estado "salir de pantalla completa". */
 export const FULLSCREEN_EXIT_LABEL = 'Salir de pantalla completa';
 
 const FULLSCREEN_ACTIVE_CLASS = 'route-map-fullscreen-toggle--fullscreen';
@@ -32,6 +34,7 @@ const EXIT_ICON_SVG =
   '<path fill="currentColor" d="M6 10H2V8h6V2h2v6a2 2 0 0 1-2 2zm10 0h6V8h-6V2h-2v6a2 2 0 0 0 2 2zM6 14H2v2h6v6h2v-6a2 2 0 0 0-2-2zm10 0a2 2 0 0 0-2 2v6h2v-6h6v-2h-6z"/>' +
   '</svg>';
 
+/** Resultado de crear el toggle: el botón y una función de limpieza de listeners. */
 export interface FullscreenToggle {
   readonly element: HTMLButtonElement;
   readonly destroy: () => void;
@@ -67,6 +70,9 @@ interface ShadowRootWithFullscreen {
   fullscreenElement?: Element | null;
 }
 
+/** Comprueba si `container` está en pantalla completa, manejando correctamente
+ * el retarget de `document.fullscreenElement` hacia el host del Shadow DOM
+ * (ver comentario de cabecera). */
 export function isElementFullscreen(container: HTMLElement): boolean {
   const root = container.getRootNode();
   if (root instanceof ShadowRoot) {

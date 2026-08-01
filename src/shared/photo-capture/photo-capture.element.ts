@@ -24,6 +24,8 @@ const GALLERY_ICON = `
   <polyline points="21 15 16 10 5 21"/>
 </svg>`;
 
+/** Web Component `<photo-capture>`: botón de añadir foto con menú Cámara/Galería
+ * y estados `disabled`/`loading`/`limit-reached`. */
 export class PhotoCaptureElement extends BaseElement {
   static get observedAttributes(): string[] {
     return ['disabled', 'loading', 'limit-reached'];

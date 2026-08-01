@@ -1,4 +1,5 @@
 /**
+ * @packageDocumentation
  * Bus de eventos de navegación de la app.
  *
  * Los eventos de navegación viajan por `window` (bus global), no por el árbol de
@@ -22,6 +23,7 @@ export interface AppEventDetailMap {
   'back-to-list': undefined;
 }
 
+/** Nombre de evento de navegación (clave de `AppEventDetailMap`). */
 export type AppEventName = keyof AppEventDetailMap;
 
 /**

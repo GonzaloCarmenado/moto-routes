@@ -8,8 +8,10 @@
 import '../shared/photo-gallery/photo-gallery.element.js';
 import { PHOTO_GALLERY_SELECT_EVENT, type PhotoGallerySelectDetail, type GalleryPhoto } from '../shared/photo-gallery/photo-gallery.element.js';
 
+/** Referencia tipada al `<photo-gallery>` con su propiedad `photos`. */
 export type PhotoGalleryElement = HTMLElement & { photos: GalleryPhoto[] };
 
+/** Construye la cabecera del cockpit (chip de estado + reloj). */
 export function buildHeader(time: string, chipClass: string, chipLabel: string): HTMLElement {
   const header = document.createElement('div');
   header.className = 'app-header';
@@ -22,6 +24,7 @@ export function buildHeader(time: string, chipClass: string, chipLabel: string):
   return header;
 }
 
+/** Construye la cifra de velocidad actual con su unidad (km/h). */
 export function buildSpeedDisplay(speed: string): HTMLElement {
   const display = document.createElement('div');
   display.className = 'speed-display';
@@ -31,6 +34,7 @@ export function buildSpeedDisplay(speed: string): HTMLElement {
   return display;
 }
 
+/** Construye la rejilla de estadísticas (distancia, tiempo, altitud). */
 export function buildStatGrid(dist: string, time: string, alt: string): HTMLElement {
   const grid = document.createElement('div');
   grid.className = 'stat-grid';
@@ -50,6 +54,7 @@ export function buildStatGrid(dist: string, time: string, alt: string): HTMLElem
   return grid;
 }
 
+/** Construye el banner de velocidad media que se muestra al parar la grabación. */
 export function buildAvgSpeedBanner(avgSpeed: string): HTMLElement {
   const banner = document.createElement('div');
   banner.className = 'avg-speed-banner';
@@ -57,6 +62,7 @@ export function buildAvgSpeedBanner(avgSpeed: string): HTMLElement {
   return banner;
 }
 
+/** Valores numéricos actualizados en vivo durante la grabación (tick/GPS). */
 export interface LiveValues {
   speed: string;
   avgSpeed: string;
@@ -92,11 +98,13 @@ export function updateLiveDisplay(root: ShadowRoot, values: LiveValues): void {
   if (avgEl) avgEl.textContent = `${values.avgSpeed} km/h`;
 }
 
+/** Arco de progreso SVG del botón maestro (contiene el SVG y su círculo). */
 export interface ProgressArc {
   svg: SVGSVGElement;
   circle: SVGCircleElement;
 }
 
+/** Crea el arco de progreso SVG del botón maestro (long-press para parar). */
 export function buildProgressArc(): ProgressArc {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('class', 'control-btn__arc');
@@ -109,12 +117,14 @@ export function buildProgressArc(): ProgressArc {
   return { svg, circle };
 }
 
+/** Callbacks del botón maestro (iniciar, pulsar para finalizar, soltar). */
 export interface MasterButtonHandlers {
   onStart: () => void;
   onStopPress: () => void;
   onStopRelease: () => void;
 }
 
+/** Construye el botón maestro: "Iniciar grabación" o "Mantén pulsado para finalizar". */
 export function buildMasterButton(isActive: boolean, handlers: MasterButtonHandlers, arc: ProgressArc | null): HTMLButtonElement {
   const btn = document.createElement('button');
   btn.id = 'cockpit-master-btn';
@@ -136,6 +146,7 @@ export function buildMasterButton(isActive: boolean, handlers: MasterButtonHandl
   return btn;
 }
 
+/** Construye el botón de pausa/reanudar (deshabilitado si no hay grabación activa). */
 export function buildPauseButton(isActive: boolean, isPaused: boolean, onPauseResume: () => void): HTMLButtonElement {
   const btn = document.createElement('button');
   btn.id = 'cockpit-pause-btn';
@@ -153,6 +164,7 @@ export function buildPauseButton(isActive: boolean, isPaused: boolean, onPauseRe
   return btn;
 }
 
+/** Opciones de `buildControls`: estado de grabación y callbacks de los botones. */
 export interface ControlsOptions {
   isActive: boolean;
   isPaused: boolean;
@@ -161,6 +173,7 @@ export interface ControlsOptions {
   arc: ProgressArc | null;
 }
 
+/** Construye el bloque de controles de grabación (pause + master + etiquetas). */
 export function buildControls(options: ControlsOptions): HTMLElement {
   const { isActive, isPaused, masterHandlers, onPauseResume, arc } = options;
   const wrapper = document.createElement('div');
@@ -177,6 +190,7 @@ export function buildControls(options: ControlsOptions): HTMLElement {
   return wrapper;
 }
 
+/** Crea el elemento `<photo-gallery>` del cockpit conectando su evento de selección. */
 export function buildPhotoGalleryElement(onSelect: (index: number) => void): PhotoGalleryElement {
   const gallery = document.createElement('photo-gallery') as PhotoGalleryElement;
   gallery.setAttribute('data-cy', 'cockpit-photo-gallery');
@@ -186,6 +200,7 @@ export function buildPhotoGalleryElement(onSelect: (index: number) => void): Pho
   return gallery;
 }
 
+/** Crea el overlay de permiso GPS (oculto por defecto, muestra botón para abrir ajustes). */
 export function buildGpsOverlay(onRequestGps: () => void): HTMLElement {
   const overlay = document.createElement('div');
   overlay.id = 'gps-overlay';

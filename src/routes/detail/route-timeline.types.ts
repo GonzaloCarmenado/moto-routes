@@ -1,3 +1,4 @@
+/** Parada detectada dentro de la ruta para la timeline (inicio, fin, ubicación). */
 export interface TimelineStop {
   /** epoch ms — punto donde la velocidad cae por primera vez (AC-006) */
   startTime: number;
@@ -7,14 +8,17 @@ export interface TimelineStop {
   lng: number;
 }
 
+/** Tramo de la ruta entre dos delimitadores de la timeline. */
 export interface TimelineSegment {
   startTime: number;
   endTime: number;
   avgSpeedKmh: number;
 }
 
+/** Tipo de delimitador de la timeline: salida, parada o llegada. */
 export type TimelineDelimiterKind = 'salida' | 'parada' | 'llegada';
 
+/** Delimitador visual de la timeline (Salida, Parada o Llegada con su posición). */
 export interface TimelineDelimiter {
   kind: TimelineDelimiterKind;
   startTime: number;
@@ -24,6 +28,7 @@ export interface TimelineDelimiter {
   lng: number;
 }
 
+/** Marcador de foto en la timeline (id y momento de captura). */
 export interface TimelinePhotoMarker {
   photoId: string;
   /** capturedAt en epoch ms */
@@ -41,6 +46,7 @@ export interface TimelineRow {
   photosInSegment: TimelinePhotoMarker[];
 }
 
+/** Datos completos de la timeline: filas, fotos por tramo y fotos huérfanas. */
 export interface TimelineData {
   /** false si <2 route_points (AC-015) */
   hasGpsData: boolean;
@@ -53,7 +59,7 @@ export interface TimelineData {
   orphanPhotos: TimelinePhotoMarker[];
 }
 
-/** Versión mínima de photo para la timeline (solo lo que necesita la transformación) */
+/** Versión mínima de foto para la timeline (solo lo que necesita la transformación). */
 export interface TimelinePhotoInput {
   id: string;
   capturedAt: string; // ISO string

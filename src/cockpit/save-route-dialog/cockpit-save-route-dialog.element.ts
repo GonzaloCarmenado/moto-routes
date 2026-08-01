@@ -1,11 +1,13 @@
 import { BaseElement } from '../../shared/base-element.js';
 import styles from './cockpit-save-route-dialog.element.css?inline';
 
+/** Opciones del diálogo de guardado: resumen de la ruta a mostrar. */
 export interface SaveRouteDialogOptions {
   /** Resumen de la ruta (distancia · duración), ej. "5.2 km · 02:00". */
   message: string;
 }
 
+/** Resultado de la decisión: guardar (con nombre) o descartar. */
 export interface SaveRouteDialogResult {
   action: 'save' | 'discard';
   name: string;

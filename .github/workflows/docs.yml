@@ -1,0 +1,33 @@
+name: Docs
+
+# Genera y valida la documentación del proyecto (VitePress + TypeDoc + cargo doc)
+# en cada push a master y en PRs que toquen código/documentación.
+# Nota: el script se invoca como `pnpm run docs` — `pnpm docs` colisiona con el
+# comando nativo de pnpm (abre la doc de un paquete) y pnpm lo intercepta antes.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build docs (VitePress + TypeDoc + cargo doc)
+        run: pnpm run docs

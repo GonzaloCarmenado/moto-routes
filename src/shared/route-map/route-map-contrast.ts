@@ -48,6 +48,7 @@ export const ROAD_LABEL_LAYER_IDS = [
   'place_other',
 ] as const;
 
+/** Un override de `paint` sobre una capa del mapa (propiedad y valor). */
 export interface RoadContrastOverride {
   layerId: string;
   property: string;

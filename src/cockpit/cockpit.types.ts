@@ -2,10 +2,13 @@
  * Tipos del dominio Cockpit (Grabación de Rutas)
  */
 
+/** Estado del ciclo de grabación: parado, grabando o pausado. */
 export type RecordingStatus = 'idle' | 'recording' | 'paused';
 
+/** Estado de la detección de paradas: en movimiento, posible parada o confirmada. */
 export type StopDetectionState = 'moving' | 'possible-stop' | 'confirmed-stop';
 
+/** Punto GPS de una grabación activa (sin id — se genera al persistir). */
 export interface RoutePoint {
   timestamp: number;
   lat: number;
@@ -14,6 +17,7 @@ export interface RoutePoint {
   speed: number;
 }
 
+/** Parada detectada dentro de una grabación (tiempos y ubicación). */
 export interface Stop {
   startTime: number;
   endTime?: number;
@@ -22,6 +26,7 @@ export interface Stop {
   type: 'manual' | 'auto';
 }
 
+/** Metadatos de una ruta al detener la grabación (para el diálogo guardar/descartar). */
 export interface RouteMetadata {
   date: string;
   duration: number;
@@ -30,6 +35,7 @@ export interface RouteMetadata {
   stops: Stop[];
 }
 
+/** Estado completo del cockpit en un instante (snapshot inmutable compartido con listeners). */
 export interface CockpitState {
   /** ID pre-generado de la ruta en curso, asignado al iniciar la grabación.
    * Permite asociar fotos capturadas durante la grabación a la ruta antes

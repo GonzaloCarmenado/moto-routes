@@ -8,6 +8,7 @@
 /*  Entidad (lectura)                                                  */
 /* ------------------------------------------------------------------ */
 
+/** Foto capturada para una ruta (entidad de lectura). */
 export interface Photo {
   readonly id: string;
   readonly routeId: string;
@@ -22,6 +23,7 @@ export interface Photo {
 /*  Tipo de creación (escritura — sin id ni createdAt)                 */
 /* ------------------------------------------------------------------ */
 
+/** Datos necesarios para crear una foto (escritura — sin `id` ni `createdAt`). */
 export interface CreatePhoto {
   routeId: string;
   filePath: string;
