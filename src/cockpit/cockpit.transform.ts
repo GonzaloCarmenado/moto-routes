@@ -24,6 +24,7 @@ export function sanitizeRouteName(raw: string): string {
   return raw.trim().slice(0, ROUTE_NAME_MAX_LENGTH);
 }
 
+/** Valores formateados para mostrar en pantalla (speed/avgSpeed/dist/time/alt). */
 export interface CockpitDisplayValues {
   speed: string;
   avgSpeed: string;

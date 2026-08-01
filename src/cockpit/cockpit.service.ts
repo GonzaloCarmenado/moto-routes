@@ -14,6 +14,7 @@ import { persistRouteOnStart, persistRouteOnStop } from './persist/cockpit-persi
 
 export type { ForegroundServiceProvider } from './gps/cockpit-foreground.service.js';
 
+/** Proveedor de ubicación (navegador o nativo Android) con permisos. */
 export interface GpsProvider {
   getCurrentPosition(): Promise<GeolocationPosition>;
   watchPosition(callback: (pos: GeolocationPosition) => void): () => void;
@@ -21,6 +22,7 @@ export interface GpsProvider {
   requestPermissions(): Promise<boolean>;
 }
 
+/** Almacenamiento genérico (guardado de archivos, p. ej. fotos). */
 export interface StorageProvider {
   save(path: string, data: string): Promise<void>;
 }
@@ -51,8 +53,10 @@ export function createBrowserGpsProvider(): GpsProvider {
   };
 }
 
+/** Listener de cambios de estado del cockpit. */
 export type StateListener = (state: CockpitState) => void;
 
+/** API pública del servicio de grabación (creado con `createCockpitService`). */
 export interface CockpitService {
   subscribe(listener: StateListener): () => void;
   getCurrentState(): CockpitState;

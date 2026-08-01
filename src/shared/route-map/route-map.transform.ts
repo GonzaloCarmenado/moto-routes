@@ -1,10 +1,13 @@
+/** Punto geográfico de entrada para la transformación del mapa. */
 export interface RouteMapPoint {
   lat: number;
   lng: number;
 }
 
+/** Tupla [lng, lat] en orden GeoJSON (longitud primero). */
 export type LngLat = [number, number];
 
+/** Feature GeoJSON LineString que consume MapLibre para pintar la ruta. */
 export interface RouteLineFeature {
   type: 'Feature';
   properties: Record<string, never>;

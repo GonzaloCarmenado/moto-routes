@@ -8,7 +8,9 @@ export interface GalleryPhoto {
   objectUrl: string;
 }
 
+/** Nombre del evento despachado al pulsar una miniatura (con el índice). */
 export const PHOTO_GALLERY_SELECT_EVENT = 'photo-gallery:select';
+/** Payload del evento de selección de miniatura. */
 export interface PhotoGallerySelectDetail {
   index: number;
 }

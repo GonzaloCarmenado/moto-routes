@@ -11,6 +11,7 @@ import {
   resumeRecordingLocation,
 } from '../../shared/tauri/commands.js';
 
+/** Proveedor del foreground service Android (start/stop/pausa/reanuda ubicación). */
 export interface ForegroundServiceProvider {
   start(): Promise<void>;
   stop(): Promise<void>;

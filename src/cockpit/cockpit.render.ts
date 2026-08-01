@@ -8,6 +8,7 @@
 import '../shared/photo-gallery/photo-gallery.element.js';
 import { PHOTO_GALLERY_SELECT_EVENT, type PhotoGallerySelectDetail, type GalleryPhoto } from '../shared/photo-gallery/photo-gallery.element.js';
 
+/** Referencia tipada al `<photo-gallery>` con su propiedad `photos`. */
 export type PhotoGalleryElement = HTMLElement & { photos: GalleryPhoto[] };
 
 /** Construye la cabecera del cockpit (chip de estado + reloj). */
@@ -61,6 +62,7 @@ export function buildAvgSpeedBanner(avgSpeed: string): HTMLElement {
   return banner;
 }
 
+/** Valores numéricos actualizados en vivo durante la grabación (tick/GPS). */
 export interface LiveValues {
   speed: string;
   avgSpeed: string;
@@ -96,6 +98,7 @@ export function updateLiveDisplay(root: ShadowRoot, values: LiveValues): void {
   if (avgEl) avgEl.textContent = `${values.avgSpeed} km/h`;
 }
 
+/** Arco de progreso SVG del botón maestro (contiene el SVG y su círculo). */
 export interface ProgressArc {
   svg: SVGSVGElement;
   circle: SVGCircleElement;
@@ -114,6 +117,7 @@ export function buildProgressArc(): ProgressArc {
   return { svg, circle };
 }
 
+/** Callbacks del botón maestro (iniciar, pulsar para finalizar, soltar). */
 export interface MasterButtonHandlers {
   onStart: () => void;
   onStopPress: () => void;
@@ -160,6 +164,7 @@ export function buildPauseButton(isActive: boolean, isPaused: boolean, onPauseRe
   return btn;
 }
 
+/** Opciones de `buildControls`: estado de grabación y callbacks de los botones. */
 export interface ControlsOptions {
   isActive: boolean;
   isPaused: boolean;
