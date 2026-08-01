@@ -32,10 +32,14 @@ describe('route-map attribution control styling (AC-009)', () => {
   });
 });
 
-describe('route-map zoom controls hitbox (AC-014)', () => {
-  it('zoom control buttons have a minimum 56x56 hitbox, overriding MapLibre\'s default size', () => {
+describe('route-map attribution button opacity (AC-033)', () => {
+  it('reduces the compact attribution button opacity by default', () => {
+    expect(styles).toMatch(/\.maplibregl-ctrl-attrib-button\s*\{[^}]*opacity:\s*0\.\d+/);
+  });
+
+  it('restores full opacity on hover/focus so it stays reachable', () => {
     expect(styles).toMatch(
-      /\.maplibregl-ctrl-group button\s*\{[^}]*min-width:\s*var\(--hitbox-min\)[^}]*min-height:\s*var\(--hitbox-min\)/,
+      /\.maplibregl-ctrl-attrib-button:hover,\s*\.maplibregl-ctrl-attrib-button:focus-visible\s*\{[^}]*opacity:\s*1/,
     );
   });
 });
@@ -54,6 +58,14 @@ describe('route-map fullscreen button styling (AC-016)', () => {
   it('has a minimum 56x56 hitbox', () => {
     expect(styles).toMatch(
       /\.route-map-fullscreen-toggle\s*\{[^}]*min-width:\s*var\(--hitbox-min\)[^}]*min-height:\s*var\(--hitbox-min\)/,
+    );
+  });
+});
+
+describe('route-map photo marker hit area (AC-036)', () => {
+  it('has a minimum 56x56 hitbox around the visible icon', () => {
+    expect(styles).toMatch(
+      /\.route-map-marker-hitarea\s*\{[^}]*min-width:\s*var\(--hitbox-min\)[^}]*min-height:\s*var\(--hitbox-min\)/,
     );
   });
 });

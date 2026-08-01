@@ -47,8 +47,31 @@ export function isFullscreenSupported(container: HTMLElement): boolean {
   return document.fullscreenEnabled && typeof container.requestFullscreen === 'function';
 }
 
-/** Compara `document.fullscreenElement` contra el contenedor dado. */
+/**
+ * Compara el elemento en pantalla completa contra el contenedor dado.
+ *
+ * Bug real encontrado en verificación de dispositivo (2026-08-01): `container`
+ * vive dentro del Shadow DOM de `<route-map>`, y la Fullscreen API retargeta
+ * `document.fullscreenElement` al *host* del árbol de sombra más externo (el
+ * propio `<route-map>`), no al elemento real que llamó a `requestFullscreen()`
+ * — por diseño, para no filtrar detalles de encapsulación del shadow tree. Con
+ * `document.fullscreenElement === container` esa comparación era siempre
+ * `false`, así que tras entrar en pantalla completa el botón nunca detectaba
+ * el estado activo y, al pulsarlo de nuevo, volvía a llamar a
+ * `requestFullscreen()` en vez de a `exitFullscreen()` (no pasaba nada).
+ * `ShadowRoot` expone su propio `fullscreenElement` (sin retargetar) para el
+ * árbol que lo contiene — se usa ese cuando el contenedor vive en un shadow
+ * tree, y se cae a `document.fullscreenElement` en caso contrario (DOM ligero).
+ */
+interface ShadowRootWithFullscreen {
+  fullscreenElement?: Element | null;
+}
+
 export function isElementFullscreen(container: HTMLElement): boolean {
+  const root = container.getRootNode();
+  if (root instanceof ShadowRoot) {
+    return (root as ShadowRoot & ShadowRootWithFullscreen).fullscreenElement === container;
+  }
   return document.fullscreenElement === container;
 }
 
