@@ -1,0 +1,51 @@
+schema: spec-driven
+
+context: |
+  Moto Routes: app móvil de tracking de rutas en moto. Frontend TypeScript 5.7 strict +
+  Vite 6 + Web Components nativos (sin framework); backend Rust + Tauri 2 (target Android
+  prioritario). Estructura por dominio funcional (cockpit/, routes/, shared/), separación
+  .element.ts + .element.css + .service.ts + .transform.ts + .types.ts. Componentes
+  compartidos van en src/shared/, nunca duplicados entre dominios.
+  Quality gates existentes (no los sustituye OpenSpec, conviven en paralelo): 100% test
+  pass rate (Vitest + cargo test), cobertura TS ≥80%, ESLint/Clippy 0 warnings, rustfmt,
+  pre-commit Husky con toda la suite. Todo elemento interactivo lleva data-cy="<contexto>-
+  <tipo>-<accion>" (nunca selectores de clase/ID/posición DOM en tests E2E Cypress). Todo
+  export público lleva JSDoc conciso (eslint-plugin-jsdoc, publicOnly, *.spec.ts exento).
+  CSP estricta en Tauri (sin unsafe-eval/unsafe-inline). Nunca secretos en código.
+  Diseño "Asfalto Nocturno": modo oscuro obligatorio, tokens en src/shared/styles/tokens.css
+  (nunca hardcodear color/fuente/espaciado), hitbox mínima 56×56px (uso con guantes).
+  Documentación y specs en español, código en inglés. El proyecto mantiene en paralelo un
+  SDD propio (specs/features/, memory/, .claude/agents/ con spec-agent/plan-agent/impl-agent/
+  review-agent/test-agent) — ver memory/decisions.md ADR-027 para el porqué de adoptar
+  OpenSpec y el criterio de convivencia entre ambos flujos durante la transición.
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
