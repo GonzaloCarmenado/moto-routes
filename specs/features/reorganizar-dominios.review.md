@@ -22,9 +22,9 @@
 | `specs/features/reorganizar-dominios.plan.md` | CREADO | Plan con 3 pasos + URLs de issues GitHub |
 
 ## 📝 Resumen de Cambios
-- **Reorganización de `src/cockpit/`**: `cockpit-save-route-dialog.*` (element, css, spec) movido a `src/cockpit/save-route-dialog/`. El resto de ficheros del cockpit permanece plano en la raíz porque es UNA pantalla (ventana de grabación) — sus servicios (native-gps, foreground, persist, stop, photo, long-press) son sub-partes de la misma vista.
+- **Reorganización de `src/cockpit/` (núcleo + sub-responsabilidades)**: `cockpit-save-route-dialog.*` movido a `src/cockpit/save-route-dialog/`; el núcleo (element/service/transform/render/types) permanece en raíz; los servicios se agrupan por **sub-responsabilidad funcional** (AC-009): `gps/` (native-gps + foreground), `persist/`, `photo/`, `stop/`, `long-press/`. Cada `x.ts` con su `x.spec.ts` en su subcarpeta.
 - **Reorganización de `src/routes/`**: dividido en 2 subcarpetas por vista de aplicación: `list/` (listado: 7 ficheros) y `detail/` (detalle: 12 ficheros). El timeline (pestaña del detalle) vive dentro de `detail/` junto a `route-timeline.transform.ts` y `route-timeline.types.ts`.
-- **Imports actualizados**: todos los `../shared/` → `../../shared/` en ficheros movidos a una subcarpeta; el import cruzado `routes → cockpit` (excepción documentada AC-001: `detectStop`) pasa de `../cockpit/` a `../../cockpit/`.
+- **Imports actualizados**: todos los `../shared/` → `../../shared/` en ficheros movidos a una subcarpeta; el import cruzado `routes → cockpit` (excepción documentada AC-001: `detectStop`) pasa de `../cockpit/` a `../../cockpit/`; los imports de la raíz de cockpit apuntan a `./gps/`, `./persist/`, `./photo/`, `./stop/`, `./long-press/`.
 - **Importador externo**: `src/app/app.element.ts` actualizado a `../routes/list/` y `../routes/detail/`.
 - **Sin cambios de lógica, CSS ni dependencias**: ficheros movidos "literalmente" con `git mv` (confirmado por git rename detection), solo cambiaron los imports relativos.
 
@@ -39,6 +39,7 @@
 | AC-006 | ✅ Cumplido | Refactor sin cambio de comportamiento | **527/527 tests pasan** / `pnpm lint` 0 warnings / `tsc` limpio | Invariante respetado |
 | AC-007 | ✅ Cumplido | `data-cy` intactos | Ningún `.element.ts` tocado en selectores | Ningún selector ni atributo modificado |
 | AC-008 | ✅ Cumplido | Movimientos "literalmente" | `git status` muestra `R`/`RM` (renamed) | Sin dependencias nuevas, sin lógica tocada |
+| AC-009 | ✅ Cumplido | Servicios de cockpit en `gps/`, `persist/`, `photo/`, `stop/`, `long-press/` + núcleo en raíz | Specs movidos sin cambios; 527/527 tests | Cada `x.ts` con su `x.spec.ts` en la misma subcarpeta |
 
 ## 🔴 CRÍTICO
 
@@ -62,4 +63,4 @@
 - **Recomendación**: Mantener como está. Es una excepción ya validada en la feature `deuda-tecnica-auditoria` y el comentario en el código lo documenta explícitamente. Si en el futuro `detectStop` se desacopla de `StopDetectionState`, se movería a `shared/` y se eliminaría la excepción.
 
 ## 📊 Veredicto
-- [x] **APPROVED** - Los 8 AC cumplidos, sin issues críticos, sin incidencias de seguridad, verificado en dispositivo real por el usuario.
+- [x] **APPROVED** - Los 9 AC cumplidos (AC-001 a AC-009), sin issues críticos, sin incidencias de seguridad, verificado en dispositivo real por el usuario.
