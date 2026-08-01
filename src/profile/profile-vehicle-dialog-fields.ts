@@ -10,8 +10,13 @@
  */
 import type { VehicleType } from '../shared/models/index.js';
 
-/** Etiquetas visibles de cada tipo de vehículo (AC-017). */
-const VEHICLE_TYPE_LABELS: Record<VehicleType, string> = {
+/**
+ * Etiquetas visibles de cada tipo de vehículo (AC-017). Exportada para que
+ * `profile.element.ts` (Paso 13) reutilice exactamente el mismo texto al
+ * mostrar el vehículo ya guardado en la sección "Mi vehículo", sin duplicar
+ * el mapeo.
+ */
+export const VEHICLE_TYPE_LABELS: Record<VehicleType, string> = {
   motorcycle: 'Moto',
   car: 'Coche',
 };

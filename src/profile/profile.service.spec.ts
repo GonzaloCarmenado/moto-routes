@@ -19,7 +19,7 @@ vi.mock('./vpic.service.js', () => ({
   fetchVehicleModels: vi.fn(),
 }));
 
-import { loadProfile, saveProfileInfo, saveVehicle, loadRouteStats } from './profile.service.js';
+import { loadProfile, saveProfileInfo, saveVehicle, loadRouteStats, applyProfileEditResult } from './profile.service.js';
 
 /** Repositorio de perfil fake mínimo, usado cuando el test necesita inspeccionar los
  * argumentos exactos pasados a `save()` sin depender del coalescido real de `MemoryProfileRepository`. */
@@ -189,6 +189,41 @@ describe('saveProfileInfo', () => {
     await expect(
       saveProfileInfo(repo, { avatarFile: null, rawName: 'Marc', currentAvatarPath: null }),
     ).rejects.toBe(dbError);
+  });
+});
+
+describe('applyProfileEditResult', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('con avatarPath resuelto, lo incluye en el patch tal cual (sin volver a llamar a savePhotoFile) junto al nombre saneado (AC-009)', async () => {
+    const repo = createFakeProfileRepository();
+
+    await applyProfileEditResult(repo, { avatarPath: '/app-data/photos/new-avatar.jpg', name: '  Marc  ' });
+
+    expect(savePhotoFile).not.toHaveBeenCalled();
+    expect(repo.save).toHaveBeenCalledWith({ avatarPath: '/app-data/photos/new-avatar.jpg', name: 'Marc' });
+  });
+
+  it('con avatarPath null, no incluye avatarPath en el patch (conserva el existente por coalescido)', async () => {
+    const repo = createFakeProfileRepository();
+
+    await applyProfileEditResult(repo, { avatarPath: null, name: 'Marc' });
+
+    const patch = vi.mocked(repo.save).mock.calls[0]?.[0] as CreateProfile;
+    expect('avatarPath' in patch).toBe(false);
+    expect(patch.name).toBe('Marc');
+  });
+
+  it('con name vacío o solo espacios, no incluye name en el patch, conservando el nombre previo — de extremo a extremo con MemoryProfileRepository real (AC-010)', async () => {
+    const repo = new MemoryProfileRepository();
+    await repo.save({ name: 'Marc' });
+
+    await applyProfileEditResult(repo, { avatarPath: null, name: '   ' });
+
+    const profile = await repo.get();
+    expect(profile?.name).toBe('Marc');
   });
 });
 
