@@ -375,7 +375,9 @@ cy.get('[data-cy="loading"]', { timeout: 10000 }).should('not.exist'); // ✅ Me
 
 ## Integración con Pre-Commit
 
-Cypress NO se ejecuta en pre-commit (son tests lentos que requieren el servidor levantado). Se ejecutan en CI/CD:
+Los tests E2E **sí** se ejecutan en pre-commit (`.husky/pre-commit`): al final de la cadena de checks, `pnpm test:e2e` levanta Vite en `:1420` vía `start-server-and-test` y ejecuta todos los specs en headless. Esto garantiza que ningún cambio que rompa los flujos principales (grabación, listado, detalle, fotos, timeline) llegue a `master`. Para iterar rápido localmente se pueden ejecutar de forma aislada con `pnpm cy:open` o `pnpm cy:run`.
+
+Los tests E2E también se ejecutan en CI/CD:
 
 ```yaml
 # .github/workflows/e2e.yml (ejemplo)

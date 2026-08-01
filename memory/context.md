@@ -17,7 +17,7 @@
 - **Linting Rust**: Clippy (deny warnings)
 - **Formatting TS**: Prettier 3
 - **Formatting Rust**: rustfmt
-- **Git Hooks**: Husky 9 (pre-commit: ESLint + Clippy + rustfmt + tests + cargo audit)
+- **Git Hooks**: Husky 9 (pre-commit: ESLint + Clippy + rustfmt + tests + cargo audit + E2E Cypress vía `pnpm test:e2e`)
 - **Package Manager**: pnpm + Cargo
 - **Security**: CSP estricto, permisos mínimos, sin eval, path validation
 - **BBDD Local**: SQLite vía `@tauri-apps/plugin-sql` (archivo: `moto-routes.db`)
