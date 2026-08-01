@@ -15,4 +15,7 @@ echo "🦀 Ejecutando Clippy (backend)..."
 echo "🦀 Ejecutando tests backend..."
 (cd src-tauri && cargo test) || exit 1
 
+echo "🚀 Ejecutando tests E2E (Cypress) — levanta Vite en :1420 y ejecuta 30 tests headless..."
+pnpm test:e2e || exit 1
+
 echo "✅ Pre-commit checks superados"
