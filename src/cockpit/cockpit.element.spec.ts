@@ -7,10 +7,28 @@ import type * as PhotoCaptureAdapter from '../shared/services/photo-capture-adap
 import { isAndroidTauri } from './gps/cockpit-native-gps.service.js';
 import type * as NativeGpsModule from './gps/cockpit-native-gps.service.js';
 import { listen } from '@tauri-apps/api/event';
+import { fetchGalleryPhotos, processMultiplePhotos, deleteCockpitPhoto } from './photo/cockpit-photo.service.js';
+import type * as CockpitPhotoService from './photo/cockpit-photo.service.js';
+import type { GalleryPhoto } from '../shared/photo-gallery/photo-gallery.element.js';
 
 vi.mock('../shared/services/photo-capture-adapter.service.js', async (importOriginal) => {
   const actual = await importOriginal<typeof PhotoCaptureAdapter>();
   return { ...actual, pickFromGallery: vi.fn() };
+});
+
+// Paso 11 (límite de 100 fotos): envuelve las funciones reales con vi.fn() en vez
+// de sustituirlas — el resto de tests del archivo (p. ej. "adds every photo
+// selected from the gallery") siguen ejerciendo el pipeline real de persistencia
+// sin necesitar mocks propios; solo los tests del describe de límite usan
+// mockResolvedValueOnce() para forzar un recuento concreto en una llamada puntual.
+vi.mock('./photo/cockpit-photo.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof CockpitPhotoService>();
+  return {
+    ...actual,
+    fetchGalleryPhotos: vi.fn(actual.fetchGalleryPhotos),
+    processMultiplePhotos: vi.fn(actual.processMultiplePhotos),
+    deleteCockpitPhoto: vi.fn(actual.deleteCockpitPhoto),
+  };
 });
 
 // Por defecto se comporta como fuera de Android (regresión de AC-020): los tests
@@ -295,6 +313,87 @@ describe('CockpitView - foto durante grabación', () => {
     const gallery = shadowRoot.querySelector('[data-cy="cockpit-photo-gallery"]')!;
     expect(gallery.shadowRoot!.querySelectorAll('[data-cy="photo-thumbnail"]')).toHaveLength(3);
     expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('📷 3 fotos añadidas');
+    document.body.removeChild(cockpit);
+  });
+});
+
+function buildGalleryPhotos(count: number): GalleryPhoto[] {
+  return Array.from({ length: count }, (_, i) => ({ id: `photo-${String(i)}`, objectUrl: `blob:mock-${String(i)}` }));
+}
+
+describe('CockpitView - límite de 100 fotos por ruta (AC-041, AC-043 a AC-045)', () => {
+  afterEach(() => {
+    document.body.querySelector('photo-viewer')?.remove();
+  });
+
+  it('disables <photo-capture> when the active recording already has 100 photos loaded (AC-041)', async () => {
+    vi.mocked(fetchGalleryPhotos).mockResolvedValueOnce(buildGalleryPhotos(100));
+    const { cockpit, shadowRoot } = await mountCockpit();
+    const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
+    masterBtn.click();
+    await waitRender();
+
+    const photoCapture = shadowRoot.querySelector('[data-cy="cockpit-photo-capture"]');
+    expect(photoCapture?.hasAttribute('disabled')).toBe(true);
+    document.body.removeChild(cockpit);
+  });
+
+  it('does not disable <photo-capture> when the active recording has 99 photos (AC-043)', async () => {
+    vi.mocked(fetchGalleryPhotos).mockResolvedValueOnce(buildGalleryPhotos(99));
+    const { cockpit, shadowRoot } = await mountCockpit();
+    const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
+    masterBtn.click();
+    await waitRender();
+
+    const photoCapture = shadowRoot.querySelector('[data-cy="cockpit-photo-capture"]');
+    expect(photoCapture?.hasAttribute('disabled')).toBe(false);
+    document.body.removeChild(cockpit);
+  });
+
+  it('disables <photo-capture> right after adding the 100th photo, without reloading (AC-044)', async () => {
+    vi.mocked(fetchGalleryPhotos)
+      .mockResolvedValueOnce(buildGalleryPhotos(99))
+      .mockResolvedValueOnce(buildGalleryPhotos(100));
+    vi.mocked(pickFromGallery).mockResolvedValueOnce([new File([''], 'nueva.jpg', { type: 'image/jpeg' })]);
+    vi.mocked(processMultiplePhotos).mockResolvedValueOnce(1);
+
+    const { cockpit, shadowRoot } = await mountCockpit();
+    const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
+    masterBtn.click();
+    await waitRender();
+
+    const photoCaptureBefore = shadowRoot.querySelector('[data-cy="cockpit-photo-capture"]')!;
+    expect(photoCaptureBefore.hasAttribute('disabled')).toBe(false);
+
+    (photoCaptureBefore.shadowRoot!.querySelector('.photo-btn') as HTMLButtonElement).click();
+    (photoCaptureBefore.shadowRoot!.querySelector('[data-cy="photo-menu-gallery"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    const photoCaptureAfter = shadowRoot.querySelector('[data-cy="cockpit-photo-capture"]');
+    expect(photoCaptureAfter?.hasAttribute('disabled')).toBe(true);
+    document.body.removeChild(cockpit);
+  });
+
+  it('re-enables <photo-capture> after deleting a photo from an active recording at the 100-photo limit (AC-045)', async () => {
+    vi.mocked(fetchGalleryPhotos).mockResolvedValueOnce(buildGalleryPhotos(100));
+    vi.mocked(deleteCockpitPhoto).mockResolvedValueOnce(true);
+
+    const { cockpit, shadowRoot } = await mountCockpit();
+    const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
+    masterBtn.click();
+    await waitRender();
+
+    const photoCaptureBefore = shadowRoot.querySelector('[data-cy="cockpit-photo-capture"]');
+    expect(photoCaptureBefore?.hasAttribute('disabled')).toBe(true);
+
+    const gallery = shadowRoot.querySelector('[data-cy="cockpit-photo-gallery"]')!;
+    (gallery.shadowRoot!.querySelector('[data-cy="photo-thumbnail"]') as HTMLElement).click();
+    const viewer = document.body.querySelector('photo-viewer')!;
+    (viewer.shadowRoot!.querySelector('[data-cy="photo-viewer-delete"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    const photoCaptureAfter = shadowRoot.querySelector('[data-cy="cockpit-photo-capture"]');
+    expect(photoCaptureAfter?.hasAttribute('disabled')).toBe(false);
     document.body.removeChild(cockpit);
   });
 });
