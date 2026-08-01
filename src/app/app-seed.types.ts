@@ -7,6 +7,7 @@
 
 import type { Route, RoutePoint, RouteStop } from '../shared/models/route.types.js';
 
+/** Datos sembrados por Cypress: rutas, puntos y paradas opcionales. */
 export interface CypressSeedData {
   routes: Route[];
   points?: Record<string, RoutePoint[]>;

@@ -15,12 +15,14 @@ import { toErrorMessage } from '../../shared/utils/errors.js';
 import type { RoutePoint } from '../cockpit.types.js';
 import type { GalleryPhoto } from '../../shared/photo-gallery/photo-gallery.element.js';
 
+/** Callbacks de resultado del procesado de foto en el cockpit. */
 export interface PhotoCaptureCallbacks {
   onSuccess: (photo: CreatePhoto) => void;
   onError: (error: string) => void;
   onCancel?: () => void;
 }
 
+/** Parámetros del procesado de una foto capturada durante grabación activa. */
 export interface ProcessPhotoCaptureParams {
   file: CaptureResult;
   routeId: string;
@@ -54,6 +56,7 @@ export async function processPhotoCapture(params: ProcessPhotoCaptureParams): Pr
   }
 }
 
+/** Parámetros del procesado de varias fotos en secuencia (galería). */
 export interface ProcessMultiplePhotosParams {
   files: File[];
   routeId: string;

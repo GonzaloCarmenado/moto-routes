@@ -1,14 +1,17 @@
 import { BaseElement } from '../base-element.js';
 import styles from './confirm-dialog.element.css?inline';
 
+/** Variante visual de un botón de acción del diálogo. */
 export type ConfirmDialogVariant = 'primary' | 'danger' | 'neutral';
 
+/** Acción configurable del diálogo de confirmación (id, etiqueta, variante). */
 export interface ConfirmDialogAction {
   id: string;
   label: string;
   variant: ConfirmDialogVariant;
 }
 
+/** Opciones del diálogo: título, mensaje opcional, acciones y cerrabilidad. */
 export interface ConfirmDialogOptions {
   title: string;
   message?: string;

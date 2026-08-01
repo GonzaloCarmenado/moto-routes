@@ -4,14 +4,14 @@
  * del umbral configurado. Lee `docs/api/coverage.json` generado por `typedoc`.
  *
  * Uso: node scripts/docs-coverage.mjs [threshold]
- *   threshold: porcentaje mínimo (entero 0-100). Por defecto: 50.
+ *   threshold: porcentaje mínimo (entero 0-100). Por defecto: 70.
  *
  * Exit code: 0 si cumple el umbral, 1 si baja (para fallar en pre-commit/CI).
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const threshold = Number(process.argv[2] ?? process.env.DOCS_COVERAGE_THRESHOLD ?? 50);
+const threshold = Number(process.argv[2] ?? process.env.DOCS_COVERAGE_THRESHOLD ?? 70);
 
 if (Number.isNaN(threshold) || threshold < 0 || threshold > 100) {
   console.error(`Umbral inválido: ${process.argv[2]} (debe ser 0-100)`);

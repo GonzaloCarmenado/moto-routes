@@ -34,6 +34,7 @@ async function decideStopOutcome(metadata: RouteMetadata): Promise<StopOutcome> 
   return { choice: result.action, name };
 }
 
+/** Parámetros del flujo de resolución de la parada (diálogo guardar/descartar). */
 export interface ResolveStopDecisionParams {
   metadata: RouteMetadata;
   routeId: string;

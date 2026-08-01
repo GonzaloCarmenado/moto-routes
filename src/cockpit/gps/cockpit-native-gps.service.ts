@@ -16,6 +16,7 @@ import { listen } from '@tauri-apps/api/event';
 import { isTauri } from '../../shared/services/photo-capture-adapter.service.js';
 import type { GpsProvider } from '../cockpit.service.js';
 
+/** Nombre del evento Tauri emitido por el puente Kotlin→Rust→JS con cada punto GPS nativo. */
 export const NATIVE_LOCATION_EVENT = 'recording-service://location';
 
 /**
