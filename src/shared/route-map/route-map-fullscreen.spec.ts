@@ -49,4 +49,36 @@ describe('isElementFullscreen (AC-018, AC-019)', () => {
 
     expect(isElementFullscreen(container)).toBe(false);
   });
+
+  // Regresión (2026-08-01): `container` vive dentro de un Shadow DOM real (caso
+  // de `<route-map>`) — la Fullscreen API retargeta `document.fullscreenElement`
+  // al host del shadow tree, nunca al elemento real, así que debe consultarse
+  // `ShadowRoot.fullscreenElement` en su lugar. Fijar SOLO `document.fullscreenElement`
+  // (como en los tests de arriba) no debe bastar para dar el contenedor por
+  // fullscreen cuando vive en un shadow tree.
+  describe('cuando el contenedor vive dentro de un Shadow DOM', () => {
+    function attachShadowContainer(): { host: HTMLElement; shadowRoot: ShadowRoot; container: HTMLElement } {
+      const host = document.createElement('div');
+      const shadowRoot = host.attachShadow({ mode: 'open' });
+      const container = document.createElement('div');
+      shadowRoot.appendChild(container);
+      return { host, shadowRoot, container };
+    }
+
+    it('returns true when the ShadowRoot fullscreenElement is the container, even if document.fullscreenElement is the shadow host (retargeted)', () => {
+      const { host, shadowRoot, container } = attachShadowContainer();
+      Object.defineProperty(document, 'fullscreenElement', { value: host, configurable: true });
+      Object.defineProperty(shadowRoot, 'fullscreenElement', { value: container, configurable: true });
+
+      expect(isElementFullscreen(container)).toBe(true);
+    });
+
+    it('returns false when the ShadowRoot fullscreenElement is null, regardless of document.fullscreenElement', () => {
+      const { host, shadowRoot, container } = attachShadowContainer();
+      Object.defineProperty(document, 'fullscreenElement', { value: host, configurable: true });
+      Object.defineProperty(shadowRoot, 'fullscreenElement', { value: null, configurable: true });
+
+      expect(isElementFullscreen(container)).toBe(false);
+    });
+  });
 });

@@ -63,26 +63,33 @@
   color: var(--ink-faint);
 }
 
-/* Controles de zoom (AC-013, AC-014, AC-015): MapLibre coloca el
-   NavigationControl en 'top-left' (ver route-map.element.ts) con botones de
-   ~29x29px por defecto — se amplía su hitbox a 56x56 (uso con guantes) sin
-   desbordar el contenedor de 200px de alto. La esquina 'top-left' deja
-   'top-right' libre para el botón de pantalla completa (Paso 6), evitando el
-   solape entre ambos controles. */
-.maplibregl-ctrl-group button {
-  min-width: var(--hitbox-min);
-  min-height: var(--hitbox-min);
+/* Feedback real de usuario (2026-08-01, segunda ronda, AC-033): el botón "i"
+   compacto de MapLibre seguía percibiéndose como un "indicador" molesto sobre
+   el mapa oscuro pese a AC-009. No se elimina (la licencia de OpenFreeMap/OSM
+   exige mantenerlo) — se reduce su opacidad por defecto y se restaura al
+   completo en hover/foco, para que siga siendo alcanzable sin llamar la
+   atención en el uso normal. */
+.maplibregl-ctrl-attrib-button {
+  background-color: transparent;
+  opacity: 0.35;
+  transition: opacity 0.15s ease;
+}
+
+.maplibregl-ctrl-attrib-button:hover,
+.maplibregl-ctrl-attrib-button:focus-visible {
+  opacity: 1;
 }
 
 /* Botón de pantalla completa (AC-016 a AC-021): esquina superior derecha,
-   opuesta a los controles de zoom ('top-left', Paso 5) y separada de la
-   atribución (esquina inferior, Paso 2) — evita solapes entre los tres.
-   Hitbox mínima 56x56 (uso con guantes de moto). El icono usa dos capas
-   superpuestas (entrar/salir, ver route-map-fullscreen.ts) intercambiadas
+   separada de la atribución (esquina inferior, Paso 2) — evita solapes entre
+   ambas. Hitbox mínima 56x56 (uso con guantes de moto). El icono usa dos
+   capas superpuestas (entrar/salir, ver route-map-fullscreen.ts) intercambiadas
    vía `opacity`/`transition` controlada por la clase `--fullscreen` — así la
    transición se apoya en el override global de `prefers-reduced-motion` de
    tokens.css (sin @media propio, mismo patrón que el skeleton del Paso 1),
-   en vez de un swap de `innerHTML` sin transición posible. */
+   en vez de un swap de `innerHTML` sin transición posible.
+   Nota (2026-08-01): los controles de zoom (`NavigationControl`, antes en
+   'top-left') se retiraron tras feedback real de usuario — ver route-map.element.ts. */
 .route-map-fullscreen-toggle {
   position: absolute;
   top: var(--space-2);
@@ -176,6 +183,19 @@
 
 .route-map-marker--end {
   color: var(--amber);
+}
+
+/* Zona de clic ampliada de marcadores de foto/cluster (AC-036): envuelve el
+   icono visible (16-32px) en un área invisible de al menos --hitbox-min
+   (56px) para uso con guantes de moto, sin agrandar el icono en sí — el
+   icono queda centrado dentro vía flexbox. */
+.route-map-marker-hitarea {
+  min-width: var(--hitbox-min);
+  min-height: var(--hitbox-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 /* Marcador de foto — cobre/terracota, diferenciable del ámbar y del verde */

@@ -8,10 +8,22 @@ const DARK_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
 const ROUTE_SOURCE_ID = 'route-line';
 const ROUTE_LAYER_ID = 'route-line-layer';
 const AMBER_FALLBACK = '#d4880f';
-// Aproximación en rgb de --ink-soft (oklch(70% 0.015 55)) — fallback solo
+// Aproximación en rgb de --ink-faint (oklch(55% 0.02 55)) — fallback solo
 // para el caso extremo en que resolveToken() no pueda leer el token (sin
 // shadowRoot todavía).
-const ROAD_CONTRAST_FALLBACK = '#b3a894';
+const ROAD_CONTRAST_FALLBACK = '#7b6f67';
+// Aproximación en rgb de --ink-soft (oklch(70% 0.015 55)) — mismo fallback
+// extremo que ROAD_CONTRAST_FALLBACK, para el texto de nombres de calles/
+// ciudades (más claro que el trazado de vía, ver applyContrastOverrides).
+const ROAD_LABEL_CONTRAST_FALLBACK = '#a69c96';
+// Feedback real de usuario (2026-08-01): el color de contraste de las vías
+// (Paso 3) se veía "demasiado blanco/grueso" en dispositivo real. Se reduce
+// el ancho respecto al original del estilo, multiplicando el valor final de
+// la expresión de interpolación por zoom ya existente (en vez de sustituirla
+// por un número fijo, que rompería la progresión motorway>minor entre capas)
+// — ver `thinRoadLine()`. Bajado de 0.7 a 0.5 tras una segunda ronda de
+// feedback real (2026-08-01, sesión posterior) — seguía viéndose grueso.
+const ROAD_WIDTH_SCALE = 0.5;
 // Icono de pin para los marcadores de inicio/fin (AC-010): `fill="currentColor"`
 // deja que el color lo decida el CSS del marcador (`--start`/`--end`), nunca
 // un valor fijo en el propio SVG (AC-011).
@@ -22,7 +34,7 @@ const ROUTE_MARKER_PIN_SVG =
   '</svg>';
 
 import { addPhotoMarkers, photoClusterRadiusForZoom, type MapPhoto } from './route-map-photos.js';
-import { buildRoadContrastOverrides } from './route-map-contrast.js';
+import { buildRoadContrastOverrides, buildRoadLabelContrastOverrides } from './route-map-contrast.js';
 import { createFullscreenToggle, type FullscreenToggle } from './route-map-fullscreen.js';
 import { BaseElement } from '../base-element.js';
 
@@ -149,18 +161,19 @@ class RouteMap extends BaseElement {
     });
     this.mapInstance = map;
 
-    // AC-013/AC-026: controles de zoom +/- siempre visibles (sin depender de
-    // hover ni gestos). 'top-left' evita competir con el botón de pantalla
-    // completa, que se coloca en 'top-right' (Paso 6) — AC-015 (posición).
-    map.addControl(new maplibregl.NavigationControl(), 'top-left');
-
     // AC-016 a AC-021: el botón de pantalla completa se añade sobre el
     // contenedor EXTERIOR (`outerContainer`, no `mapRoot`) porque debe ser ese
     // elemento el que entre en pantalla completa vía la Fullscreen API — así
-    // el mapa (incluidos los controles de zoom/atribución que MapLibre monta
-    // dentro de `mapRoot`) y este botón, ambos descendientes suyos, se ven con
-    // normalidad una vez en pantalla completa. Degrada a `null` sin error si
-    // la Fullscreen API no está soportada (AC-020).
+    // el mapa (incluida la atribución que MapLibre monta dentro de `mapRoot`)
+    // y este botón, ambos descendientes suyos, se ven con normalidad una vez
+    // en pantalla completa. Degrada a `null` sin error si la Fullscreen API no
+    // está soportada (AC-020).
+    //
+    // Nota (2026-08-01): los controles de zoom (`NavigationControl`, Paso 5)
+    // se retiraron tras verificación en dispositivo real — el usuario los
+    // encontró innecesarios (el gesto de pellizco cubre el mismo caso) y
+    // preferible dejar la esquina 'top-left' libre. Ver AC-013/AC-014/AC-015
+    // marcados como retirados en la spec.
     this.fullscreenToggle = createFullscreenToggle(outerContainer, map);
     if (this.fullscreenToggle) {
       outerContainer.appendChild(this.fullscreenToggle.element);
@@ -172,6 +185,7 @@ class RouteMap extends BaseElement {
       this.skeletonElement?.remove();
       this.skeletonElement = null;
       this.applyContrastOverrides(map);
+      this.collapseAttribution(mapRoot);
       this.drawRoute(map, points);
       this.renderPhotoMarkers();
     });
@@ -201,21 +215,68 @@ class RouteMap extends BaseElement {
 
   // AC-001/AC-004: aumenta el contraste de las capas de carretera del estilo
   // `dark` (casi indistinguibles del fondo por defecto) con un tono
-  // cálido/neutro de la paleta "Asfalto Nocturno" (--ink-soft), sin
-  // sustituir el estilo base ni tocar el color del trazado (--amber).
+  // cálido/neutro de la paleta "Asfalto Nocturno" (--ink-faint — más oscuro
+  // que --ink-soft usado originalmente, ver comentario de ROAD_CONTRAST_FALLBACK:
+  // feedback real de usuario, "demasiado blanco"), sin sustituir el estilo
+  // base ni tocar el color del trazado (--amber). También afina el ancho de
+  // línea (thinRoadLine) y sube el contraste de las etiquetas de nombres de
+  // calles/ciudades (--ink-soft — más claro que el color de vía, para que se
+  // distingan entre sí), casi ilegibles por defecto en este estilo.
   // AC-003: cada override va en su propio try/catch — si el estilo de
   // terceros renombra/quita una capa, ese fallo aislado no debe abortar el
   // resto de overrides ni el resto del ciclo de vida del mapa (trazado,
   // marcadores, fitBounds siguen dibujándose con normalidad).
   private applyContrastOverrides(map: maplibregl.Map): void {
-    const color = this.resolveToken('--ink-soft', ROAD_CONTRAST_FALLBACK);
-    for (const { layerId, property, value } of buildRoadContrastOverrides(color)) {
+    const roadColor = this.resolveToken('--ink-faint', ROAD_CONTRAST_FALLBACK);
+    for (const { layerId, property, value } of buildRoadContrastOverrides(roadColor)) {
       try {
         map.setPaintProperty(layerId, property, value);
+        this.thinRoadLine(map, layerId);
       } catch {
         // Capa no existente en el estilo cargado — ver comentario de arriba.
       }
     }
+
+    const labelColor = this.resolveToken('--ink-soft', ROAD_LABEL_CONTRAST_FALLBACK);
+    for (const { layerId, property, value } of buildRoadLabelContrastOverrides(labelColor)) {
+      try {
+        map.setPaintProperty(layerId, property, value);
+      } catch {
+        // Capa de etiqueta no existente en el estilo cargado — ver comentario de arriba.
+      }
+    }
+  }
+
+  // Reduce el ancho de línea de una capa de carretera ya overrideada en color
+  // (ROAD_WIDTH_SCALE). Multiplica el valor final de la expresión de
+  // interpolación por zoom que ya trae el estilo (`['*', current, scale]`) en
+  // vez de sustituirla por un número fijo, preservando la progresión de grosor
+  // entre clases de vía (motorway > major > minor) en todos los niveles de
+  // zoom. `getPaintProperty` devuelve `undefined` si la capa no existe en el
+  // estilo cargado — en ese caso no hace nada (el `try/catch` del llamador ya
+  // cubre el resto de fallos, p. ej. si `setPaintProperty` mismo lanza).
+  private thinRoadLine(map: maplibregl.Map, layerId: string): void {
+    const current = map.getPaintProperty(layerId, 'line-width');
+    if (current === undefined) return;
+    map.setPaintProperty(layerId, 'line-width', ['*', current, ROAD_WIDTH_SCALE]);
+  }
+
+  // Feedback real de usuario (2026-08-01, tercera ronda, AC-038): el control
+  // de atribución compacto de MapLibre (`attributionControl: {compact:true}`)
+  // arranca EXPANDIDO por diseño — `AttributionControl._updateCompact()`
+  // añade la clase `maplibregl-compact-show` y el atributo `open` nada más
+  // crearse (antes incluso de que cargue el estilo) y solo lo colapsa cuando
+  // el usuario arrastra el mapa (`_updateCompactMinimize()`, enganchado al
+  // evento `drag`). En un mapa embebido de 200px que casi nadie arrastra,
+  // queda expandido indefinidamente. Se colapsa aquí a mano, replicando
+  // exactamente lo mismo que hace `_updateCompactMinimize()` al arrastrar —
+  // si una versión futura de MapLibre cambia este detalle interno, esto
+  // simplemente deja de tener efecto (la atribución seguiría visible y
+  // pulsable, solo que expandida por defecto).
+  private collapseAttribution(mapRoot: HTMLElement): void {
+    const attrib = mapRoot.querySelector('.maplibregl-ctrl-attrib');
+    attrib?.classList.remove('maplibregl-compact-show');
+    attrib?.removeAttribute('open');
   }
 
   private drawRoute(map: maplibregl.Map, points: RouteMapPoint[]): void {
@@ -253,7 +314,11 @@ class RouteMap extends BaseElement {
     const el = document.createElement('div');
     el.className = `route-map-marker route-map-marker--pin route-map-marker--${kind}`;
     el.innerHTML = ROUTE_MARKER_PIN_SVG;
-    new maplibregl.Marker({ element: el }).setLngLat([point.lng, point.lat]).addTo(map);
+    // AC-034: ancla la punta inferior del pin (no su centro) a la coordenada
+    // GPS real — comportamiento estándar de un pin de mapa, pedido por
+    // feedback real de usuario ("el icono flotaba sobre el punto en vez de
+    // tocarlo con la punta").
+    new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat([point.lng, point.lat]).addTo(map);
   }
 
   // MapLibre valida sus paint properties con su propio parser de color (no el

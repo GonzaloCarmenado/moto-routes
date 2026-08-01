@@ -23,6 +23,31 @@
  */
 export const ROAD_LAYER_IDS = ['highway_motorway_inner', 'highway_major_inner', 'highway_minor'] as const;
 
+/**
+ * IDs reales de capa `symbol` (nombres de calles/carreteras y de lugares:
+ * ciudades, pueblos, países) del mismo style JSON de arriba, verificados el
+ * 2026-08-01 (`curl -s https://tiles.openfreemap.org/styles/dark`) a raíz de
+ * feedback real de usuario ("el nombre de las ciudades y calles... no se ve").
+ * Todas tienen `text-color` en tonos gris apagado (p. ej. `rgb(101,101,101)`,
+ * `hsl(0,0%,37%)`) casi ilegibles sobre el fondo casi negro del estilo —
+ * mismo problema de contraste que ya afectaba a las vías (ver ROAD_LAYER_IDS),
+ * aquí en las etiquetas de texto en vez del trazado.
+ */
+export const ROAD_LABEL_LAYER_IDS = [
+  'highway_name_motorway',
+  'highway_name_other',
+  'place_country_major',
+  'place_country_minor',
+  'place_country_other',
+  'place_state',
+  'place_city_large',
+  'place_city',
+  'place_town',
+  'place_village',
+  'place_suburb',
+  'place_other',
+] as const;
+
 export interface RoadContrastOverride {
   layerId: string;
   property: string;
@@ -37,4 +62,13 @@ export interface RoadContrastOverride {
  */
 export function buildRoadContrastOverrides(color: string): RoadContrastOverride[] {
   return ROAD_LAYER_IDS.map((layerId) => ({ layerId, property: 'line-color', value: color }));
+}
+
+/**
+ * Construye un override de `paint` (`text-color`) por cada capa de
+ * `ROAD_LABEL_LAYER_IDS`, mismo patrón que `buildRoadContrastOverrides` —
+ * el color tampoco lo decide esta función, se resuelve en `route-map.element.ts`.
+ */
+export function buildRoadLabelContrastOverrides(color: string): RoadContrastOverride[] {
+  return ROAD_LABEL_LAYER_IDS.map((layerId) => ({ layerId, property: 'text-color', value: color }));
 }

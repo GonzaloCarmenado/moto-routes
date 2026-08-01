@@ -43,15 +43,23 @@ export function addPhotoMarkers(
 
   for (const cluster of clusters) {
     const isCluster = cluster.photos.length > 1;
-    const el = document.createElement('div');
-    el.className = isCluster
+    const icon = document.createElement('div');
+    icon.className = isCluster
       ? 'route-map-marker route-map-marker--photo route-map-marker--cluster'
       : 'route-map-marker route-map-marker--photo';
-    el.setAttribute('data-cy', isCluster ? 'photo-cluster' : 'photo-marker');
+
+    // AC-036: el icono visible (16-32px) se envuelve en un contenedor
+    // invisible más grande (--hitbox-min) para uso con guantes de moto — es
+    // el wrapper, no el icono, el que MapLibre posiciona y el que recibe el
+    // listener de click, así el icono no cambia de tamaño ni posición aparente.
+    const hitArea = document.createElement('div');
+    hitArea.className = 'route-map-marker-hitarea';
+    hitArea.setAttribute('data-cy', isCluster ? 'photo-cluster' : 'photo-marker');
+    hitArea.appendChild(icon);
 
     if (isCluster) {
-      el.textContent = String(cluster.photos.length);
-      el.addEventListener('click', () => {
+      icon.textContent = String(cluster.photos.length);
+      hitArea.addEventListener('click', () => {
         // Zoom hacia la zona del cluster
         map.flyTo({
           center: [cluster.centerLng, cluster.centerLat],
@@ -59,10 +67,10 @@ export function addPhotoMarkers(
         });
       });
     } else {
-      el.addEventListener('click', () => onPhotoClick?.(cluster.photos[0]!));
+      hitArea.addEventListener('click', () => onPhotoClick?.(cluster.photos[0]!));
     }
 
-    const marker = new maplibregl.Marker({ element: el })
+    const marker = new maplibregl.Marker({ element: hitArea })
       .setLngLat([cluster.centerLng, cluster.centerLat])
       .addTo(map);
     markers.push(marker);

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const {
   addSource, addLayer, fitBounds, remove, mapCtor, markerCtor, markerRemove, popupCtor, mapOn, getZoom, flyTo,
-  setPaintProperty, addControl, NavigationControlMock, resize, setCenter, jumpTo,
+  setPaintProperty, getPaintProperty, resize, setCenter, jumpTo,
 } = vi.hoisted(() => {
   const addSourceFn = vi.fn();
   const addLayerFn = vi.fn();
@@ -11,17 +11,13 @@ const {
   const getZoomFn = vi.fn(() => 12);
   const flyToFn = vi.fn();
   const setPaintPropertyFn = vi.fn();
-  const addControlFn = vi.fn();
+  // Valor por defecto plausible de una expresión `line-width` interpolada por
+  // zoom (mismo shape que el estilo real de OpenFreeMap) — así `thinRoadLine`
+  // (route-map.element.ts) tiene algo que escalar en vez de recibir `undefined`.
+  const getPaintPropertyFn = vi.fn(() => ['interpolate', ['exponential', 1.3], ['zoom'], 10, 2, 20, 20]);
   const resizeFn = vi.fn();
   const setCenterFn = vi.fn();
   const jumpToFn = vi.fn();
-  // Constructor mockeado de `maplibregl.NavigationControl` (AC-013, AC-026) —
-  // solo necesita ser distinguible como instancia en `addControl`, no
-  // reproducir ningún comportamiento real de MapLibre. Función en vez de
-  // `class` vacía para no disparar `@typescript-eslint/no-extraneous-class`.
-  function NavigationControlMockClass(this: object): void {
-    Object.assign(this, {});
-  }
   // Solo registra el callback — no lo invoca. Antes este mock invocaba `load`
   // de forma síncrona e incondicional al registrarlo, lo que hacía imposible
   // testear ningún estado "antes de load" (p. ej. el skeleton de carga,
@@ -37,7 +33,7 @@ const {
     getZoom: getZoomFn,
     flyTo: flyToFn,
     setPaintProperty: setPaintPropertyFn,
-    addControl: addControlFn,
+    getPaintProperty: getPaintPropertyFn,
     // AC-018/AC-019/AC-027/AC-028: el botón de pantalla completa solo debe
     // invocar `resize()` — nunca recolocar la cámara manualmente (`resize()`
     // de MapLibre ya preserva centro/zoom internamente). `setCenter`/`jumpTo`
@@ -56,7 +52,7 @@ const {
   // markers "vivos" de los que ya se quitaron del mapa (el historial de mock.calls de
   // Marker conserva TODOS los elementos creados, también los ya eliminados).
   const markerRemoveFn = vi.fn((element: HTMLElement) => { element.removeAttribute('data-cy'); });
-  const markerCtorFn = vi.fn((options: { element: HTMLElement }) => ({
+  const markerCtorFn = vi.fn((options: { element: HTMLElement; anchor?: string }) => ({
     element: options.element,
     setLngLat: markerSetLngLat,
     addTo: markerAddTo,
@@ -93,8 +89,7 @@ const {
     getZoom: getZoomFn,
     flyTo: flyToFn,
     setPaintProperty: setPaintPropertyFn,
-    addControl: addControlFn,
-    NavigationControlMock: NavigationControlMockClass,
+    getPaintProperty: getPaintPropertyFn,
     resize: resizeFn,
     setCenter: setCenterFn,
     jumpTo: jumpToFn,
@@ -106,18 +101,16 @@ vi.mock('maplibre-gl', () => ({
     Map: mapCtor,
     Marker: markerCtor,
     Popup: popupCtor,
-    NavigationControl: NavigationControlMock,
   },
   Map: mapCtor,
   Marker: markerCtor,
   Popup: popupCtor,
-  NavigationControl: NavigationControlMock,
 }));
 
 import './route-map.element.js';
 import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from './route-map.element.js';
 import type { MapPhoto } from './route-map-photos.js';
-import { ROAD_LAYER_IDS } from './route-map-contrast.js';
+import { ROAD_LAYER_IDS, ROAD_LABEL_LAYER_IDS } from './route-map-contrast.js';
 import { FULLSCREEN_ENTER_LABEL, FULLSCREEN_EXIT_LABEL } from './route-map-fullscreen.js';
 
 type RouteMapEl = HTMLElement & { points: { lat: number; lng: number }[]; photos: MapPhoto[] };
@@ -198,7 +191,7 @@ describe('route-map', () => {
     mapOn.mockClear();
     flyTo.mockClear();
     setPaintProperty.mockReset();
-    addControl.mockClear();
+    getPaintProperty.mockClear();
     resize.mockClear();
     setCenter.mockClear();
     jumpTo.mockClear();
@@ -325,6 +318,44 @@ describe('route-map', () => {
       document.body.removeChild(el);
     });
 
+    // Feedback real de usuario (2026-08-01, segunda ronda, AC-036): el área de
+    // clic quedaba ajustada al tamaño visual del icono (16-32px), demasiado
+    // pequeña para pulsar con guantes. Se envuelve el icono visible en un
+    // contenedor invisible más grande (--hitbox-min) que es el que MapLibre
+    // posiciona y el que recibe el listener de click — el icono no cambia de
+    // tamaño ni posición aparente.
+    it('wraps the visible photo marker icon in a larger invisible hit area (AC-036)', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+      el.photos = [makePhoto('p1', 40.4168, -3.7038)];
+      await waitRender();
+
+      const [wrapper] = findMarkerElements('photo-marker');
+      expect(wrapper).toBeDefined();
+      expect(wrapper!.classList.contains('route-map-marker-hitarea')).toBe(true);
+      const icon = wrapper!.querySelector('.route-map-marker--photo');
+      expect(icon).not.toBeNull();
+
+      document.body.removeChild(el);
+    });
+
+    it('wraps the cluster marker icon in a larger invisible hit area as well (AC-036)', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+      el.photos = [
+        makePhoto('p1', 40.4168, -3.7038),
+        makePhoto('p2', 40.41693, -3.7038),
+      ];
+      await waitRender();
+
+      const [wrapper] = findMarkerElements('photo-cluster');
+      expect(wrapper).toBeDefined();
+      expect(wrapper!.classList.contains('route-map-marker-hitarea')).toBe(true);
+      const icon = wrapper!.querySelector('.route-map-marker--cluster');
+      expect(icon).not.toBeNull();
+      expect(icon!.textContent).toBe('2');
+
+      document.body.removeChild(el);
+    });
+
     it('splits a cluster into individual markers when zooming in (AC-018)', async () => {
       const el = await mountRouteMap(MADRID_POINTS);
       el.photos = [
@@ -354,6 +385,30 @@ describe('route-map', () => {
       const options = mapCtor.mock.calls[0]?.[0] as { attributionControl?: unknown };
       expect(options.attributionControl).not.toBe(false);
       expect(options.attributionControl).toEqual({ compact: true });
+
+      document.body.removeChild(el);
+    });
+  });
+
+  // Feedback real de usuario (2026-08-01, tercera ronda, AC-038): MapLibre
+  // expande el control de atribución compacto por defecto nada más crearse
+  // (`AttributionControl._updateCompact()` añade `maplibregl-compact-show` y
+  // el atributo `open` antes de que el estilo cargue) y solo lo colapsa si el
+  // usuario arrastra el mapa (evento `drag`) — en un mapa embebido de 200px
+  // que casi nadie arrastra, queda expandido de forma indefinida.
+  describe('atribución colapsada por defecto (AC-038)', () => {
+    it('collapses the compact attribution control after load, mirroring what MapLibre itself does on a user drag', async () => {
+      const el = await mountRouteMapWithoutLoad(MADRID_POINTS);
+      const mapRoot = el.shadowRoot!.querySelector('.maplibre-root')!;
+      const attrib = document.createElement('details');
+      attrib.className = 'maplibregl-ctrl maplibregl-ctrl-attrib maplibregl-compact maplibregl-compact-show';
+      attrib.setAttribute('open', '');
+      mapRoot.appendChild(attrib);
+
+      triggerLoad();
+
+      expect(attrib.classList.contains('maplibregl-compact-show')).toBe(false);
+      expect(attrib.hasAttribute('open')).toBe(false);
 
       document.body.removeChild(el);
     });
@@ -409,17 +464,55 @@ describe('route-map', () => {
 
       document.body.removeChild(el);
     });
+
+    // Feedback real de usuario (2026-08-01, segunda ronda, AC-034): el pin
+    // flotaba centrado sobre el punto GPS en vez de "tocarlo" con su punta
+    // inferior, por usar el anclaje por defecto de MapLibre (`center`).
+    it('anchors the start/end pin markers by their bottom tip, not their center (AC-034)', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+
+      const startEndCalls = markerCtor.mock.calls.filter(
+        ([options]) =>
+          options.element.classList.contains('route-map-marker--start') ||
+          options.element.classList.contains('route-map-marker--end'),
+      );
+      expect(startEndCalls).toHaveLength(2);
+      for (const [options] of startEndCalls) {
+        expect(options.anchor).toBe('bottom');
+      }
+
+      document.body.removeChild(el);
+    });
   });
 
-  describe('contraste visual de capas de carretera (AC-001, AC-002, AC-003, AC-004, AC-022)', () => {
+  describe('contraste visual de capas de carretera (AC-001, AC-002, AC-003, AC-004, AC-022, AC-030)', () => {
     it('calls setPaintProperty for at least one road layer after load, with a color different from a placeholder/blue tone', async () => {
       const el = await mountRouteMap(MADRID_POINTS);
 
-      expect(setPaintProperty.mock.calls.length).toBeGreaterThan(0);
-      for (const [layerId, property, value] of setPaintProperty.mock.calls) {
+      const colorCalls = setPaintProperty.mock.calls.filter(([, property]) => property === 'line-color');
+      expect(colorCalls.length).toBeGreaterThan(0);
+      for (const [layerId, , value] of colorCalls) {
         expect(ROAD_LAYER_IDS).toContain(layerId);
-        expect(property).toBe('line-color');
         expect(String(value)).not.toMatch(/blue|azure|#0000ff/i);
+      }
+
+      document.body.removeChild(el);
+    });
+
+    // Feedback real de usuario (2026-08-01): el color de contraste original se
+    // veía "demasiado blanco/grueso" — se afina el ancho escalando la
+    // expresión de interpolación por zoom que ya trae el estilo, en vez de
+    // sustituirla por un número fijo (AC-030).
+    it('thins the line-width of each road layer by scaling the existing zoom-interpolated expression, not replacing it with a fixed number', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+
+      expect(getPaintProperty).toHaveBeenCalledWith(expect.stringMatching(/.+/), 'line-width');
+      const widthCalls = setPaintProperty.mock.calls.filter(([, property]) => property === 'line-width');
+      expect(widthCalls.length).toBeGreaterThan(0);
+      for (const [layerId, , value] of widthCalls) {
+        expect(ROAD_LAYER_IDS).toContain(layerId);
+        expect(Array.isArray(value)).toBe(true);
+        expect((value as unknown[])[0]).toBe('*');
       }
 
       document.body.removeChild(el);
@@ -441,11 +534,29 @@ describe('route-map', () => {
     });
   });
 
-  describe('controles de zoom (AC-013, AC-014, AC-015, AC-026)', () => {
-    it('adds a NavigationControl to the map, positioned in a corner distinct from the fullscreen button', async () => {
+  // Feedback real de usuario (2026-08-01): "el nombre de las ciudades y
+  // calles... no se ve" — mismo mecanismo que el contraste de vías, aplicado
+  // a las capas `symbol` de nombres (AC-031).
+  describe('contraste de etiquetas de calles/ciudades (AC-031, AC-032)', () => {
+    it('calls setPaintProperty for at least one road label layer after load, with a text-color different from a placeholder/blue tone', async () => {
       const el = await mountRouteMap(MADRID_POINTS);
 
-      expect(addControl).toHaveBeenCalledWith(expect.any(NavigationControlMock), 'top-left');
+      const labelCalls = setPaintProperty.mock.calls.filter(([, property]) => property === 'text-color');
+      expect(labelCalls.length).toBeGreaterThan(0);
+      for (const [layerId, , value] of labelCalls) {
+        expect(ROAD_LABEL_LAYER_IDS).toContain(layerId);
+        expect(String(value)).not.toMatch(/blue|azure|#0000ff/i);
+      }
+
+      document.body.removeChild(el);
+    });
+
+    it('uses a lighter color for labels than for road lines, so both remain distinguishable', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+
+      const roadCall = setPaintProperty.mock.calls.find(([, property]) => property === 'line-color');
+      const labelCall = setPaintProperty.mock.calls.find(([, property]) => property === 'text-color');
+      expect(labelCall?.[2]).not.toBe(roadCall?.[2]);
 
       document.body.removeChild(el);
     });
@@ -467,10 +578,14 @@ describe('route-map', () => {
     }
 
     // El navegador dispara `fullscreenchange` tanto al pulsar el botón como al
-    // salir vía Esc (AC-019) — se simula fijando `document.fullscreenElement`
-    // (jsdom no implementa la Fullscreen API real) y disparando el evento.
-    function simulateFullscreenChange(toElement: Element | null): void {
-      Object.defineProperty(document, 'fullscreenElement', { value: toElement, configurable: true });
+    // salir vía Esc (AC-019) — se simula fijando el `fullscreenElement` del
+    // ShadowRoot real de `<route-map>` (jsdom no implementa la Fullscreen API
+    // real). `isElementFullscreen()` lee `ShadowRoot.fullscreenElement`, no
+    // `document.fullscreenElement` (que la Fullscreen API retargeta al shadow
+    // host, nunca al elemento real — bug de regresión encontrado en dispositivo
+    // real el 2026-08-01, ver `route-map-fullscreen.ts`).
+    function simulateFullscreenChange(el: RouteMapEl, toElement: Element | null): void {
+      Object.defineProperty(el.shadowRoot, 'fullscreenElement', { value: toElement, configurable: true });
       document.dispatchEvent(new Event('fullscreenchange'));
     }
 
@@ -515,7 +630,7 @@ describe('route-map', () => {
       const container = findFullscreenContainer(el);
       const button = findFullscreenButton(el)!;
 
-      simulateFullscreenChange(container);
+      simulateFullscreenChange(el, container);
       await waitRender();
 
       expect(resize).toHaveBeenCalledOnce();
@@ -529,7 +644,7 @@ describe('route-map', () => {
       const container = findFullscreenContainer(el);
       const button = findFullscreenButton(el)!;
 
-      simulateFullscreenChange(container);
+      simulateFullscreenChange(el, container);
       await waitRender();
 
       button.click();
@@ -544,9 +659,9 @@ describe('route-map', () => {
       const container = findFullscreenContainer(el);
       const button = findFullscreenButton(el)!;
 
-      simulateFullscreenChange(container);
+      simulateFullscreenChange(el, container);
       await waitRender();
-      simulateFullscreenChange(null);
+      simulateFullscreenChange(el, null);
       await waitRender();
 
       expect(resize).toHaveBeenCalledTimes(2);
@@ -559,9 +674,9 @@ describe('route-map', () => {
       const el = await mountRouteMap(MADRID_POINTS);
       const container = findFullscreenContainer(el);
 
-      simulateFullscreenChange(container);
+      simulateFullscreenChange(el, container);
       await waitRender();
-      simulateFullscreenChange(null);
+      simulateFullscreenChange(el, null);
       await waitRender();
 
       expect(setCenter).not.toHaveBeenCalled();

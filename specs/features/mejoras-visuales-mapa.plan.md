@@ -18,6 +18,9 @@
 | 5 | Controles de zoom (`NavigationControl`, hitbox 56×56) | `route-map.element.ts`, `route-map.element.css`, `route-map.element.css.spec.ts`, `route-map.element.spec.ts` | AC-013, AC-014, AC-015 (parcial), AC-026 | Small |
 | 6 | Botón de pantalla completa (Fullscreen API real) | `route-map-fullscreen.ts` (nuevo), `route-map-fullscreen.spec.ts` (nuevo), `route-map.element.ts`, `route-map.element.css`, `route-map.element.css.spec.ts`, `route-map.element.spec.ts` | AC-016, AC-017, AC-018, AC-019, AC-020, AC-021, AC-027, AC-028, AC-029 | Large |
 | 7 | Regresión completa + cierre de verificaciones manuales | (sin código nuevo — ejecución de suite + checklist manual) | AC-002, AC-009, AC-012, AC-015, AC-020 (dispositivo real) | Small |
+| 8 | Ajustes tras feedback real (zoom retirado, bug fullscreen, ancho/etiquetas) | `route-map.element.ts`, `route-map-fullscreen.ts`, `route-map-contrast.ts`, `route-map.element.css`, tests | Retira AC-013/014/015/026, corrige AC-019/028, añade AC-030/031/032 | Medium |
+| 9 | Segunda ronda de ajustes (atribución, anclaje pin, ancho, hitbox foto) | `route-map.element.ts`, `route-map-photos.ts`, `route-map.element.css`, tests | AC-033, AC-034, AC-035, AC-037; afina AC-030 | Small |
+| 10 | Atribución colapsada por defecto (tercera ronda) | `route-map.element.ts`, tests | AC-038, AC-039 | Small |
 
 ---
 
@@ -93,7 +96,10 @@
   - `MODIFICAR src/shared/route-map/route-map.element.spec.ts`.
 - **Notas**: Los marcadores de foto/cluster (`.route-map-marker--photo`/`--cluster`) **no se tocan** — son de `mejoras-fotos-mapa` y están fuera de alcance de esta spec (Constraints). Confirmar que el nuevo estilo de pin no afecta al selector base `.route-map-marker` compartido con esas clases (usar clases específicas nuevas en vez de modificar la clase raíz si hay riesgo de colisión).
 
-## Paso 5: Controles de zoom [x]
+## Paso 5: Controles de zoom [x] — **RETIRADO en Paso 8 (2026-08-01)**
+
+> Implementado como se describe abajo, pero retirado íntegramente tras feedback real de usuario sobre el APK instalado (Paso 7) — ver Paso 8. Se conserva esta sección como registro histórico de lo que se implementó y por qué, no como trabajo pendiente.
+
 
 - **Issue**: https://github.com/GonzaloCarmenado/moto-routes/issues/58
 - **Objetivo**: Añadir `NavigationControl` (o control equivalente) siempre visible, con hitbox 56×56px, en una esquina que no compita con el botón de pantalla completa.
@@ -144,7 +150,7 @@
   - `MODIFICAR src/shared/route-map/route-map.element.spec.ts`.
 - **Notas**: `map.resize()` de MapLibre ya preserva el centro/zoom internamente (no re-centra el mapa, solo remide el canvas) — este plan asume que **no** hace falta capturar/reaplicar manualmente `getCenter()`/`getZoom()`, solo invocar `resize()` en el próximo frame tras `fullscreenchange` (nota de implementación de la spec). Si la verificación manual en dispositivo real (Paso 7) revelara lo contrario, habría que añadir esa captura/reaplicación explícita — dejarlo anotado como riesgo a confirmar, no una decisión cerrada. El listener de `fullscreenchange` se registra en `document`, no en el contenedor — hay que limpiarlo explícitamente en `destroy()`/`disconnectedCallback()` para no acumular listeners huérfanos entre montajes/desmontajes de `<route-map>` (p. ej. al navegar entre rutas en `<route-detail>`).
 
-## Paso 7: Regresión completa + cierre de verificaciones manuales
+## Paso 7: Regresión completa + cierre de verificaciones manuales [x]
 
 - **Issue**: https://github.com/GonzaloCarmenado/moto-routes/issues/60
 - **Objetivo**: Confirmar que las 6 mejoras conviven sin solaparse ni romper `mejoras-fotos-mapa`, y cerrar las verificaciones que los tests unitarios (con `maplibre-gl` mockeado) no pueden confirmar por sí solos.
@@ -155,3 +161,71 @@
   - Verificación visual manual (navegador o Android real) de: contraste real de las vías vs. fondo (AC-002), contraste del icono de marcador (AC-012), que atribución/zoom/fullscreen no se solapan visualmente en el contenedor de 200px (AC-009, AC-015 definitivos).
   - Verificación específica en el WebView de Android (target prioritario del proyecto, ADR-018): comprobar si soporta la Fullscreen API (`document.fullscreenEnabled`) — si no la soporta, confirmar que el botón simplemente no aparece (AC-020) sin error en consola, siguiendo el mismo patrón de "verificación pendiente en dispositivo real" ya usado en otras features de este proyecto (ver `memory/context.md`).
   - Si alguna de estas verificaciones manuales revela una desviación (p. ej. el WebView de Android sí soporta Fullscreen API pero con comportamiento distinto al de Chrome desktop), no se ignora: se corrige el código o se anota como ADR/nota en la spec, según corresponda — nunca se deja desalineado (regla de oro de `CLAUDE.md`).
+
+## Paso 8: Ajustes tras verificación visual real (feedback usuario 2026-08-01) [x]
+
+- **Objetivo**: Corregir las tres desviaciones concretas que reveló la verificación manual del Paso 7 sobre el APK instalado en dispositivo real — exactamente el caso previsto en la nota final del Paso 7 ("si alguna verificación manual revela una desviación, se corrige el código").
+- **AC cubiertos**: Retira AC-013, AC-014, AC-015, AC-026 (marcados como retirados en la spec); corrige AC-019/AC-028 (bug real); añade AC-030, AC-031, AC-032 (nuevos).
+- **Feedback recibido** (tres puntos, literal):
+  1. "Vamos a quitar los botones del mapa, no me han gustado y no son útiles" → controles de zoom (`NavigationControl`, Paso 5).
+  2. "El botón de hacer pantalla completa funciona bien para hacerla completa, pero al darle otra vez debería volver al modo normal" → bug de toggle, no volvía al modo normal.
+  3. "El cambio en las calles es demasiado blanco... el nombre de las ciudades y calles es un color demasiado tibio y no se ve" → afinar ancho de vía + subir contraste de etiquetas.
+- **Diagnóstico**:
+  1. Sin causa técnica — decisión de producto del usuario, se retiran sin más.
+  2. Causa raíz: `isElementFullscreen()` comparaba `document.fullscreenElement === container`. La Fullscreen API **retargeta** `document.fullscreenElement` al host del Shadow DOM más externo cuando el elemento en pantalla completa vive dentro de un shadow tree (por diseño, para no filtrar detalles de encapsulación) — nunca devuelve el `container` real. La comparación era siempre `false`, así que tras entrar en pantalla completa el botón nunca detectaba el estado activo (aria-label/icono se quedaban en "entrar") y, al pulsarlo de nuevo, volvía a llamar a `requestFullscreen()` (ya en fullscreen, no-op) en vez de a `exitFullscreen()`.
+  3. Confirmado con el mismo método que en el Paso 3 (`curl -s https://tiles.openfreemap.org/styles/dark`, 2026-08-01): las capas de etiqueta (`highway_name_*`, `place_*`) tienen `text-color` en grises muy apagados (`rgb(101,101,101)`, `hsl(0,0%,37%)`) — nunca tocadas por el override de vías (AC-001), que solo cubre `ROAD_LAYER_IDS` (capas `line`, no `symbol`).
+- **Tests a escribir/modificar**:
+  - `route-map-fullscreen.spec.ts`: nuevo `describe('cuando el contenedor vive dentro de un Shadow DOM')` con dos tests que fijan `ShadowRoot.fullscreenElement` (no `document.fullscreenElement`) para reproducir el caso real y confirmar la corrección.
+  - `route-map.element.spec.ts`: helper `simulateFullscreenChange` pasa a fijar `el.shadowRoot!.fullscreenElement` (antes fijaba `document.fullscreenElement`, que ya no es lo que lee la implementación); eliminado el `describe('controles de zoom ...')`; el test de contraste existente se filtra por `property === 'line-color'` (antes asumía que TODAS las llamadas a `setPaintProperty` eran de color, ya no es cierto); nuevo test de ancho de línea (`line-width` escalado, no fijo) y nuevo `describe` de contraste de etiquetas (`text-color`, distinto del color de vía).
+  - `route-map-contrast.spec.ts`: nuevos tests para `buildRoadLabelContrastOverrides`, mismo patrón que `buildRoadContrastOverrides`.
+  - `route-map.element.css.spec.ts`: eliminado el test de hitbox de `.maplibregl-ctrl-group button` (capa retirada).
+- **Archivos modificados**:
+  - `MODIFICAR src/shared/route-map/route-map.element.ts`: elimina `map.addControl(new maplibregl.NavigationControl(), 'top-left')`; `applyContrastOverrides` ahora resuelve `--ink-faint` (antes `--ink-soft`) para el color de vía, añade `thinRoadLine()` (multiplica la expresión `line-width` existente por `ROAD_WIDTH_SCALE = 0.7`) y un segundo bucle que aplica `buildRoadLabelContrastOverrides(resolveToken('--ink-soft', ...))` sobre las capas de etiqueta.
+  - `MODIFICAR src/shared/route-map/route-map-fullscreen.ts`: `isElementFullscreen()` lee `ShadowRoot.fullscreenElement` cuando `container.getRootNode()` es un `ShadowRoot`, con fallback a `document.fullscreenElement` en caso contrario (compatibilidad con el resto de tests/usos que no viven en un shadow tree).
+  - `MODIFICAR src/shared/route-map/route-map-contrast.ts`: nuevo `ROAD_LABEL_LAYER_IDS` (12 capas `symbol`, verificadas en el style JSON real) y `buildRoadLabelContrastOverrides()`.
+  - `MODIFICAR src/shared/route-map/route-map.element.css`: elimina la regla `.maplibregl-ctrl-group button`; actualiza el comentario del botón de pantalla completa (ya no comparte esquina con controles de zoom retirados).
+  - Tests listados arriba.
+- **Notas**:
+  - No se creó una spec nueva para esta ronda — es la propia verificación manual del Paso 7 revelando desviaciones sobre una spec todavía no cerrada (`review-agent` no había dado veredicto), así que se corrige directamente sobre `mejoras-visuales-mapa.md`/`.plan.md` (regla de oro de `CLAUDE.md`: código y spec nunca quedan desalineados).
+  - `ROAD_WIDTH_SCALE = 0.7` (reducción ~30%) es un valor de partida razonable, no calibrado con una medición formal de contraste — si en una futura verificación visual se ve demasiado fino/grueso, es el único número a ajustar (`route-map.element.ts`).
+  - Pendiente: recompilar el APK con estos tres cambios e instalarlo en el dispositivo de pruebas para que el usuario confirme visualmente antes de invocar `review-agent` y cerrar la spec.
+
+## Paso 9: Segunda ronda de ajustes tras reinstalar el APK (feedback usuario 2026-08-01, sesión posterior) [x]
+
+- **Objetivo**: Resolver cuatro puntos de feedback adicionales, ya sobre el APK con los cambios del Paso 8 instalados.
+- **AC cubiertos**: AC-033, AC-034, AC-035, AC-037 (test); afina AC-030 (segunda reducción de ancho); decisión de producto sobre AC-009 (atribución).
+- **Feedback recibido** (cuatro puntos, literal/paráfrasis):
+  1. "Ahora aparece un indicador en la parte de abajo del mapa que es un link a openfreemap, no sé si eso se puede quitar" → resuelto con el usuario: no se quita (licencia OpenFreeMap/OSM), se hace **aún más discreto** (opacidad reducida, recupera opacidad en hover/foco).
+  2. "Punto de inicio y final, me gustaría que el icono, la punta inferior del icono esté unida al último punto del gps, actualmente está el centro del icono" → los pines anclan por el centro (`anchor` de MapLibre por defecto), no por su punta.
+  3. "Es posible que el resaltado de las carreteras que ahora está en blanco, sea un poco más fino?" → `ROAD_WIDTH_SCALE` del Paso 8 (0.7) sigue viéndose grueso.
+  4. "Cuando hay una imagen... me gustaría que la zona de click fuese un pelín más amplia, quizás metiendo un div superior al propio botón pero invisible con el evento de click" → marcadores de foto/cluster sin margen de tolerancia al pulsar (icono pequeño = hitbox pequeña).
+- **Tests a escribir/modificar**:
+  - `route-map.element.spec.ts` (describe `marcadores de inicio/fin`): nuevo test que confirma que `markerCtor` se llama con `anchor: 'bottom'` para los marcadores `--start`/`--end` (no para los de foto/cluster, que mantienen el anclaje por defecto).
+  - `route-map.element.spec.ts` (describe `contraste visual`): el test existente de `line-width` (Paso 8) se reutiliza sin cambios de estructura — solo cambia el valor de `ROAD_WIDTH_SCALE` en el código, que el test no fija explícitamente (comprueba forma `['*', current, scale]`, no el escalar).
+  - `route-map.element.spec.ts` (describe `marcadores de fotos`): nuevo test que confirma que el elemento pasado a `markerCtor` para un marcador de foto/cluster es un contenedor (`route-map-marker-hitarea`) que a su vez contiene como hijo el icono visible (`route-map-marker--photo`/`--cluster`), y que el listener de click sigue funcionando sobre ese contenedor exterior (regresión de los tests ya existentes de click en marcador/cluster, que no deberían necesitar cambios si el listener se mueve al wrapper).
+  - `route-map.element.css.spec.ts`: nuevo test para `.maplibregl-ctrl-attrib-button` con `opacity` reducida por defecto y `1` en `:hover`/`:focus-visible`; nuevo test para `.route-map-marker-hitarea` con `min-width`/`min-height: var(--hitbox-min)`.
+- **Archivos modificados**:
+  - `MODIFICAR src/shared/route-map/route-map.element.ts`: `addMarker()` pasa `anchor: 'bottom'` a `new maplibregl.Marker({ element: el, anchor: 'bottom' })`; `ROAD_WIDTH_SCALE` baja de `0.7` a `0.5`.
+  - `MODIFICAR src/shared/route-map/route-map.element.css`: nueva regla `.maplibregl-ctrl-attrib-button { background-color: transparent; opacity: 0.35; transition: opacity 0.15s ease; }` + `:hover`/`:focus-visible { opacity: 1; }`; nueva clase `.route-map-marker-hitarea` (`min-width`/`min-height: var(--hitbox-min)`, `display: flex`, `align-items/justify-content: center`, sin fondo/borde visible).
+  - `MODIFICAR src/shared/route-map/route-map-photos.ts`: `addPhotoMarkers()` envuelve el icono visible (`route-map-marker--photo`/`--cluster`, con su `data-cy` y `textContent` de cluster) en un nuevo contenedor `.route-map-marker-hitarea` que además recibe el `data-cy` (`photo-marker`/`photo-cluster`, movido del icono al wrapper) y el listener de `click`; el `Marker` de MapLibre se construye con el wrapper como `element`, no con el icono directamente — el punto de anclaje visual no cambia porque MapLibre sigue centrando el mismo elemento (ahora más grande pero con el icono centrado dentro vía flexbox).
+  - Tests listados arriba.
+- **Notas**:
+  - Igual que en el Paso 8, no se crea una spec nueva — la spec/plan de `mejoras-visuales-mapa` sigue abierta (sin veredicto de `review-agent`), así que las correcciones van directamente aquí.
+  - `ROAD_WIDTH_SCALE = 0.5` sigue sin ser una medición formal de contraste — si una futura verificación visual pide ajustarlo de nuevo, es el mismo único número a tocar.
+  - Los marcadores de inicio/fin (`anchor: 'bottom'`) y los de foto/cluster (sin `anchor` explícito, centro) quedan con comportamiento de anclaje distinto a propósito: el usuario solo pidió el cambio para inicio/fin, donde "tocar el suelo" con la punta del pin tiene sentido visual; los de foto son un icono simétrico sin punta, sin ese mismo requisito.
+  - Pendiente: recompilar el APK con estos cuatro cambios e instalarlo para que el usuario confirme visualmente antes de invocar `review-agent` y cerrar la spec.
+
+## Paso 10: Atribución colapsada por defecto (feedback usuario 2026-08-01, tercera ronda) [x]
+
+- **Objetivo**: Tras probar el APK del Paso 9, el usuario reportó que la atribución (ya con opacidad reducida) seguía apareciendo expandida (mostrando el texto de crédito) en vez de solo el icono "i".
+- **AC cubiertos**: AC-038, AC-039 (test).
+- **Diagnóstico**: no es un bug propio — es el comportamiento documentado internamente de `AttributionControl` de MapLibre en modo `compact`. Su método `_updateCompact()` añade la clase `maplibregl-compact-show` y el atributo `open` al `<details>` del control **nada más crearse** (antes incluso de que el estilo termine de cargar), y solo lo colapsa (`_updateCompactMinimize()`) cuando el mapa recibe un evento `drag` de gesto real del usuario. En un mapa embebido de 200px que la mayoría de usuarios nunca llega a arrastrar (solo lo miran), queda expandido de forma indefinida — confirmado leyendo el código fuente de `node_modules/maplibre-gl/dist/maplibre-gl-dev.js` (búsqueda de `_updateCompact`).
+- **Tests a escribir**:
+  - `route-map.element.spec.ts`, nuevo `describe('atribución colapsada por defecto (AC-038)')`: inserta manualmente en `.maplibre-root` (dentro del shadow root) un `<details>` con las clases reales que usa MapLibre (`maplibregl-ctrl maplibregl-ctrl-attrib maplibregl-compact maplibregl-compact-show` + atributo `open`) antes de disparar `triggerLoad()`; tras dispararlo, comprueba que la clase `maplibregl-compact-show` y el atributo `open` ya no están presentes.
+- **Archivos modificados**:
+  - `MODIFICAR src/shared/route-map/route-map.element.ts`: nuevo método privado `collapseAttribution(mapRoot)`, invocado dentro del handler de `'load'` (junto a `applyContrastOverrides`); busca `.maplibregl-ctrl-attrib` dentro de `mapRoot` y, si existe, quita `maplibregl-compact-show` y el atributo `open` — replicando exactamente lo que MapLibre hace internamente al arrastrar, sin reimplementar ni sustituir su lógica de toggle (el clic del usuario para reabrirlo lo sigue gestionando MapLibre igual que siempre).
+  - Test listado arriba.
+- **Notas**:
+  - No se toca el mecanismo de apertura/cierre al pulsar (`_toggleAttribution` de MapLibre) — sigue intacto; esto solo corrige el estado inicial tras `load`.
+  - Si una versión futura de `maplibre-gl` cambia los nombres de clase/atributo internos del control compacto, este método simplemente deja de tener efecto (degradación seguridad: la atribución seguiría siendo visible y pulsable, solo que expandida por defecto) — no lanza ningún error si `.maplibregl-ctrl-attrib` no existe.
+  - Pendiente: recompilar el APK con este cambio e instalarlo para que el usuario confirme visualmente antes de invocar `review-agent` y cerrar la spec.

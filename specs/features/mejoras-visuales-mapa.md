@@ -3,50 +3,73 @@
 ## Descripción
 Mejora incremental del componente compartido `<route-map>` (introducido por `specs/features/mapa-ruta-maplibre.md`) para resolver problemas de legibilidad reportados por un motorista al revisar el detalle de una ruta: el estilo oscuro actual apenas distingue las calles del fondo, no hay forma de ver el mapa a pantalla completa, faltan controles de zoom visibles, los marcadores de inicio/fin son difíciles de identificar, no hay estado de carga mientras cargan las teselas, y la atribución de OpenFreeMap/OpenStreetMap está deshabilitada incumpliendo su licencia. Esta spec no rediseña el componente desde cero: añade contraste, controles e indicadores sobre la base ya construida y aprobada.
 
+> **Feature cerrada (2026-08-01)**: verificada en dispositivo Android real (`75fe536b`) a través de 3 rondas de feedback del usuario sobre el APK instalado (Pasos 7 a 10), incluyendo los AC solo verificables manualmente (AC-002, AC-009, AC-012, AC-020). Todos los AC de este documento están cumplidos y verificados salvo AC-013/AC-014/AC-015/AC-026, retirados formalmente por decisión de producto (ver "Controles de zoom" más abajo).
+
 ## Criterios de Aceptación
 
 ### Contraste visual del estilo del mapa
-- [ ] AC-001: Tras el evento `load` de MapLibre, el componente aplica overrides de `paint` (vía `map.setPaintProperty`) sobre las capas de carreteras del estilo `dark` de OpenFreeMap para aumentar su contraste de color/luminosidad respecto al fondo, sin sustituir el estilo base completo por uno distinto.
-- [ ] AC-002: Las vías principales y secundarias son claramente distinguibles del fondo del mapa en el nivel de zoom resultante del `fitBounds` inicial (encuadre por defecto al abrir el detalle), sin necesidad de hacer zoom adicional. Se considera cumplido cuando el color resuelto de las capas de vía overrideadas mantiene un ratio de contraste de al menos 3:1 frente al color de fondo del estilo (criterio WCAG AA para elementos gráficos no textuales, aplicado aquí a la visualización cartográfica).
-- [ ] AC-003: Si alguna de las capas de carretera esperadas no existe en el estilo cargado (p. ej. un cambio no anunciado del estilo de terceros de OpenFreeMap), la aplicación de los overrides no lanza ninguna excepción no controlada ni impide que el trazado, los marcadores y el `fitBounds` se sigan dibujando con normalidad.
-- [ ] AC-004: Los colores usados en los overrides de contraste son coherentes con la paleta "Asfalto Nocturno" (tonos cálidos/neutros, sin azules fríos ni acentos neón) — no se introduce ninguna paleta ajena al sistema de diseño.
+- [x] AC-001: Tras el evento `load` de MapLibre, el componente aplica overrides de `paint` (vía `map.setPaintProperty`) sobre las capas de carreteras del estilo `dark` de OpenFreeMap para aumentar su contraste de color/luminosidad respecto al fondo, sin sustituir el estilo base completo por uno distinto.
+- [x] AC-002: Las vías principales y secundarias son claramente distinguibles del fondo del mapa en el nivel de zoom resultante del `fitBounds` inicial (encuadre por defecto al abrir el detalle), sin necesidad de hacer zoom adicional. Se considera cumplido cuando el color resuelto de las capas de vía overrideadas mantiene un ratio de contraste de al menos 3:1 frente al color de fondo del estilo (criterio WCAG AA para elementos gráficos no textuales, aplicado aquí a la visualización cartográfica).
+- [x] AC-003: Si alguna de las capas de carretera esperadas no existe en el estilo cargado (p. ej. un cambio no anunciado del estilo de terceros de OpenFreeMap), la aplicación de los overrides no lanza ninguna excepción no controlada ni impide que el trazado, los marcadores y el `fitBounds` se sigan dibujando con normalidad.
+- [x] AC-004: Los colores usados en los overrides de contraste son coherentes con la paleta "Asfalto Nocturno" (tonos cálidos/neutros, sin azules fríos ni acentos neón) — no se introduce ninguna paleta ajena al sistema de diseño.
 
 ### Estado de carga (skeleton) del mapa
-- [ ] AC-005: Mientras el mapa se está inicializando y el evento `load` de MapLibre aún no se ha disparado, el componente muestra un placeholder visual sobre `--panel-sunken` (opcionalmente con una animación sutil tipo shimmer/pulso) en el área del mapa, en vez de dejar el contenedor vacío o producir un flash en blanco.
-- [ ] AC-006: El placeholder de carga se sustituye por el mapa real inmediatamente al dispararse el evento `load`, sin dejar ambos superpuestos ni un parpadeo perceptible.
-- [ ] AC-007: Si `prefers-reduced-motion: reduce` está activo, el placeholder de carga se muestra estático (sin animación), igual que el resto de animaciones del sistema de diseño.
+- [x] AC-005: Mientras el mapa se está inicializando y el evento `load` de MapLibre aún no se ha disparado, el componente muestra un placeholder visual sobre `--panel-sunken` (opcionalmente con una animación sutil tipo shimmer/pulso) en el área del mapa, en vez de dejar el contenedor vacío o producir un flash en blanco.
+- [x] AC-006: El placeholder de carga se sustituye por el mapa real inmediatamente al dispararse el evento `load`, sin dejar ambos superpuestos ni un parpadeo perceptible.
+- [x] AC-007: Si `prefers-reduced-motion: reduce` está activo, el placeholder de carga se muestra estático (sin animación), igual que el resto de animaciones del sistema de diseño.
 
 ### Atribución OpenFreeMap / OpenStreetMap
-- [ ] AC-008: El mapa muestra el control de atribución de MapLibre (`attributionControl: true` o un control de atribución compacto equivalente) con el crédito de OpenFreeMap/OpenStreetMap, revirtiendo el `attributionControl: false` actual para cumplir su requisito de licencia.
-- [ ] AC-009: El control de atribución se presenta de forma discreta (texto pequeño, esquina inferior, estilo coherente con "Asfalto Nocturno" vía overrides CSS del componente) sin romper la altura fija de 200px del contenedor ni solaparse de forma que impida pulsar el botón de pantalla completa o los controles de zoom.
+- [x] AC-008: El mapa muestra el control de atribución de MapLibre (`attributionControl: true` o un control de atribución compacto equivalente) con el crédito de OpenFreeMap/OpenStreetMap, revirtiendo el `attributionControl: false` actual para cumplir su requisito de licencia.
+- [x] AC-009: El control de atribución se presenta de forma discreta (texto pequeño, esquina inferior, estilo coherente con "Asfalto Nocturno" vía overrides CSS del componente) sin romper la altura fija de 200px del contenedor ni solaparse de forma que impida pulsar el botón de pantalla completa o los controles de zoom.
 
 ### Marcadores de inicio y fin
-- [ ] AC-010: Los marcadores de inicio y fin dejan de renderizarse como círculos CSS simples y pasan a usar un icono con mejor legibilidad sobre fondo oscuro (tipo pin o bandera).
-- [ ] AC-011: El marcador de inicio conserva el color verde (token `--success`) y el de fin conserva el color ámbar (token `--amber`), ambos leídos como tokens del sistema — prohibido hardcodear el color en el nuevo icono.
-- [ ] AC-012: El nuevo icono de marcador mantiene un contraste mínimo de 3:1 (WCAG AA para elementos gráficos) respecto al mapa de fondo circundante.
+- [x] AC-010: Los marcadores de inicio y fin dejan de renderizarse como círculos CSS simples y pasan a usar un icono con mejor legibilidad sobre fondo oscuro (tipo pin o bandera).
+- [x] AC-011: El marcador de inicio conserva el color verde (token `--success`) y el de fin conserva el color ámbar (token `--amber`), ambos leídos como tokens del sistema — prohibido hardcodear el color en el nuevo icono.
+- [x] AC-012: El nuevo icono de marcador mantiene un contraste mínimo de 3:1 (WCAG AA para elementos gráficos) respecto al mapa de fondo circundante.
 
-### Controles de zoom
-- [ ] AC-013: El mapa muestra controles de zoom +/- (`maplibregl.NavigationControl` o control propio equivalente) visibles de forma permanente, sin depender de hover ni de gestos multitáctiles para descubrirlos.
-- [ ] AC-014: Cada botón de zoom tiene una hitbox mínima de 56×56px, ampliando el tamaño por defecto de MapLibre (~29px) mediante CSS propio del componente.
-- [ ] AC-015: Los controles de zoom se posicionan de modo que no se solapen ni compitan visualmente con el botón de pantalla completa (p. ej. zoom en una esquina distinta a la del botón de pantalla completa).
+### Controles de zoom — **RETIRADO (2026-08-01)**
+- [x] ~~AC-013: El mapa muestra controles de zoom +/- (`maplibregl.NavigationControl` o control propio equivalente) visibles de forma permanente, sin depender de hover ni de gestos multitáctiles para descubrirlos.~~
+- [x] ~~AC-014: Cada botón de zoom tiene una hitbox mínima de 56×56px, ampliando el tamaño por defecto de MapLibre (~29px) mediante CSS propio del componente.~~
+- [x] ~~AC-015: Los controles de zoom se posicionan de modo que no se solapen ni compitan visualmente con el botón de pantalla completa (p. ej. zoom en una esquina distinta a la del botón de pantalla completa).~~
+
+Implementados en el Paso 5 (`NavigationControl` en `top-left`) y verificados visualmente en dispositivo real en esta misma ronda de feedback (2026-08-01): el usuario los encontró innecesarios ("no me han gustado y no son útiles" — el pellizco para zoom ya cubre el mismo caso) y pidió quitarlos. Retirados del código (`route-map.element.ts`, `route-map.element.css`) y de los tests. AC-013/AC-014/AC-015 y su test AC-026 quedan formalmente **fuera de esta spec** — no se reintroducen sin una nueva petición explícita.
 
 ### Botón de pantalla completa
-- [ ] AC-016: El mapa incluye un botón integrado en la esquina superior derecha del contenedor, con hitbox mínima 56×56px y `aria-label` descriptivo que refleja el estado actual ("Ver mapa a pantalla completa" / "Salir de pantalla completa").
-- [ ] AC-017: Al pulsar el botón estando en modo normal, se invoca `requestFullscreen()` sobre el contenedor del mapa (Fullscreen API real, no una simulación con CSS `position: fixed`); el icono del botón cambia para reflejar la acción de salir de pantalla completa.
-- [ ] AC-018: Tras entrar en pantalla completa, el mapa conserva el mismo centro y nivel de zoom que tenía inmediatamente antes del cambio, y se invoca `map.resize()` para que MapLibre vuelva a medir el nuevo tamaño del contenedor.
-- [ ] AC-019: El mapa puede salir de pantalla completa tanto pulsando el mismo botón (ahora con icono de "salir") como pulsando Esc (comportamiento nativo del navegador vía el evento `fullscreenchange`); en ambos casos se conserva el centro/zoom previos y se vuelve a invocar `map.resize()`.
-- [ ] AC-020: Si el entorno no soporta la Fullscreen API (`document.fullscreenEnabled` es `false` o el método no existe en el contenedor), el botón de pantalla completa no se muestra, sin lanzar ningún error ni dejar un botón inoperante visible.
-- [ ] AC-021: La transición visual de entrada/salida de pantalla completa no aplica ninguna animación cuando `prefers-reduced-motion: reduce` está activo.
+- [x] AC-016: El mapa incluye un botón integrado en la esquina superior derecha del contenedor, con hitbox mínima 56×56px y `aria-label` descriptivo que refleja el estado actual ("Ver mapa a pantalla completa" / "Salir de pantalla completa").
+- [x] AC-017: Al pulsar el botón estando en modo normal, se invoca `requestFullscreen()` sobre el contenedor del mapa (Fullscreen API real, no una simulación con CSS `position: fixed`); el icono del botón cambia para reflejar la acción de salir de pantalla completa.
+- [x] AC-018: Tras entrar en pantalla completa, el mapa conserva el mismo centro y nivel de zoom que tenía inmediatamente antes del cambio, y se invoca `map.resize()` para que MapLibre vuelva a medir el nuevo tamaño del contenedor.
+- [x] AC-019: El mapa puede salir de pantalla completa tanto pulsando el mismo botón (ahora con icono de "salir") como pulsando Esc (comportamiento nativo del navegador vía el evento `fullscreenchange`); en ambos casos se conserva el centro/zoom previos y se vuelve a invocar `map.resize()`. **Bug encontrado en verificación real (2026-08-01) y corregido**: el botón entraba en pantalla completa pero, al pulsarlo de nuevo, no salía — `isElementFullscreen()` comparaba contra `document.fullscreenElement`, que la Fullscreen API retargeta al *host* del Shadow DOM (el propio `<route-map>`), nunca al contenedor real que llamó a `requestFullscreen()`. Corregido leyendo `ShadowRoot.fullscreenElement` (no retargetado) cuando el contenedor vive en un shadow tree — ver comentario en `route-map-fullscreen.ts`.
+- [x] AC-020: Si el entorno no soporta la Fullscreen API (`document.fullscreenEnabled` es `false` o el método no existe en el contenedor), el botón de pantalla completa no se muestra, sin lanzar ningún error ni dejar un botón inoperante visible.
+- [x] AC-021: La transición visual de entrada/salida de pantalla completa no aplica ninguna animación cuando `prefers-reduced-motion: reduce` está activo.
 
 ### Tests (Vitest, `maplibre-gl` mockeado)
-- [ ] AC-022: Test: tras disparar `load` en el mock de `maplibregl.Map`, se verifica que el componente llama a `setPaintProperty` sobre al menos una capa de carretera con un valor de color distinto al del estilo original.
-- [ ] AC-023: Test: mientras el mock de `maplibregl.Map` no ha disparado `load`, el DOM del componente muestra el elemento de skeleton/placeholder de carga; tras disparar `load`, el placeholder deja de mostrarse.
-- [ ] AC-024: Test: al construir el mapa, `attributionControl` se pasa como `true` (o la configuración de control compacto equivalente), no `false`.
-- [ ] AC-025: Test: los marcadores de inicio/fin se construyen con la nueva estructura/clase de icono y siguen resolviendo `--success`/`--amber` como color base respectivamente.
-- [ ] AC-026: Test: el mapa se inicializa añadiendo un `NavigationControl` (o control de zoom equivalente) vía `map.addControl`.
-- [ ] AC-027: Test: al pulsar el botón de pantalla completa en estado normal, se invoca `requestFullscreen()` sobre el contenedor y, al simular el evento `fullscreenchange` correspondiente, se invoca `map.resize()`.
-- [ ] AC-028: Test: al pulsar el botón de pantalla completa estando ya en pantalla completa (o al simular la salida vía Esc), se invoca `document.exitFullscreen()` y el `aria-label`/icono del botón vuelven a su estado original.
-- [ ] AC-029: Test: si `document.fullscreenEnabled` es `false` (o `requestFullscreen` no existe en el contenedor), el botón de pantalla completa no se renderiza.
+- [x] AC-022: Test: tras disparar `load` en el mock de `maplibregl.Map`, se verifica que el componente llama a `setPaintProperty` sobre al menos una capa de carretera con un valor de color distinto al del estilo original.
+- [x] AC-023: Test: mientras el mock de `maplibregl.Map` no ha disparado `load`, el DOM del componente muestra el elemento de skeleton/placeholder de carga; tras disparar `load`, el placeholder deja de mostrarse.
+- [x] AC-024: Test: al construir el mapa, `attributionControl` se pasa como `true` (o la configuración de control compacto equivalente), no `false`.
+- [x] AC-025: Test: los marcadores de inicio/fin se construyen con la nueva estructura/clase de icono y siguen resolviendo `--success`/`--amber` como color base respectivamente.
+- [x] ~~AC-026: Test: el mapa se inicializa añadiendo un `NavigationControl` (o control de zoom equivalente) vía `map.addControl`.~~ **RETIRADO (2026-08-01)** — ver "Controles de zoom" arriba.
+- [x] AC-027: Test: al pulsar el botón de pantalla completa en estado normal, se invoca `requestFullscreen()` sobre el contenedor y, al simular el evento `fullscreenchange` correspondiente, se invoca `map.resize()`.
+- [x] AC-028: Test: al pulsar el botón de pantalla completa estando ya en pantalla completa (o al simular la salida vía Esc), se invoca `document.exitFullscreen()` y el `aria-label`/icono del botón vuelven a su estado original.
+- [x] AC-029: Test: si `document.fullscreenEnabled` es `false` (o `requestFullscreen` no existe en el contenedor), el botón de pantalla completa no se renderiza.
+
+### Afinado de contraste tras verificación en dispositivo real (2026-08-01)
+Feedback real de usuario sobre el APK instalado para el Paso 7: el color de contraste de las vías (AC-001/AC-004) se veía demasiado blanco/grueso, y los nombres de calles/ciudades del propio estilo `dark` (fuera del alcance original de AC-001, que solo cubría el trazado de vía) resultaban casi ilegibles.
+- [x] AC-030: El ancho de línea de las capas de carretera overrideadas en color (AC-001) se reduce respecto al del estilo original, escalando la expresión de interpolación por zoom ya existente (no sustituyéndola por un valor fijo), preservando la progresión de grosor entre clases de vía (motorway > major > minor).
+- [x] AC-031: Las capas de texto (`symbol`) de nombres de calles/carreteras y de lugares (ciudades, pueblos, países) del estilo `dark` reciben un override de `text-color` con un tono de la paleta "Asfalto Nocturno", distinguible del color de las vías (AC-001) y legible sobre el fondo oscuro.
+- [x] AC-032: Test: tras `load`, se llama a `setPaintProperty` con `line-width` para al menos una capa de `ROAD_LAYER_IDS` con un valor que escala (no sustituye) la expresión existente, y con `text-color` para al menos una capa de etiqueta, con un color distinto al de las vías.
+
+### Segunda ronda de ajustes tras probar el APK reinstalado (2026-08-01)
+Nuevo feedback real de usuario, ya con los cambios del Paso 8 instalados: la atribución sigue percibiéndose como un "indicador" molesto, los marcadores de inicio/fin no señalan el punto GPS exacto (el pin flota centrado sobre él en vez de apoyar su punta), el ancho de vía (AC-030) sigue viéndose grueso, y el área de clic de los marcadores de foto es demasiado ajustada al icono visual para usarse con guantes.
+- [x] AC-033: El control de atribución de OpenFreeMap/OSM (AC-008/AC-009) se muestra con opacidad reducida por defecto, quedando casi imperceptible sobre el mapa oscuro, y recupera opacidad completa al recibir foco o `hover` — sigue presente y pulsable en todo momento (no se elimina, por requisito de licencia).
+- [x] AC-034: Los marcadores de inicio y fin anclan su punta inferior (no su centro) a la coordenada GPS exacta que representan, igual que el comportamiento estándar de un pin de mapa.
+- [x] AC-035: El ancho de línea de las capas de carretera (AC-030) se reduce de nuevo respecto al valor fijado en el Paso 8, manteniendo el mismo mecanismo de escalado de la expresión de interpolación por zoom (no un valor fijo).
+- [x] AC-036: Los marcadores de foto individuales y de cluster exponen una zona de clic invisible de al menos `--hitbox-min` (56×56px) que envuelve el icono visible sin alterar su tamaño ni posición aparente.
+- [x] AC-037: Test: los marcadores de inicio/fin se construyen con `anchor: 'bottom'` (o equivalente) en las opciones de `maplibregl.Marker`; el control de atribución resuelto en CSS tiene opacidad reducida por defecto y `1` en `:hover`/`:focus-visible`; el ancho de vía sigue escalando (no fijo) con un factor menor que el del Paso 8; los marcadores de foto/cluster se construyen envolviendo el icono visible en un contenedor con hitbox `--hitbox-min`.
+
+### Tercera ronda de ajustes: atribución colapsada por defecto (2026-08-01)
+Pese a AC-033 (opacidad reducida), el control de atribución seguía apareciendo **expandido** (mostrando el texto de crédito, no solo el icono "i") en el primer render, en un mapa de 200px que el usuario no llega a arrastrar. Investigado: comportamiento propio de MapLibre (`AttributionControl` en modo `compact`), no un bug de esta app — arranca expandido y solo se colapsa cuando el mapa recibe un evento `drag` real.
+- [x] AC-038: Tras el evento `load`, el control de atribución compacto queda colapsado (solo el icono "i" visible, sin el texto de crédito expandido), sin necesidad de que el usuario arrastre el mapa. Sigue pudiéndose abrir pulsándolo (comportamiento nativo de MapLibre, sin tocar).
+- [x] AC-039: Test: si el control de atribución existe en el DOM con las clases de estado "expandido" de MapLibre tras `load`, el componente las retira (y retira el atributo `open`), dejándolo en su estado colapsado.
 
 ## Comportamiento Esperado
 
