@@ -1,0 +1,171 @@
+@import '../shared/styles/tokens.css';
+@import './profile-header.css';
+
+:host {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+}
+
+.dialog {
+  position: relative;
+  width: min(90vw, 360px);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--ink);
+  margin: 0;
+  text-align: center;
+}
+
+.preview {
+  display: flex;
+  justify-content: center;
+}
+
+.change-photo {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.change-photo-btn {
+  min-width: var(--hitbox-min);
+  min-height: var(--hitbox-min);
+  padding: 0 var(--space-4);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--amber);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.change-photo-btn:hover {
+  background: var(--amber-soft);
+}
+
+.photo-menu {
+  position: absolute;
+  top: 100%;
+  margin-top: var(--space-1);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--space-2);
+  display: none;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 180px;
+  box-shadow: var(--shadow-card);
+  z-index: 10;
+}
+
+.photo-menu.menu-open {
+  display: flex;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--hitbox-min);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast);
+}
+
+.menu-item:hover {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field-label {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.input {
+  min-height: var(--hitbox-min);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--panel-sunken);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  padding: 0 var(--space-3);
+}
+
+.input:focus {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.action {
+  min-width: var(--hitbox-min);
+  min-height: var(--hitbox-min);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.action--primary {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: var(--bg-bottom);
+}
+
+.action--danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
