@@ -9,7 +9,7 @@ import {
   stopForegroundService,
   pauseRecordingLocation,
   resumeRecordingLocation,
-} from '../shared/tauri/commands.js';
+} from '../../shared/tauri/commands.js';
 
 export interface ForegroundServiceProvider {
   start(): Promise<void>;

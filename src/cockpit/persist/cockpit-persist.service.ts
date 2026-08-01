@@ -3,10 +3,10 @@
  * Extraído de cockpit.service.ts para mantener ese archivo centrado en el
  * estado de grabación en sí.
  */
-import type { CockpitState } from './cockpit.types.js';
-import type { IRouteRepository } from '../shared/models/route.repository.js';
-import type { CreateRoute, CreateRoutePoint, CreateRouteStop } from '../shared/models/route.types.js';
-import { simplifyPolyline } from '../shared/services/route-polyline.service.js';
+import type { CockpitState } from '../cockpit.types.js';
+import type { IRouteRepository } from '../../shared/models/route.repository.js';
+import type { CreateRoute, CreateRoutePoint, CreateRouteStop } from '../../shared/models/route.types.js';
+import { simplifyPolyline } from '../../shared/services/route-polyline.service.js';
 
 const BACKUP_KEY = 'moto-routes-pending-backup';
 

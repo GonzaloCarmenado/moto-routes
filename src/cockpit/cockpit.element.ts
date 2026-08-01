@@ -1,7 +1,7 @@
 import { BaseElement } from '../shared/base-element.js';
 import { createCockpitService, createBrowserGpsProvider, type CockpitService, type StorageProvider } from './cockpit.service.js';
-import { createTauriForegroundServiceProvider } from './cockpit-foreground.service.js';
-import { createNativeGpsProvider, isAndroidTauri, selectGpsProvider } from './cockpit-native-gps.service.js';
+import { createTauriForegroundServiceProvider } from './gps/cockpit-foreground.service.js';
+import { createNativeGpsProvider, isAndroidTauri, selectGpsProvider } from './gps/cockpit-native-gps.service.js';
 import { getCockpitDisplayValues, getStatusChipClass, getStatusChipLabel } from './cockpit.transform.js';
 import type { CockpitState } from './cockpit.types.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
@@ -12,11 +12,11 @@ import type { PhotoCaptureElement } from '../shared/photo-capture/photo-capture.
 import { PHOTO_CAPTURE_EVENT, type PhotoCaptureEventDetail } from '../shared/photo-capture/photo-capture.types.js';
 import { openPhotoViewer } from '../shared/photo-viewer/photo-viewer.element.js';
 import { captureFromCamera, pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
-import { processMultiplePhotos, fetchGalleryPhotos, deleteCockpitPhoto } from './cockpit-photo.service.js';
+import { processMultiplePhotos, fetchGalleryPhotos, deleteCockpitPhoto } from './photo/cockpit-photo.service.js';
 import { toErrorMessage } from '../shared/utils/errors.js';
 import { showToast } from '../shared/feedback/toast.js';
-import { resolveStopDecision } from './cockpit-stop.service.js';
-import { createLongPressController, type LongPressController } from './cockpit-long-press.js';
+import { resolveStopDecision } from './stop/cockpit-stop.service.js';
+import { createLongPressController, type LongPressController } from './long-press/cockpit-long-press.js';
 import { SqliteRouteRepository } from '../shared/repositories/sqlite-route.repository.js';
 import { createSqliteDb } from '../shared/repositories/sqlite-route.factory.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
