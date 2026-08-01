@@ -5,11 +5,11 @@
  * devolviendo además una URL para la vista previa inmediata.
  */
 
-import type { IPhotoRepository } from '../shared/models/photo.repository.js';
-import type { CreatePhoto } from '../shared/models/photo.types.js';
-import type { CaptureResult } from '../shared/services/photo-capture-adapter.service.js';
-import { isTauri } from '../shared/services/photo-capture-adapter.service.js';
-import { persistCapturedPhoto } from '../shared/services/photo-persist.service.js';
+import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
+import type { CreatePhoto } from '../../shared/models/photo.types.js';
+import type { CaptureResult } from '../../shared/services/photo-capture-adapter.service.js';
+import { isTauri } from '../../shared/services/photo-capture-adapter.service.js';
+import { persistCapturedPhoto } from '../../shared/services/photo-persist.service.js';
 
 /**
  * Añade una foto a una ruta con persistencia real y devuelve, además del

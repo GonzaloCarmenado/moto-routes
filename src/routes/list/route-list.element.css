@@ -1,4 +1,4 @@
-@import '../shared/styles/tokens.css';
+@import '../../shared/styles/tokens.css';
 
 :host {
   display: block;

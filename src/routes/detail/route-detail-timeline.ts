@@ -1,4 +1,4 @@
-import type { RoutePoint } from '../shared/models/route.types.js';
+import type { RoutePoint } from '../../shared/models/route.types.js';
 import type { TimelinePhotoInput, TimelineDelimiter, TimelineSegment, TimelinePhotoMarker } from './route-timeline.types.js';
 import {
   buildTimelineData,

@@ -3,10 +3,10 @@
  * DOM y persistencia de la nota. Extraído de route-detail.element.ts para
  * mantener ese archivo bajo el límite de tamaño (specs/ui/frontend-conventions.md).
  */
-import type { IRouteRepository } from '../shared/models/route.repository.js';
-import type { Route } from '../shared/models/route.types.js';
-import { showToast } from '../shared/feedback/toast.js';
-import { toErrorMessage } from '../shared/utils/errors.js';
+import type { IRouteRepository } from '../../shared/models/route.repository.js';
+import type { Route } from '../../shared/models/route.types.js';
+import { showToast } from '../../shared/feedback/toast.js';
+import { toErrorMessage } from '../../shared/utils/errors.js';
 
 type SaveNote = (textarea: HTMLTextAreaElement) => Promise<boolean>;
 

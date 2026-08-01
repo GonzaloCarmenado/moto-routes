@@ -1,4 +1,4 @@
-import { BaseElement } from '../shared/base-element.js';
+import { BaseElement } from '../../shared/base-element.js';
 import styles from './cockpit-save-route-dialog.element.css?inline';
 
 export interface SaveRouteDialogOptions {

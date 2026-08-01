@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
-import type { IRouteRepository } from '../shared/models/route.repository.js';
+import { MemoryRouteRepository } from '../../shared/repositories/memory-route.repository.js';
+import type { IRouteRepository } from '../../shared/models/route.repository.js';
 import './route-list.element.js';
 
 async function waitRender(): Promise<void> {
