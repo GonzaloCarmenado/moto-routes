@@ -46,24 +46,29 @@ export async function resumeRecordingLocation(): Promise<void> {
 }
 
 // Ejemplo: comando greet en Rust
+/** Argumentos del comando `greet` (ejemplo del backend Rust). */
 export interface GreetArgs {
   name: string;
 }
 
+/** Respuesta del comando `greet`. */
 export interface GreetResponse {
   message: string;
 }
 
+/** Ejemplo de comando `greet` del backend Rust. */
 export async function greet(args: GreetArgs): Promise<GreetResponse> {
   return invoke<GreetResponse>('greet', args as unknown as InvokeArgs);
 }
 
 // Ejemplo: comando con validación
+/** Argumentos del comando `save_file`. */
 export interface SaveFileArgs {
   path: string;
   content: string;
 }
 
+/** Ejemplo de comando `save_file` con validación básica en frontend. */
 export async function saveFile(args: SaveFileArgs): Promise<void> {
   // Validación básica en frontend (la validación real está en Rust)
   if (!args.path || !args.content) {

@@ -14,6 +14,7 @@ export interface RouteLineFeature {
   };
 }
 
+/** Convierte los puntos de ruta a una Feature GeoJSON LineString para MapLibre. */
 export function toGeoJSON(points: readonly RouteMapPoint[]): RouteLineFeature {
   return {
     type: 'Feature',
@@ -77,6 +78,7 @@ function linearToSrgb8bit(channel: number): number {
   return Math.round(Math.min(Math.max(encoded, 0), 1) * 255);
 }
 
+/** Calcula los límites geográficos (suroeste, noreste) de los puntos; `null` si no hay puntos. */
 export function computeBounds(points: readonly RouteMapPoint[]): [LngLat, LngLat] | null {
   if (points.length === 0) return null;
 

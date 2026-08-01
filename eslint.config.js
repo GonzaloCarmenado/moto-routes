@@ -1,11 +1,35 @@
+import jsdoc from 'eslint-plugin-jsdoc';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist/', 'node_modules/', 'coverage/', 'src-tauri/', 'cypress/', 'scripts/', '**/*.d.ts'],
+    ignores: ['dist/', 'node_modules/', 'coverage/', 'src-tauri/', 'cypress/', 'scripts/', 'docs/', '**/*.d.ts'],
   },
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylistic,
+  {
+    plugins: {
+      jsdoc,
+    },
+    rules: {
+      // JSDoc obligatorio en exports públicos (AC-003/AC-005) — el pre-commit
+      // ya ejecuta `npx eslint src/ --max-warnings 0`, así que un export sin
+      // documentar bloquea el commit.
+      'jsdoc/require-jsdoc': [
+        'error',
+        {
+          publicOnly: true,
+          require: {
+            ArrowFunctionExpression: false,
+            ClassDeclaration: true,
+            ClassExpression: true,
+            FunctionDeclaration: true,
+            MethodDefinition: false,
+          },
+        },
+      ],
+    },
+  },
   {
     languageOptions: {
       parserOptions: {
@@ -50,6 +74,8 @@ export default tseslint.config(
       '@typescript-eslint/unbound-method': 'off',
       // Template literals con números son ubicuos en tests (ids dinámicos, array indices)
       '@typescript-eslint/restrict-template-expressions': 'off',
+      // Los tests no requieren JSDoc (AC-004 de documentacion-codigo)
+      'jsdoc/require-jsdoc': 'off',
     },
   },
   {

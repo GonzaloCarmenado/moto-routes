@@ -1,0 +1,27 @@
+{
+  "entryPoints": ["src"],
+  "entryPointStrategy": "expand",
+  "out": "docs/api",
+  "plugin": ["typedoc-plugin-coverage"],
+  "coverageLabel": "Cobertura de documentación",
+  "coverageColor": "#d97706",
+  "coverageOutputType": "json",
+  "requiredToBeDocumented": [
+    "Module",
+    "Namespace",
+    "Enum",
+    "Variable",
+    "Function",
+    "Class",
+    "Interface",
+    "Method",
+    "Accessor",
+    "TypeAlias"
+  ],
+  "exclude": ["**/*.spec.ts", "**/__mocks__/**", "**/*.css.ts", "src/vite-env.d.ts", "src/shared/tauri-plugins/**"],
+  "excludeExternals": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "skipErrorChecking": true,
+  "tsconfig": "./tsconfig.json"
+}

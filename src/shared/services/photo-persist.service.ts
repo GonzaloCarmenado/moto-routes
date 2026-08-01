@@ -13,6 +13,7 @@ import { validatePhoto } from './photo-capture-adapter.service.js';
 import { extractPhotoLocation } from './photo-geolocation.service.js';
 import { savePhotoFile } from './photo-storage.service.js';
 
+/** Parámetros del pipeline de persistencia de una foto capturada. */
 export interface PersistCapturedPhotoParams {
   file: File;
   routeId: string;
