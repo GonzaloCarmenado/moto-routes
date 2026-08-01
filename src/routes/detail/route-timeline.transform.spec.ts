@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { detectStopsFromPoints, formatTimelineTime, formatTimelineCoords, formatTimelineSpeed } from './route-timeline.transform.js';
-import type { RoutePoint } from '../shared/models/route.types.js';
+import type { RoutePoint } from '../../shared/models/route.types.js';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers de datos de prueba                                        */

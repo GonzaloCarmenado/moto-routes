@@ -1,6 +1,6 @@
-import type { IRouteRepository } from '../shared/models/route.repository.js';
-import type { Route } from '../shared/models/route.types.js';
-import { simplifyPolyline } from '../shared/services/route-polyline.service.js';
+import type { IRouteRepository } from '../../shared/models/route.repository.js';
+import type { Route } from '../../shared/models/route.types.js';
+import { simplifyPolyline } from '../../shared/services/route-polyline.service.js';
 
 /**
  * Único punto de decisión de "¿ya tiene trazado / hay que calcularlo / no hay

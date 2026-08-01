@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { buildTimelinePanel } from './route-detail-timeline.js';
-import type { RoutePoint } from '../shared/models/route.types.js';
+import type { RoutePoint } from '../../shared/models/route.types.js';
 
 function makePt(overrides: Partial<RoutePoint> & { timestamp: number; speed: number }): RoutePoint {
   return {

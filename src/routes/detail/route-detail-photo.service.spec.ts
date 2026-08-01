@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { addPhotoToRoute } from './route-detail-photo.service.js';
-import type { IPhotoRepository } from '../shared/models/photo.repository.js';
-import type { CreatePhoto } from '../shared/models/photo.types.js';
+import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
+import type { CreatePhoto } from '../../shared/models/photo.types.js';
 
 function createMockRepo(): IPhotoRepository {
   return {

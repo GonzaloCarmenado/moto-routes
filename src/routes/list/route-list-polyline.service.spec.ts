@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ensurePreviewPolyline } from './route-list-polyline.service.js';
-import type { IRouteRepository } from '../shared/models/route.repository.js';
-import type { Route, RoutePoint } from '../shared/models/route.types.js';
+import type { IRouteRepository } from '../../shared/models/route.repository.js';
+import type { Route, RoutePoint } from '../../shared/models/route.types.js';
 
 function buildRoute(overrides: Partial<Route> = {}): Route {
   return {

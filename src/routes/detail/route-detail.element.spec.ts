@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
-import { MemoryPhotoRepository } from '../shared/repositories/memory-photo.repository.js';
-import type { IRouteRepository } from '../shared/models/route.repository.js';
-import type { Route } from '../shared/models/route.types.js';
+import { MemoryRouteRepository } from '../../shared/repositories/memory-route.repository.js';
+import { MemoryPhotoRepository } from '../../shared/repositories/memory-photo.repository.js';
+import type { IRouteRepository } from '../../shared/models/route.repository.js';
+import type { Route } from '../../shared/models/route.types.js';
 import './route-detail.element.js';
-import { pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
-import type * as PhotoCaptureAdapter from '../shared/services/photo-capture-adapter.service.js';
-import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from '../shared/route-map/route-map.element.js';
-import type { MapPhoto } from '../shared/route-map/route-map-photos.js';
+import { pickFromGallery } from '../../shared/services/photo-capture-adapter.service.js';
+import type * as PhotoCaptureAdapter from '../../shared/services/photo-capture-adapter.service.js';
+import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from '../../shared/route-map/route-map.element.js';
+import type { MapPhoto } from '../../shared/route-map/route-map-photos.js';
 
-vi.mock('../shared/services/photo-capture-adapter.service.js', async (importOriginal) => {
+vi.mock('../../shared/services/photo-capture-adapter.service.js', async (importOriginal) => {
   const actual = await importOriginal<typeof PhotoCaptureAdapter>();
   return { ...actual, pickFromGallery: vi.fn() };
 });
