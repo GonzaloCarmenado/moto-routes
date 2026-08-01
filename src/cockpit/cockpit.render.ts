@@ -26,7 +26,7 @@ export function buildSpeedDisplay(speed: string): HTMLElement {
   const display = document.createElement('div');
   display.className = 'speed-display';
   display.innerHTML = `
-    <div class="num speed-value">${speed}</div>
+    <div class="num speed-value" data-cy="cockpit-speed-value">${speed}</div>
     <div class="speed-unit">km/h</div>`;
   return display;
 }
