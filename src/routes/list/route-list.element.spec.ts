@@ -76,6 +76,33 @@ describe('route-list - listado y tarjetas', () => {
     document.body.removeChild(list);
   });
 
+  it('each rendered card has data-cy="route-card" (AC-039)', async () => {
+    await repo.save(
+      { duration: 300, totalDistance: 10, avgSpeed: 60, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+    await repo.save(
+      { duration: 600, totalDistance: 20, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+
+    const list = await createList(repo);
+    const root = list.shadowRoot!;
+    const cards = root.querySelectorAll('[data-cy="route-card"]');
+    expect(cards.length).toBe(2);
+    document.body.removeChild(list);
+  });
+
+  it('the empty state has data-cy="route-list-empty" and no data-cy="route-card" appears (AC-040)', async () => {
+    const list = await createList(repo);
+    const root = list.shadowRoot!;
+    expect(root.querySelector('[data-cy="route-list-empty"]')).not.toBeNull();
+    expect(root.querySelectorAll('[data-cy="route-card"]').length).toBe(0);
+    document.body.removeChild(list);
+  });
+
   it('should show subtitle with count and total km', async () => {
     await repo.save(
       { duration: 100, totalDistance: 15.5, avgSpeed: 40, status: 'completed', visibility: 'private', origin: 'local' },

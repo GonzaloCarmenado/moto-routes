@@ -25,7 +25,10 @@
     "rust:test": "cd src-tauri && cargo test",
     "rust:lint": "cd src-tauri && cargo clippy -- -D warnings",
     "rust:format": "cd src-tauri && cargo fmt --check",
-    "rust:audit": "cd src-tauri && cargo audit"
+    "rust:audit": "cd src-tauri && cargo audit",
+    "cy:open": "cypress open",
+    "cy:run": "cypress run",
+    "test:e2e": "start-server-and-test dev http://localhost:1420 cy:run"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
@@ -44,6 +47,7 @@
     "husky": "^9.0.0",
     "jsdom": "^25.0.0",
     "prettier": "^3.0.0",
+    "start-server-and-test": "^3.0.11",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.0.0",
     "vite": "^6.0.0",

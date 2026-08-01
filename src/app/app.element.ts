@@ -8,6 +8,8 @@ import { createSqliteDb } from '../shared/repositories/sqlite-route.factory.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
 import { BaseElement } from '../shared/base-element.js';
 import { APP_EVENTS, type AppEventDetailMap } from '../shared/app-events.js';
+import { isTauri } from '../shared/services/photo-capture-adapter.service.js';
+import { applyCypressSeed } from './app-seed.service.js';
 
 class AppRoot extends BaseElement {
   private repo: IRouteRepository = new MemoryRouteRepository();
@@ -41,12 +43,21 @@ class AppRoot extends BaseElement {
     window.removeEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
   }
 
+  // Decide primero por isTauri() (en vez de por éxito/fracaso del intento de SQLite)
+  // para que la siembra de rutas de test sea determinista y no dependa de si, por
+  // casualidad, hay un plugin SQL cargable en el navegador de pruebas (AC-007/AC-010).
   private async init(): Promise<void> {
-    try {
-      const sqliteDb = await createSqliteDb();
-      this.repo = new SqliteRouteRepository(sqliteDb);
-    } catch {
-      this.repo = new MemoryRouteRepository();
+    if (isTauri()) {
+      try {
+        const sqliteDb = await createSqliteDb();
+        this.repo = new SqliteRouteRepository(sqliteDb);
+      } catch {
+        this.repo = new MemoryRouteRepository();
+      }
+    } else {
+      const memRepo = new MemoryRouteRepository();
+      applyCypressSeed(memRepo);
+      this.repo = memRepo;
     }
     this.render();
   }
