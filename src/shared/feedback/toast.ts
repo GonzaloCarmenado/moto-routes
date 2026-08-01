@@ -1,3 +1,9 @@
+/**
+ * @packageDocumentation
+ * Toast flotante de feedback (éxito/error/info) montado en document.body.
+ */
+
+/** Variante de toast: éxito, error o info (progreso). */
 export type ToastVariant = 'success' | 'error' | 'info';
 
 const DATA_CY_BY_VARIANT: Record<ToastVariant, string> = {

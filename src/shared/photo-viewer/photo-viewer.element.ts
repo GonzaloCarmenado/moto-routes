@@ -4,6 +4,7 @@ import styles from './photo-viewer.element.css?inline';
 
 const SWIPE_THRESHOLD_PX = 40;
 
+/** Opciones para abrir el visor a pantalla completa de fotos. */
 export interface OpenPhotoViewerOptions {
   photos: GalleryPhoto[];
   startIndex: number;

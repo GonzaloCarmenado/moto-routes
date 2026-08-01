@@ -8,15 +8,20 @@
 /*  Enums / Union types                                               */
 /* ------------------------------------------------------------------ */
 
+/** Estado del ciclo de vida de una ruta: en grabación (`active`), finalizada (`completed`) o archivada. */
 export type RouteStatus = 'active' | 'completed' | 'archived';
+/** Visibilidad de la ruta: privada (por defecto) o pública. */
 export type RouteVisibility = 'private' | 'public';
+/** Origen de la ruta: grabada en este dispositivo (`local`) o importada/remota. */
 export type RouteOrigin = 'local' | 'remote';
+/** Cómo se detectó la parada: manual (usuario) o automática (algoritmo de detección). */
 export type StopType = 'manual' | 'auto';
 
 /* ------------------------------------------------------------------ */
 /*  Entidades (lectura)                                               */
 /* ------------------------------------------------------------------ */
 
+/** Ruta guardada (entidad de lectura completa). */
 export interface Route {
   readonly id: string;
   readonly createdAt: string;
@@ -34,6 +39,7 @@ export interface Route {
   notes: string | null;
 }
 
+/** Punto GPS individual de una ruta (entidad de lectura). */
 export interface RoutePoint {
   readonly id: string;
   readonly routeId: string;
@@ -44,6 +50,7 @@ export interface RoutePoint {
   speed: number;
 }
 
+/** Parada detectada dentro de una ruta (entidad de lectura). */
 export interface RouteStop {
   readonly id: string;
   readonly routeId: string;
@@ -58,6 +65,7 @@ export interface RouteStop {
 /*  Tipos de creación (escritura — sin id ni createdAt)                */
 /* ------------------------------------------------------------------ */
 
+/** Datos necesarios para crear una ruta (escritura — sin `id` ni `createdAt`). */
 export interface CreateRoute {
   /** ID pre-generado (ej. asignado al iniciar grabación para poder asociar fotos capturadas
    * en pleno directo antes de que la ruta se persista). Si se omite, el repositorio genera uno. */
@@ -74,6 +82,7 @@ export interface CreateRoute {
   name?: string;
 }
 
+/** Datos necesarios para crear un punto GPS (escritura). */
 export interface CreateRoutePoint {
   routeId: string;
   timestamp: number;
@@ -83,6 +92,7 @@ export interface CreateRoutePoint {
   speed: number;
 }
 
+/** Datos necesarios para crear una parada (escritura). */
 export interface CreateRouteStop {
   routeId: string;
   startTime: number;

@@ -16,6 +16,7 @@ import { listen } from '@tauri-apps/api/event';
 import { isTauri } from '../../shared/services/photo-capture-adapter.service.js';
 import type { GpsProvider } from '../cockpit.service.js';
 
+/** Nombre del evento Tauri emitido por el puente Kotlin→Rust→JS con cada punto GPS nativo. */
 export const NATIVE_LOCATION_EVENT = 'recording-service://location';
 
 /**
@@ -68,6 +69,9 @@ export function selectGpsProvider(isAndroid: boolean, native: GpsProvider, brows
   return isAndroid ? native : browser;
 }
 
+/** Crea un `GpsProvider` que usa el evento nativo Android `recording-service://location`
+ * (escuchado vía `listen`) y delega en `fallback` para las operaciones que el
+ * servicio nativo no cubre (getCurrentPosition, permisos). */
 export function createNativeGpsProvider(fallback: GpsProvider): GpsProvider {
   return {
     getCurrentPosition: () => fallback.getCurrentPosition(),

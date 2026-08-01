@@ -45,6 +45,7 @@ import { BaseElement } from '../base-element.js';
  * `<photo-viewer>`, sin importarlo ni conocerlo (AC-016 — Notas de Implementación).
  */
 export const ROUTE_MAP_PHOTO_SELECT_EVENT = 'route-map:photo-select';
+/** Payload del evento de selección de un marcador de foto en el mapa. */
 export interface RouteMapPhotoSelectDetail {
   photo: MapPhoto;
 }

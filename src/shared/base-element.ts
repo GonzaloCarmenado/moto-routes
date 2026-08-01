@@ -1,4 +1,13 @@
+/**
+ * Clase base de todos los custom elements de la app.
+ *
+ * Encapsula el patrón compartido de los Web Components: eventos tipados con
+ * `emit<T>()` y renderizado en Shadow DOM con `renderShadow()`. Cualquier
+ * componente nuevo debe extender esta clase en vez de `HTMLElement` directo
+ * (ver ADR-022).
+ */
 export abstract class BaseElement extends HTMLElement {
+  /** Despacha un CustomEvent tipado burbujeante y `composed` (atraviesa Shadow DOM). */
   protected emit<T>(name: string, detail: T): void {
     this.dispatchEvent(
       new CustomEvent<T>(name, {
