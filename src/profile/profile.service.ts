@@ -100,6 +100,50 @@ export async function saveProfileInfo(
 }
 
 /**
+ * Resultado ya resuelto del modal "Editar perfil" (`ProfileEditSaveResult` de
+ * `profile-edit-dialog.element.ts`): a diferencia de `SaveProfileInfoParams`,
+ * aquí `avatarPath` ya viene resuelto — el propio diálogo llama a
+ * `savePhotoFile` internamente antes de invocar `onSave` (decisión de diseño
+ * #5 del plan, confirmada en el Paso 10), así que este archivo nunca vuelve
+ * a tocar el sistema de archivos para este flujo.
+ */
+export interface ProfileEditSaveResult {
+  /** Ruta ya persistida de la nueva foto, o `null` si el usuario no cambió el avatar (señal de "no cambiar"). */
+  avatarPath: string | null;
+  /** Nombre tal cual escrito en el modal, sin sanear todavía. */
+  name: string;
+}
+
+/**
+ * Persiste el resultado del modal "Editar perfil" (AC-004, AC-009, AC-010):
+ * adaptador fino usado por `profile.element.ts` para conectar el `onSave` de
+ * `openProfileEditDialog` con `IProfileRepository`, aplicando el mismo
+ * criterio de patch incremental que `saveProfileInfo` (avatar sin cambiar /
+ * nombre vacío no se persisten) pero sin volver a escribir el archivo a
+ * disco, ya que el diálogo ya lo hizo.
+ * @param repo - Repositorio de perfil.
+ * @param result - Resultado ya resuelto entregado por el diálogo.
+ * @returns El perfil ya persistido.
+ */
+export async function applyProfileEditResult(
+  repo: IProfileRepository,
+  result: ProfileEditSaveResult,
+): Promise<Profile> {
+  const patch: CreateProfile = {};
+
+  if (result.avatarPath !== null) {
+    patch.avatarPath = result.avatarPath;
+  }
+
+  const sanitizedName = sanitizeProfileName(result.name);
+  if (sanitizedName !== '') {
+    patch.name = sanitizedName;
+  }
+
+  return repo.save(patch);
+}
+
+/**
  * Persiste el vehículo tras el modal "Editar vehículo" (AC-021), reemplazando
  * cualquier vehículo guardado previamente. No toca `avatarPath`/`name`: el
  * patch solo incluye los tres campos del vehículo (AC-022).

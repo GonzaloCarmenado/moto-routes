@@ -1,0 +1,90 @@
+@import '../shared/styles/tokens.css';
+@import '../shared/styles/stat-tile.css';
+@import './profile-header.css';
+
+:host {
+  display: block;
+  height: calc(100dvh - var(--nav-height));
+  overflow-y: auto;
+}
+
+.profile-view {
+  padding: 24px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.profile-view__loading {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 15px;
+  padding: var(--space-7) var(--space-4);
+}
+
+.header-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--ink);
+  margin-bottom: var(--space-3);
+}
+
+.vehicle-section,
+.stats-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.vehicle-empty,
+.vehicle-details {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--panel);
+  border-radius: var(--r-md);
+  padding: var(--space-4);
+}
+
+.vehicle-empty-text,
+.vehicle-summary {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.stats-empty {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 14px;
+  padding: var(--space-5) var(--space-4);
+  background: var(--panel);
+  border-radius: var(--r-md);
+}
+
+.edit-btn {
+  min-width: var(--hitbox-min);
+  min-height: var(--hitbox-min);
+  padding: 0 var(--space-4);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--amber);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.edit-btn:hover {
+  background: var(--amber-soft);
+}
