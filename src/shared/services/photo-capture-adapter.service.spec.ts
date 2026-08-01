@@ -74,6 +74,44 @@ describe('captureFromCamera (browser)', () => {
     expect(inputEl.getAttribute('capture')).toBe('environment');
     expect(result).toBe(mockFile);
   });
+
+  it('attaches the input to document.body with data-cy="photo-capture-input-file" while the promise is pending (AC-038)', () => {
+    const createElementSpy = vi.spyOn(document, 'createElement');
+    const promise = captureFromCamera();
+
+    const inputEl = createElementSpy.mock.results[0]?.value as HTMLInputElement;
+    expect(inputEl.getAttribute('data-cy')).toBe('photo-capture-input-file');
+    expect(document.body.querySelector('[data-cy="photo-capture-input-file"]')).toBe(inputEl);
+
+    // Limpieza: cancelar para no dejar el input colgado en document.body,
+    // contaminando otros tests de este mismo describe.
+    inputEl.dispatchEvent(new Event('cancel'));
+    void promise;
+  });
+
+  it('removes the input from document.body after resolving with files (AC-038)', async () => {
+    const createElementSpy = vi.spyOn(document, 'createElement');
+    const mockFile = new File([''], 'photo.jpg', { type: 'image/jpeg' });
+    const promise = captureFromCamera();
+
+    const inputEl = createElementSpy.mock.results[0]?.value as HTMLInputElement;
+    Object.defineProperty(inputEl, 'files', { value: [mockFile], writable: true });
+    inputEl.dispatchEvent(new Event('change'));
+    await promise;
+
+    expect(document.body.querySelector('[data-cy="photo-capture-input-file"]')).toBeNull();
+  });
+
+  it('removes the input from document.body after cancelling (AC-038)', async () => {
+    const createElementSpy = vi.spyOn(document, 'createElement');
+    const promise = captureFromCamera();
+
+    const inputEl = createElementSpy.mock.results[0]?.value as HTMLInputElement;
+    inputEl.dispatchEvent(new Event('cancel'));
+    await promise;
+
+    expect(document.body.querySelector('[data-cy="photo-capture-input-file"]')).toBeNull();
+  });
 });
 
 describe('pickFromGallery (browser)', () => {

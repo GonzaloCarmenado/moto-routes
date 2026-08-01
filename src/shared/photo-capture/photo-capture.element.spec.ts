@@ -148,4 +148,50 @@ describe('<photo-capture>', () => {
     expect(btn?.disabled).toBe(false);
     expect(btn?.classList.contains('is-loading')).toBe(false);
   });
+
+  it('should default to limitReached false with the standard "Añadir foto" label', () => {
+    const el2 = el as HTMLElement & { limitReached: boolean };
+    expect(el2.limitReached).toBe(false);
+
+    const btn = el.shadowRoot?.querySelector('button') as HTMLButtonElement | null;
+    expect(btn?.getAttribute('aria-label')).toBe('Añadir foto');
+  });
+
+  it('should switch the accessible label when limitReached is set to true (without disabled)', async () => {
+    const el2 = el as HTMLElement & { limitReached: boolean };
+    el2.limitReached = true;
+    await new Promise((r) => setTimeout(r, 0));
+
+    const btn = el.shadowRoot?.querySelector('button') as HTMLButtonElement | null;
+    expect(btn?.getAttribute('aria-label')).toBe('Límite de fotos alcanzado');
+    expect(btn?.getAttribute('title')).toBe('Límite de fotos alcanzado');
+  });
+
+  it('should keep the standard label when only loading is set (not limitReached)', async () => {
+    el.setAttribute('loading', '');
+    await new Promise((r) => setTimeout(r, 0));
+
+    const btn = el.shadowRoot?.querySelector('button') as HTMLButtonElement | null;
+    expect(btn?.getAttribute('aria-label')).toBe('Añadir foto');
+  });
+
+  it('should reflect limitReached as the limit-reached DOM attribute', () => {
+    const el2 = el as HTMLElement & { limitReached: boolean };
+    el2.limitReached = true;
+    expect(el.hasAttribute('limit-reached')).toBe(true);
+
+    el2.limitReached = false;
+    expect(el.hasAttribute('limit-reached')).toBe(false);
+  });
+
+  it('should show the limit label on initial render when limitReached is set before insertion into the DOM', () => {
+    const freshEl = document.createElement('photo-capture') as HTMLElement & { limitReached: boolean };
+    freshEl.limitReached = true;
+    document.body.appendChild(freshEl);
+
+    const btn = freshEl.shadowRoot?.querySelector('button') as HTMLButtonElement | null;
+    expect(btn?.getAttribute('aria-label')).toBe('Límite de fotos alcanzado');
+
+    freshEl.remove();
+  });
 });

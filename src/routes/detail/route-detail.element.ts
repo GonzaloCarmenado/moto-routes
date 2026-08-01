@@ -11,6 +11,7 @@ import type { MapPhoto } from '../../shared/route-map/route-map-photos.js';
 import '../../shared/photo-capture/photo-capture.element.js';
 import type { PhotoCaptureElement } from '../../shared/photo-capture/photo-capture.element.js';
 import { PHOTO_CAPTURE_EVENT, type PhotoCaptureEventDetail } from '../../shared/photo-capture/photo-capture.types.js';
+import { applyPhotoCaptureLimit } from '../../shared/photo-capture/photo-capture.limit.js';
 import { createPhotoRepository } from '../../shared/services/photo-storage.service.js';
 import { captureFromCamera, pickFromGallery } from '../../shared/services/photo-capture-adapter.service.js';
 import { addPhotoToRoute } from './route-detail-photo.service.js';
@@ -220,6 +221,7 @@ class RouteDetail extends BaseElement {
 
     const title = document.createElement('h1');
     title.className = 'detail-title';
+    title.setAttribute('data-cy', 'route-detail-title');
     title.textContent = buildRouteDisplayName(route.name, route.createdAt);
     fragment.appendChild(title);
 
@@ -258,6 +260,7 @@ class RouteDetail extends BaseElement {
       void this.handleAddPhoto(event.detail.source);
     }) as EventListener);
     this._photoCaptureEl = photoCapture;
+    applyPhotoCaptureLimit(photoCapture, this._photos.length);
     return photoCapture;
   }
 

@@ -47,6 +47,7 @@ function captureFromInput(options: { useCamera: boolean; multiple: boolean }): P
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
+    input.setAttribute('data-cy', 'photo-capture-input-file');
     if (options.useCamera) {
       input.setAttribute('capture', 'environment');
     }
@@ -54,12 +55,25 @@ function captureFromInput(options: { useCamera: boolean; multiple: boolean }): P
       input.multiple = true;
     }
 
+    // Se adjunta al DOM (oculto sin display:none, que en algunos navegadores/WebViews
+    // impide que .click() abra el selector nativo) para que Cypress pueda localizarlo
+    // vía data-cy y disparar cy.selectFile() sobre él. Se retira al resolver, con
+    // archivos elegidos o cancelación — no altera el comportamiento en producción.
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    input.style.width = '0';
+    input.style.height = '0';
+    input.style.pointerEvents = 'none';
+    document.body.appendChild(input);
+
     input.addEventListener('change', () => {
       resolve(Array.from(input.files ?? []));
+      input.remove();
     });
 
     input.addEventListener('cancel', () => {
       resolve([]);
+      input.remove();
     });
 
     input.click();

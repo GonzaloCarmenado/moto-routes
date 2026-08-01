@@ -202,6 +202,20 @@ describe('route-detail - nombre de ruta (AC-006, AC-007)', () => {
     expect(root.querySelector('.detail-title')?.textContent).toContain('Ruta ');
     document.body.removeChild(el);
   });
+
+  it('exposes the title with data-cy="route-detail-title" for E2E navigation checks (AC-023)', async () => {
+    localStorage.clear();
+    const repo = new MemoryRouteRepository();
+    const savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local', name: 'Puerto de la Bonaigua' },
+      [],
+      [],
+    );
+
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    expect(root.querySelector('[data-cy="route-detail-title"]')?.textContent).toBe('Puerto de la Bonaigua');
+    document.body.removeChild(el);
+  });
 });
 
 describe('route-detail - galería y visor de fotos (AC-019, AC-020, AC-033)', () => {
@@ -538,6 +552,92 @@ describe('route-detail - integración mapa → visor de fotos (AC-014 a AC-018, 
     expect(mapFitBounds.mock.calls.length).toBe(fitBoundsCallsBefore);
     expect(mapFlyTo.mock.calls.length).toBe(flyToCallsBefore);
 
+    document.body.removeChild(el);
+  });
+});
+
+describe('route-detail - límite de 100 fotos por ruta (AC-041, AC-043 a AC-045)', () => {
+  let repo: IRouteRepository;
+  let savedRoute: Route;
+
+  function seedPhotos(routeId: string, count: number): void {
+    const photos = Array.from({ length: count }, (_, i) => ({
+      id: `photo-${String(i)}`,
+      routeId,
+      filePath: `photos/seed-${String(i)}.jpg`,
+      latitude: null,
+      longitude: null,
+      capturedAt: new Date(Date.now() - i * 1000).toISOString(),
+      createdAt: new Date().toISOString(),
+    }));
+    localStorage.setItem('moto-routes-photos', JSON.stringify(photos));
+  }
+
+  beforeEach(async () => {
+    localStorage.clear();
+    repo = new MemoryRouteRepository();
+    savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+  });
+
+  it('disables <photo-capture> when the route already has 100 photos loaded (AC-041)', async () => {
+    seedPhotos(savedRoute.id, 100);
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+
+    const photoCapture = root.querySelector('[data-cy="detail-photo-capture"]');
+    expect(photoCapture?.hasAttribute('disabled')).toBe(true);
+    document.body.removeChild(el);
+  });
+
+  it('does not disable <photo-capture> when the route has 99 photos (AC-043)', async () => {
+    seedPhotos(savedRoute.id, 99);
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+
+    const photoCapture = root.querySelector('[data-cy="detail-photo-capture"]');
+    expect(photoCapture?.hasAttribute('disabled')).toBe(false);
+    document.body.removeChild(el);
+  });
+
+  it('disables <photo-capture> right after adding the 100th photo, without reloading (AC-044)', async () => {
+    seedPhotos(savedRoute.id, 99);
+    vi.mocked(pickFromGallery).mockResolvedValueOnce([
+      new File([''], 'nueva.jpg', { type: 'image/jpeg' }),
+    ]);
+
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const photoCaptureBefore = root.querySelector('[data-cy="detail-photo-capture"]');
+    expect(photoCaptureBefore?.hasAttribute('disabled')).toBe(false);
+
+    (photoCaptureBefore!.shadowRoot!.querySelector('.photo-btn') as HTMLButtonElement).click();
+    (photoCaptureBefore!.shadowRoot!.querySelector('[data-cy="photo-menu-gallery"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    const photoCaptureAfter = root.querySelector('[data-cy="detail-photo-capture"]');
+    expect(photoCaptureAfter?.hasAttribute('disabled')).toBe(true);
+    document.body.removeChild(el);
+  });
+
+  it('re-enables <photo-capture> after deleting a photo from a route at the 100-photo limit (AC-045)', async () => {
+    seedPhotos(savedRoute.id, 100);
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const photoCaptureBefore = root.querySelector('[data-cy="detail-photo-capture"]');
+    expect(photoCaptureBefore?.hasAttribute('disabled')).toBe(true);
+
+    (galleryRoot(root).querySelector('[data-cy="photo-thumbnail"]') as HTMLElement).click();
+    const viewer = document.body.querySelector('photo-viewer')!;
+    (viewer.shadowRoot!.querySelector('[data-cy="photo-viewer-delete"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    const dialog = document.body.querySelector('confirm-dialog')!;
+    (dialog.shadowRoot!.querySelector('[data-cy="confirm-dialog-action-confirm"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    const photoCaptureAfter = root.querySelector('[data-cy="detail-photo-capture"]');
+    expect(photoCaptureAfter?.hasAttribute('disabled')).toBe(false);
+    document.body.querySelector('photo-viewer')?.remove();
     document.body.removeChild(el);
   });
 });

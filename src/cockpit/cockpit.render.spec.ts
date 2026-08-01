@@ -1,6 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { buildHeader, buildSpeedDisplay, buildStatGrid, buildAvgSpeedBanner, updateLiveDisplay } from './cockpit.render.js';
 
+describe('buildSpeedDisplay', () => {
+  it('adds data-cy="cockpit-speed-value" to the .speed-value node (AC-003)', () => {
+    const display = buildSpeedDisplay('0');
+    const speedValue = display.querySelector('.speed-value');
+    expect(speedValue).not.toBeNull();
+    expect(speedValue?.getAttribute('data-cy')).toBe('cockpit-speed-value');
+  });
+});
+
 function mountShadowRoot(...children: HTMLElement[]): ShadowRoot {
   const host = document.createElement('div');
   const root = host.attachShadow({ mode: 'open' });
