@@ -14,13 +14,18 @@ src/
 │   ├── cockpit.transform.ts    # Cálculos/formateo del cockpit
 │   ├── cockpit.types.ts
 │   ├── cockpit.render.ts
-│   ├── cockpit-native-gps.service.ts   # GPS nativo Android
-│   ├── cockpit-foreground.service.ts   # Foreground service Android
-│   ├── cockpit-persist.service.ts      # Persistencia de la ruta grabada
-│   ├── cockpit-stop.service.ts         # Lógica de parada/guardado
-│   ├── cockpit-photo.service.ts        # Fotos durante la grabación
-│   ├── cockpit-long-press.ts           # Long-press del botón de parada
-│   └── save-route-dialog/              # Dialog de guardar (componente autocontenido)
+│   ├── gps/                    # 📡 GPS: native Android + foreground service
+│   │   ├── cockpit-native-gps.service.ts/.spec.ts
+│   │   └── cockpit-foreground.service.ts/.spec.ts
+│   ├── persist/                # 💾 Persistencia de la ruta grabada
+│   │   └── cockpit-persist.service.ts
+│   ├── photo/                  # 📸 Fotos durante la grabación
+│   │   └── cockpit-photo.service.ts/.spec.ts
+│   ├── stop/                   # 🛑 Lógica de parada/guardado
+│   │   └── cockpit-stop.service.ts/.spec.ts
+│   ├── long-press/             # ⏱️ Long-press del botón de parada
+│   │   └── cockpit-long-press.ts/.spec.ts
+│   └── save-route-dialog/      # Dialog de guardar (componente autocontenido)
 │       ├── cockpit-save-route-dialog.element.ts
 │       └── cockpit-save-route-dialog.element.css
 │
@@ -62,15 +67,21 @@ src/
     └── tauri-plugins/          # Declaraciones de plugins
 ```
 
-> **Lógica de la organización**: `cockpit/` es UNA pantalla (la grabación activa), por lo que todos sus servicios (GPS nativo, foreground, persistencia, parada, fotos, long-press) permanecen juntos en la misma carpeta — son sub-partes de la misma vista, no vistas independientes. `routes/` son DOS pantallas distintas (listado y detalle), por lo que se subdivide en `list/` y `detail/`. El timeline es una pestaña del detalle, no una vista independiente, así que su lógica vive dentro de `detail/`.
+> **Lógica de la organización**: `cockpit/` es UNA pantalla (la grabación activa), pero con ~20 ficheros sueltos resultaba incómodo de navegar. Por eso, además del núcleo (element/service/transform/render/types que se quedan en raíz), sus servicios se agrupan por **sub-responsabilidad funcional** siguiendo el patrón de `shared/`: `gps/` (native GPS + foreground), `persist/`, `photo/`, `stop/`, `long-press/`, `save-route-dialog/`. Cada `x.ts` queda junto a su `x.spec.ts` en su subcarpeta. `routes/` son DOS pantallas distintas (listado y detalle), por lo que se subdivide en `list/` y `detail/`. El timeline es una pestaña del detalle, no una vista independiente, así que su lógica vive dentro de `detail/`.
 
 ## Criterios de Aceptación
 
 ### Reorganización de `src/cockpit/`
-- [x] AC-001: Los ficheros de `src/cockpit/` se organizan por vista de aplicación:
-  - **En raíz** (pertenecen a la ventana de grabación): `cockpit.element.ts`, `cockpit.element.css`, `cockpit.service.ts`, `cockpit.transform.ts`, `cockpit.types.ts`, `cockpit.render.ts`, `cockpit-native-gps.service.ts`, `cockpit-foreground.service.ts`, `cockpit-persist.service.ts`, `cockpit-stop.service.ts`, `cockpit-photo.service.ts`, `cockpit-long-press.ts` — permanecen en `src/cockpit/`.
-  - **En `src/cockpit/save-route-dialog/`**: `cockpit-save-route-dialog.element.ts`, `cockpit-save-route-dialog.element.css` — el diálogo de guardado es un componente autocontenido (element + css) dentro de la ventana de grabación, siguiendo el patrón de `shared/`.
-  - Cada fichero `.spec.ts` y `.element.css.spec.ts` se mueve a la misma ubicación que su fuente.
+- [x] AC-001: El núcleo de `src/cockpit/` (ventana de grabación) permanece en raíz: `cockpit.element.ts`, `cockpit.element.css`, `cockpit.service.ts`, `cockpit.transform.ts`, `cockpit.types.ts`, `cockpit.render.ts` — son el componente principal del dominio y sus servicios/transforms propios del cockpit.
+- [x] AC-009: Los servicios de `src/cockpit/` se agrupan en subcarpetas por **sub-responsabilidad funcional** (patrón de `shared/`), cada uno con su `.spec.ts` junto al fuente:
+  - **`src/cockpit/gps/`**: `cockpit-native-gps.service.ts` (+spec), `cockpit-foreground.service.ts` (+spec) — GPS nativo Android y foreground service.
+  - **`src/cockpit/persist/`**: `cockpit-persist.service.ts` — persistencia de la ruta grabada.
+  - **`src/cockpit/photo/`**: `cockpit-photo.service.ts` (+spec) — fotos durante la grabación.
+  - **`src/cockpit/stop/`**: `cockpit-stop.service.ts` (+spec) — lógica de parada/guardado.
+  - **`src/cockpit/long-press/`**: `cockpit-long-press.ts` (+spec) — long-press del botón de parada.
+  - **`src/cockpit/save-route-dialog/`**: `cockpit-save-route-dialog.element.ts` (+css +spec) — diálogo de guardado (ya agrupado).
+  - No queda ningún fichero suelto en la raíz de `src/cockpit/` fuera de los 6 del núcleo.
+  - Cada fichero `.spec.ts` se mueve a la misma subcarpeta que su fuente.
 
 ### Reorganización de `src/routes/`
 - [x] AC-002: Los ficheros de `src/routes/` se organizan por vista de aplicación:
@@ -123,9 +134,9 @@ src/
 
 ## Notas de Implementación
 - **Invariante central**: los ficheros se mueven con `git mv` (o equivalente) para preservar historial, y su contenido NO cambia salvo los imports relativos cuya ruta se altera por la nueva profundidad.
-- **`cockpit/` se mantiene plano** (es una sola pantalla): solo `cockpit-save-route-dialog.*` se agrupa en `save-route-dialog/` por ser un componente autocontenido con element + css propio. Los servicios del cockpit (native-gps, foreground, persist, stop, photo, long-press) NO se separan en subcarpetas — son sub-partes de la misma vista de grabación.
+- **`cockpit/` agrupa por sub-responsabilidad** (una pantalla, pero ~20 ficheros incómodos): el núcleo (element/service/transform/render/types) queda en raíz; `gps/` (native-gps + foreground), `persist/`, `photo/`, `stop/`, `long-press/`, `save-route-dialog/` agrupan los servicios. Cada `x.ts` con su `x.spec.ts` en la misma subcarpeta.
 - **`routes/` se divide por vista**: `list/` (listado) y `detail/` (detalle). El timeline es una pestaña del detalle, por lo que `route-timeline.transform.ts` y `route-timeline.types.ts` viven en `detail/` junto a `route-detail-timeline.ts`.
-- **Imports de `cockpit/`**: al mover `cockpit-save-route-dialog.element.ts` a `save-route-dialog/`, sus imports de `../shared/` **no cambian** (sigue a una profundidad desde `src/`). Los imports en la raíz que apuntan a `./cockpit-save-route-dialog.element.js` pasan a `./save-route-dialog/cockpit-save-route-dialog.element.js`.
+- **Imports de `cockpit/`**: al mover un servicio de la raíz a una subcarpeta (`gps/`, `persist/`, etc.), sus imports `./x.js` apuntando a la raíz → `../x.js`; sus imports `../shared/...` → `../../shared/...`. Los imports en la raíz que apuntan a un servicio movido → `./<subcarpeta>/<fichero>.js`.
 - **Imports de `routes/`**: al mover ficheros de `src/routes/` a `src/routes/list/` o `src/routes/detail/`, sus imports de `../shared/` pasan a `../../shared/`. El único import cruzado `routes → cockpit` (la excepción documentada AC-001: `route-timeline.transform.ts` importa `detectStop` de `cockpit.transform.ts`) pasa de `../cockpit/cockpit.transform.js` a `../../cockpit/cockpit.transform.js`.
 - **Imports same-dir que NO cambian**: `route-detail.element.ts` importa `./route-detail-photo.service.js`, `./route-detail-notes.js`, `./route-detail-timeline.js`, `./route-timeline.types.js` — al moverse todos juntos a `detail/`, estas rutas siguen siendo válidas. Igual para `route-list.element.ts` con `./route-list.transform.js` y `./route-list-polyline.service.js`.
 - **Importador externo**: `src/app/app.element.ts` importa `../routes/route-list.element.js` → `../routes/list/route-list.element.js` y `../routes/route-detail.element.js` → `../routes/detail/route-detail.element.js` (su import de `../cockpit/cockpit.element.js` no cambia).

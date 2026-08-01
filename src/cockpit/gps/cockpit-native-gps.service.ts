@@ -13,8 +13,8 @@
  * GpsProvider de fallback (normalmente el de navegador) en vez de nativizarse.
  */
 import { listen } from '@tauri-apps/api/event';
-import { isTauri } from '../shared/services/photo-capture-adapter.service.js';
-import type { GpsProvider } from './cockpit.service.js';
+import { isTauri } from '../../shared/services/photo-capture-adapter.service.js';
+import type { GpsProvider } from '../cockpit.service.js';
 
 export const NATIVE_LOCATION_EVENT = 'recording-service://location';
 

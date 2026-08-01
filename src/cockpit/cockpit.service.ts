@@ -9,10 +9,10 @@ import { detectStop } from './cockpit.transform.js';
 import { calculateDistance } from '../shared/utils/geo.js';
 import { calculateAvgSpeed } from '../shared/utils/format.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
-import { triggerForegroundService, triggerLocationPause, type ForegroundServiceProvider } from './cockpit-foreground.service.js';
-import { persistRouteOnStart, persistRouteOnStop } from './cockpit-persist.service.js';
+import { triggerForegroundService, triggerLocationPause, type ForegroundServiceProvider } from './gps/cockpit-foreground.service.js';
+import { persistRouteOnStart, persistRouteOnStop } from './persist/cockpit-persist.service.js';
 
-export type { ForegroundServiceProvider } from './cockpit-foreground.service.js';
+export type { ForegroundServiceProvider } from './gps/cockpit-foreground.service.js';
 
 export interface GpsProvider {
   getCurrentPosition(): Promise<GeolocationPosition>;

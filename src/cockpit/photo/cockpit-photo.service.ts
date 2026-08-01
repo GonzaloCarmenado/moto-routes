@@ -5,15 +5,15 @@
  * fallback el último punto GPS de la ruta en curso.
  */
 
-import type { IPhotoRepository } from '../shared/models/photo.repository.js';
-import type { CreatePhoto } from '../shared/models/photo.types.js';
-import type { CaptureResult } from '../shared/services/photo-capture-adapter.service.js';
-import { persistCapturedPhoto } from '../shared/services/photo-persist.service.js';
-import { getPhotoUrl } from '../shared/services/photo-storage.service.js';
-import { deletePhotoWithConfirmation } from '../shared/services/photo-delete.service.js';
-import { toErrorMessage } from '../shared/utils/errors.js';
-import type { RoutePoint } from '../cockpit/cockpit.types.js';
-import type { GalleryPhoto } from '../shared/photo-gallery/photo-gallery.element.js';
+import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
+import type { CreatePhoto } from '../../shared/models/photo.types.js';
+import type { CaptureResult } from '../../shared/services/photo-capture-adapter.service.js';
+import { persistCapturedPhoto } from '../../shared/services/photo-persist.service.js';
+import { getPhotoUrl } from '../../shared/services/photo-storage.service.js';
+import { deletePhotoWithConfirmation } from '../../shared/services/photo-delete.service.js';
+import { toErrorMessage } from '../../shared/utils/errors.js';
+import type { RoutePoint } from '../cockpit.types.js';
+import type { GalleryPhoto } from '../../shared/photo-gallery/photo-gallery.element.js';
 
 export interface PhotoCaptureCallbacks {
   onSuccess: (photo: CreatePhoto) => void;

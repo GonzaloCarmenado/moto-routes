@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { resolveStopDecision } from './cockpit-stop.service.js';
-import type { RouteMetadata } from './cockpit.types.js';
-import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
-import type { IPhotoRepository } from '../shared/models/photo.repository.js';
+import type { RouteMetadata } from '../cockpit.types.js';
+import { MemoryRouteRepository } from '../../shared/repositories/memory-route.repository.js';
+import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
 
 function getDialog(): HTMLElement {
   const el = document.body.querySelector('cockpit-save-route-dialog');

@@ -10,7 +10,7 @@ vi.mock('@tauri-apps/api/event', () => ({
   listen: listenMock,
 }));
 
-vi.mock('../shared/services/photo-capture-adapter.service.js', () => ({
+vi.mock('../../shared/services/photo-capture-adapter.service.js', () => ({
   isTauri: isTauriMock,
 }));
 
@@ -21,7 +21,7 @@ import {
   NATIVE_LOCATION_EVENT,
   type NativeLocationEvent,
 } from './cockpit-native-gps.service.js';
-import type { GpsProvider } from './cockpit.service.js';
+import type { GpsProvider } from '../cockpit.service.js';
 
 function createMockFallback(): GpsProvider {
   return {

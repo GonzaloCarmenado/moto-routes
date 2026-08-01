@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { processPhotoCapture, deleteCockpitPhoto } from './cockpit-photo.service.js';
-import type { IPhotoRepository } from '../shared/models/photo.repository.js';
-import type { CreatePhoto, Photo } from '../shared/models/photo.types.js';
-import type { RoutePoint } from './cockpit.types.js';
-import '../shared/feedback/confirm-dialog.element.js';
+import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
+import type { CreatePhoto, Photo } from '../../shared/models/photo.types.js';
+import type { RoutePoint } from '../cockpit.types.js';
+import '../../shared/feedback/confirm-dialog.element.js';
 
 function createMockRepo(): IPhotoRepository {
   return {

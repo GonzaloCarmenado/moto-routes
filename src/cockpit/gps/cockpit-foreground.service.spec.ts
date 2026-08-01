@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, type Mock } from 'vitest';
-import type * as CommandsModule from '../shared/tauri/commands.js';
+import type * as CommandsModule from '../../shared/tauri/commands.js';
 
 const { startMock, stopMock, pauseMock, resumeMock } = vi.hoisted(() => ({
   startMock: vi.fn().mockResolvedValue(undefined),
@@ -8,7 +8,7 @@ const { startMock, stopMock, pauseMock, resumeMock } = vi.hoisted(() => ({
   resumeMock: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('../shared/tauri/commands.js', async (importOriginal) => {
+vi.mock('../../shared/tauri/commands.js', async (importOriginal) => {
   const actual = await importOriginal<typeof CommandsModule>();
   return {
     ...actual,

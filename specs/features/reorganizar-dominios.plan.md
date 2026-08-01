@@ -1,6 +1,6 @@
 # Plan de Implementación: Reorganizar dominios cockpit y routes
 
-> Origen: issue GitHub #52. Spec de refactor estructural puro (sin cambio de comportamiento observable) con organización por **vistas de la app** (no por sub-responsabilidad técnica): `cockpit/` = ventana de grabación (se mantiene plana), `routes/list/` = listado, `routes/detail/` = detalle de ruta, `components/nav-bar/` = navbar (ya correcto), `shared/` = elementos comunes (ya correcto).
+> Origen: issue GitHub #52. Spec de refactor estructural puro (sin cambio de comportamiento observable) con organización por **vistas de la app** (no por sub-responsabilidad técnica): `cockpit/` = ventana de grabación (núcleo en raíz + servicios agrupados por sub-responsabilidad funcional), `routes/list/` = listado, `routes/detail/` = detalle de ruta, `components/nav-bar/` = navbar (ya correcto), `shared/` = elementos comunes (ya correcto).
 >
 > **Regla general de imports al mover un archivo de `src/<dominio>/` a `src/<dominio>/<subcarpeta>/`:**
 > - Import same-dir `./x.js` → **no cambia** (el archivo se mueve junto a su dependencia).
@@ -15,6 +15,7 @@
 | 1 | Mover `cockpit-save-route-dialog.*` a `src/cockpit/save-route-dialog/` | 3 ficheros movidos + 1 import actualizado | AC-001, AC-003 | Small |
 | 2 | Reorganizar `src/routes/` en `list/` y `detail/` | 19 ficheros movidos + ~30 imports actualizados | AC-002, AC-004, AC-005 | Large |
 | 3 | Actualizar imports externos (app.element.ts) y verificación final | `src/app/app.element.ts`, grep de rutas antiguas | AC-005, AC-006, AC-007, AC-008 | Medium |
+| 4 | Agrupar servicios de `src/cockpit/` por sub-responsabilidad (`gps/`, `persist/`, `photo/`, `stop/`, `long-press/`) | 15 ficheros movidos + ~30 imports actualizados | AC-001, AC-009, AC-005 | Large |
 
 ---
 
@@ -100,6 +101,43 @@
   - Ejecutar `pnpm test:coverage` para confirmar que la cobertura global no baja (refactor sin cambio de lógica).
   - Confirmar con `git status` que todos los movimientos son `renamed` (git detecta renames al ser `git mv`), lo que demuestra que el contenido no cambió salvo imports.
 
+## Paso 4: Agrupar servicios de `src/cockpit/` por sub-responsabilidad (gps/, persist/, photo/, stop/, long-press/)
+
+- **Objetivo**: Los servicios del cockpit (native-gps, foreground, persist, photo, stop, long-press) pasan de la raíz plana `src/cockpit/` a subcarpetas por sub-responsabilidad funcional, siguiendo el patrón de `src/shared/`. Solo quedan en raíz los 6 ficheros del núcleo (`cockpit.element.ts`/`.css`, `cockpit.service.ts`, `cockpit.transform.ts`, `cockpit.types.ts`, `cockpit.render.ts`) más sus specs. Cada `x.ts` queda junto a su `x.spec.ts`.
+- **AC cubiertos**: AC-001 (núcleo en raíz), AC-009 (servicios agrupados), AC-005 (imports hacia shared por nueva profundidad)
+- **Tests a escribir**: Ninguno nuevo — relocación exacta. Los specs movidos validan que el comportamiento no cambió. Ejecutar `pnpm test` completo tras el paso → Valida AC-009 y AC-006.
+- **Archivos a crear/modificar** (todos con `git mv`; los imports se actualizan tras el movimiento):
+
+  **Subcarpeta `src/cockpit/gps/` (GPS):**
+  - `git mv cockpit-native-gps.service.ts gps/cockpit-native-gps.service.ts` + MODIFICAR imports: `'./cockpit.service.js'` → `'../cockpit.service.js'`; `'../shared/services/photo-capture-adapter.service.js'` → `'../../shared/services/photo-capture-adapter.service.js'`
+  - `git mv cockpit-native-gps.service.spec.ts gps/cockpit-native-gps.service.spec.ts` + MODIFICAR imports: `'./cockpit.service.js'` → `'../cockpit.service.js'`; `'../shared/services/photo-capture-adapter.service.js'` → `'../../shared/services/photo-capture-adapter.service.js'` (import `./cockpit-native-gps.service.js` no cambia — same-dir)
+  - `git mv cockpit-foreground.service.ts gps/cockpit-foreground.service.ts` + MODIFICAR su import `'../shared/tauri/commands.js'` → `'../../shared/tauri/commands.js'`
+  - `git mv cockpit-foreground.service.spec.ts gps/cockpit-foreground.service.spec.ts` + MODIFICAR sus 2 imports `'../shared/tauri/commands.js'` → `'../../shared/tauri/commands.js'` (import real + `vi.mock`); su import `'./cockpit-foreground.service.js'` no cambia — same-dir
+
+  **Subcarpeta `src/cockpit/persist/`:**
+  - `git mv cockpit-persist.service.ts persist/cockpit-persist.service.ts` + MODIFICAR imports: `'./cockpit.types.js'` → `'../cockpit.types.js'`; `'../shared/models/route.repository.js'` → `'../../shared/models/route.repository.js'`; `'../shared/models/route.types.js'` → `'../../shared/models/route.types.js'`; `'../shared/services/route-polyline.service.js'` → `'../../shared/services/route-polyline.service.js'`
+
+  **Subcarpeta `src/cockpit/photo/`:**
+  - `git mv cockpit-photo.service.ts photo/cockpit-photo.service.ts` + MODIFICAR imports: `'../cockpit/cockpit.types.js'` → `'../cockpit.types.js'`; todos los `'../shared/...'` → `'../../shared/...'` (models/photo.repository, models/photo.types, services/photo-capture-adapter, services/photo-persist, services/photo-storage, services/photo-delete, utils/errors, photo-gallery/photo-gallery.element)
+  - `git mv cockpit-photo.service.spec.ts photo/cockpit-photo.service.spec.ts` + MODIFICAR imports: `'./cockpit.types.js'` → `'../cockpit.types.js'`; `'../shared/models/photo.repository.js'` → `'../../shared/models/photo.repository.js'`; `'../shared/models/photo.types.js'` → `'../../shared/models/photo.types.js'`; `'../shared/feedback/confirm-dialog.element.js'` → `'../../shared/feedback/confirm-dialog.element.js'` (import `./cockpit-photo.service.js` no cambia — same-dir)
+
+  **Subcarpeta `src/cockpit/stop/`:**
+  - `git mv cockpit-stop.service.ts stop/cockpit-stop.service.ts` + MODIFICAR imports: `'./cockpit.types.js'` → `'../cockpit.types.js'`; `'./cockpit.service.js'` → `'../cockpit.service.js'`; `'./cockpit.transform.js'` → `'../cockpit.transform.js'`; `'./save-route-dialog/cockpit-save-route-dialog.element.js'` → `'../save-route-dialog/cockpit-save-route-dialog.element.js'`; todos los `'../shared/...'` → `'../../shared/...'` (models/route.repository, models/photo.repository, utils/format, utils/route-naming, services/route-deletion, utils/errors, feedback/toast)
+  - `git mv cockpit-stop.service.spec.ts stop/cockpit-stop.service.spec.ts` + MODIFICAR imports: `'./cockpit.types.js'` → `'../cockpit.types.js'`; `'./cockpit.element.js'` → `'../cockpit.element.js'`; `'../shared/repositories/memory-route.repository.js'` → `'../../shared/repositories/memory-route.repository.js'`; `'../shared/models/photo.repository.js'` → `'../../shared/models/photo.repository.js'` (import `./cockpit-stop.service.js` no cambia — same-dir)
+
+  **Subcarpeta `src/cockpit/long-press/`:**
+  - `git mv cockpit-long-press.ts long-press/cockpit-long-press.ts` (sin imports relativos del dominio)
+  - `git mv cockpit-long-press.spec.ts long-press/cockpit-long-press.spec.ts` (import `./cockpit-long-press.js` no cambia — same-dir)
+
+  **Ficheros en raíz `src/cockpit/` — MODIFICAR imports:**
+  - `MODIFICAR src/cockpit/cockpit.element.ts`: `'./cockpit-foreground.service.js'` → `'./gps/cockpit-foreground.service.js'`; `'./cockpit-native-gps.service.js'` → `'./gps/cockpit-native-gps.service.js'`; `'./cockpit-photo.service.js'` → `'./photo/cockpit-photo.service.js'`; `'./cockpit-stop.service.js'` → `'./stop/cockpit-stop.service.js'`; `'./cockpit-long-press.js'` → `'./long-press/cockpit-long-press.js'`
+  - `MODIFICAR src/cockpit/cockpit.service.ts`: `'./cockpit-foreground.service.js'` → `'./gps/cockpit-foreground.service.js'`; `'./cockpit-persist.service.js'` → `'./persist/cockpit-persist.service.js'`
+  - `MODIFICAR src/cockpit/cockpit.element.spec.ts`: `'./cockpit-native-gps.service.js'` → `'./gps/cockpit-native-gps.service.js'`
+
+  **Se quedan en raíz sin cambios**: `cockpit.element.ts` (+css +element.spec +css.spec), `cockpit.service.ts` (+spec), `cockpit.transform.ts` (+spec), `cockpit.types.ts`, `cockpit.render.ts` (+spec).
+
+- **Notas**: Tras el paso, ejecutar `pnpm test` completo y confirmar 0 tests rotos. Verificar con `grep -r "from '\./cockpit-" src` que no queda ninguna referencia a una ruta antigua de servicio en la raíz (todo import relativo debe apuntar a `./gps/`, `./persist/`, `./photo/`, `./stop/`, `./long-press/`, `./save-route-dialog/` o `../`). Este paso elimina la incomodidad de los ~20 ficheros planos en `src/cockpit/`.
+
 ---
 
 ## Verificación final (todos los pasos)
@@ -108,7 +146,7 @@
 - `pnpm lint` (0 warnings/errors), `npx tsc --noEmit` (sin errores), `pnpm exec prettier --check` (limpio).
 - `pnpm test:coverage` (≥80% líneas/ramas/funciones/statements — no debe bajar al ser refactor sin cambio de lógica).
 - Greps de rutas antiguas en `src/` devuelven 0 coincidencias en imports (AC-003, AC-004).
-- `src/cockpit/` tiene el diálogo en `save-route-dialog/` y el resto plano (ventana de grabación) — AC-001.
+- `src/cockpit/` tiene el núcleo en raíz (element/service/transform/render/types) y los servicios agrupados en `gps/`, `persist/`, `photo/`, `stop/`, `long-press/`, `save-route-dialog/` — AC-001, AC-009.
 - `src/routes/` tiene exactamente 2 subcarpetas (`list/` y `detail/`) y ningún fichero suelto — AC-002.
 - Atributos `data-cy` intactos en todos los `.element.ts` (no se tocó ningún selector ni atributo) — AC-007.
 - Sin dependencias nuevas, sin cambios de lógica/CSS — AC-008.

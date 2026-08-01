@@ -4,17 +4,17 @@
  * elección: persistir como completed, o borrar la ruta + sus fotos.
  */
 
-import type { RouteMetadata } from './cockpit.types.js';
-import type { CockpitService } from './cockpit.service.js';
-import type { IRouteRepository } from '../shared/models/route.repository.js';
-import type { IPhotoRepository } from '../shared/models/photo.repository.js';
-import { sanitizeRouteName } from './cockpit.transform.js';
-import { formatDuration } from '../shared/utils/format.js';
-import { buildDefaultRouteName } from '../shared/utils/route-naming.js';
-import { openSaveRouteDialog } from './save-route-dialog/cockpit-save-route-dialog.element.js';
-import { deleteRouteAndPhotos } from '../shared/services/route-deletion.service.js';
-import { toErrorMessage } from '../shared/utils/errors.js';
-import { showToast } from '../shared/feedback/toast.js';
+import type { RouteMetadata } from '../cockpit.types.js';
+import type { CockpitService } from '../cockpit.service.js';
+import type { IRouteRepository } from '../../shared/models/route.repository.js';
+import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
+import { sanitizeRouteName } from '../cockpit.transform.js';
+import { formatDuration } from '../../shared/utils/format.js';
+import { buildDefaultRouteName } from '../../shared/utils/route-naming.js';
+import { openSaveRouteDialog } from '../save-route-dialog/cockpit-save-route-dialog.element.js';
+import { deleteRouteAndPhotos } from '../../shared/services/route-deletion.service.js';
+import { toErrorMessage } from '../../shared/utils/errors.js';
+import { showToast } from '../../shared/feedback/toast.js';
 
 interface StopOutcome {
   choice: 'save' | 'discard';
