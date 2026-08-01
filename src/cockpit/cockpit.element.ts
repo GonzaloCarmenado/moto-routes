@@ -10,6 +10,7 @@ import { createPhotoRepository } from '../shared/services/photo-storage.service.
 import '../shared/photo-capture/photo-capture.element.js';
 import type { PhotoCaptureElement } from '../shared/photo-capture/photo-capture.element.js';
 import { PHOTO_CAPTURE_EVENT, type PhotoCaptureEventDetail } from '../shared/photo-capture/photo-capture.types.js';
+import { applyPhotoCaptureLimit } from '../shared/photo-capture/photo-capture.limit.js';
 import { openPhotoViewer } from '../shared/photo-viewer/photo-viewer.element.js';
 import { captureFromCamera, pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
 import { processMultiplePhotos, fetchGalleryPhotos, deleteCockpitPhoto } from './photo/cockpit-photo.service.js';
@@ -222,6 +223,7 @@ class CockpitView extends BaseElement {
     const photoRepo = await this.getPhotoRepo();
     const photos = await fetchGalleryPhotos(photoRepo, routeId);
     if (this.galleryEl) this.galleryEl.photos = photos;
+    applyPhotoCaptureLimit(this.photoCaptureEl, photos.length);
   }
 
   /** Devuelve si se borró de verdad, para que `<photo-viewer>` sepa si debe quitarla de su vista. */
@@ -234,6 +236,7 @@ class CockpitView extends BaseElement {
     }
 
     if (this.galleryEl) this.galleryEl.photos = this.galleryEl.photos.filter((p) => p.id !== photoId);
+    applyPhotoCaptureLimit(this.photoCaptureEl, this.galleryEl?.photos.length ?? 0);
     showToast('Foto eliminada', 'success');
     return true;
   }

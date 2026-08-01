@@ -55,6 +55,7 @@ TypeScript 5.7 strict + Vite 6 + Web Components nativos (frontend), Rust + Tauri
 - Separación estricta: `.element.ts` + `.element.css` + `.service.ts` + `.transform.ts` + `.types.ts`.
 - Prohibido CSS inline salvo animación/posicionamiento dinámico justificado.
 - Componentes compartidos van en `src/shared/`, nunca duplicados entre dominios — si dudas si algo es shared, pregunta antes de crear un componente nuevo.
+- **`data-cy` obligatorio**: todo elemento interactivo o que un test E2E pueda necesitar localizar (botón, input, select, checkbox, link, fila de tabla, contenedor de estado — loading/empty/error) lleva un atributo `data-cy="<contexto>-<tipo>-<accion>"` único y semántico, añadido en el propio `.element.ts` al crearlo — no se añade a posteriori solo cuando un test lo pide. Regla absoluta, sin excepciones: nunca selectores de clase, ID o posición DOM en tests. Detalle y ejemplos: `docs/07-cypress-e2e.md`.
 - Detalle completo: `specs/ui/frontend-conventions.md`.
 
 ## Diseño Visual — "Asfalto Nocturno"
@@ -66,7 +67,7 @@ TypeScript 5.7 strict + Vite 6 + Web Components nativos (frontend), Rust + Tauri
 
 ## Tests E2E (Cypress)
 
-- Todo elemento interactivo lleva `data-cy="<contexto>-<tipo>-<accion>"` único. Nunca selectores de clase/ID/posición DOM.
+- Selectores: ver regla `data-cy` obligatoria en "Convenciones de Frontend" — nunca selectores de clase/ID/posición DOM.
 - Tests autocontenidos y paralelizables: cada `describe` crea y limpia sus propios datos.
 - Validar TODOS los campos de un formulario, no solo los obligatorios. No validar IDs autogenerados.
 - Detalle completo y ejemplos: `docs/07-cypress-e2e.md`.

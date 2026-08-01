@@ -387,6 +387,31 @@ Cypress NO se ejecuta en pre-commit (son tests lentos que requieren el servidor 
     browser: chrome
 ```
 
+## Siembra de datos en Moto Routes
+
+Moto Routes no tiene backend de API para interceptar con `cy.intercept()` — la persistencia real (SQLite vía Tauri) no está disponible en el navegador de tests. En su lugar, la app expone un mecanismo de siembra vía `localStorage`, exclusivo de entornos fuera de Tauri (`isTauri() === false`), que precarga datos directamente en el repositorio en memoria antes de que la UI renderice.
+
+### `cy.visitWithSeed()`
+
+Comando compartido (`cypress/support/commands.ts`) que centraliza la escritura en `localStorage` para no repetirla inline en cada spec:
+
+```typescript
+cy.visitWithSeed({
+  routes: [{ id: crypto.randomUUID(), name: 'Ruta test', createdAt: new Date().toISOString(), /* ... */ }],
+  points: { [routeId]: [{ lat: 40.4, lng: -3.7, speed: 40, timestamp: '...' }] },
+  stops: { [routeId]: [] },
+  photos: [{ id: crypto.randomUUID(), routeId, filePath: 'photos/seed-0.jpg', capturedAt: '...' }],
+  path: '/', // por defecto
+});
+```
+
+- **Rutas** (`routes`, + `points`/`stops` opcionales): se serializan bajo la clave `cypress-seed-routes`. `applyCypressSeed()` (`src/app/app-seed.service.ts`) la lee — solo si `isTauri()` es `false` — y llama a `MemoryRouteRepository.seed()`, poblando el repositorio sin pasar por el flujo normal de grabación/guardado.
+- **Fotos** (`photos`): se serializan bajo la clave real `moto-routes-photos` — la misma que ya lee `MemoryPhotoRepository` en cada instancia nueva. No existe ningún mecanismo de producción nuevo para fotos: sembrar esa clave antes de `cy.visit()` es suficiente, el propio repositorio ya la consume tal cual.
+- `onBeforeLoad` (no `cy.window().then(...)` después de un `cy.visit()` normal) es imprescindible: `app.element.ts` lee `localStorage` de forma síncrona nada más cargar el módulo, así que la clave debe existir *antes* de que la página empiece a ejecutar su JS.
+- Cada test genera sus propios `id` con `crypto.randomUUID()` y nombres de ruta únicos (`` `Ruta test ${Date.now()}` ``) para permanecer autocontenido y paralelizable.
+- Fuera de Tauri sin ninguna clave sembrada, la app arranca igual que hoy (repositorio vacío) — `cy.visitWithSeed({})` equivale a `cy.visit('/')`.
+- En build de producción Android/Tauri (`isTauri() === true`), este mecanismo nunca se activa, sin importar el contenido de `localStorage`.
+
 ## Requisitos para Componentes
 
 Todo componente debe incluir `data-cy` en sus elementos interactivos:

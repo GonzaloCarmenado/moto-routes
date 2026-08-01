@@ -77,6 +77,25 @@ export class MemoryRouteRepository implements IRouteRepository {
     return Promise.resolve(savedRoute);
   }
 
+  /**
+   * Puebla los Map internos directamente con rutas/puntos/paradas ya "guardados",
+   * sin pasar por la lógica de upsert de save() (pensada para el flujo normal de
+   * grabación, ADR-020) ni generar nuevos id — las rutas sembradas ya traen el suyo.
+   * Solo para entornos de test/desarrollo en navegador (ver app-seed.service.ts).
+   */
+  seed(
+    routes: Route[],
+    pointsByRouteId?: Record<string, RoutePoint[]>,
+    stopsByRouteId?: Record<string, RouteStop[]>,
+  ): void {
+    for (const route of routes) {
+      this.routes.set(route.id, route);
+      this.orderMap.set(route.id, this.insertOrder++);
+      this.points.set(route.id, pointsByRouteId?.[route.id] ?? []);
+      this.stops.set(route.id, stopsByRouteId?.[route.id] ?? []);
+    }
+  }
+
   getById(id: string): Promise<Route | null> {
     return Promise.resolve(this.routes.get(id) ?? null);
   }

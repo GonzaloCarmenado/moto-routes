@@ -106,6 +106,7 @@ class RouteList extends BaseElement {
     if (routes.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'route-list__empty';
+      empty.setAttribute('data-cy', 'route-list-empty');
       empty.textContent = 'No hay rutas guardadas todavía';
       return empty;
     }
@@ -121,6 +122,7 @@ class RouteList extends BaseElement {
   private buildCard(route: Route): HTMLElement {
     const card = document.createElement('div');
     card.className = 'route-card';
+    card.setAttribute('data-cy', 'route-card');
     card.dataset.routeId = route.id;
     card.addEventListener('click', () => {
       dispatchAppEvent(APP_EVENTS.VIEW_ROUTE, { routeId: route.id });
