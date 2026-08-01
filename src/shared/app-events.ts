@@ -11,6 +11,7 @@
 export const APP_EVENTS = {
   NAV_GRABAR: 'nav-grabar',
   NAV_RUTAS: 'nav-rutas',
+  NAV_PERFIL: 'nav-perfil',
   VIEW_ROUTE: 'view-route',
   BACK_TO_LIST: 'back-to-list',
 } as const;
@@ -19,6 +20,7 @@ export const APP_EVENTS = {
 export interface AppEventDetailMap {
   'nav-grabar': undefined;
   'nav-rutas': undefined;
+  'nav-perfil': undefined;
   'view-route': { routeId: string };
   'back-to-list': undefined;
 }
