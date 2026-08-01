@@ -1,7 +1,7 @@
 import '../cockpit/cockpit.element.js';
 import '../components/nav-bar/nav-bar.element.js';
-import '../routes/route-list.element.js';
-import '../routes/route-detail.element.js';
+import '../routes/list/route-list.element.js';
+import '../routes/detail/route-detail.element.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import { SqliteRouteRepository } from '../shared/repositories/sqlite-route.repository.js';
 import { createSqliteDb } from '../shared/repositories/sqlite-route.factory.js';
