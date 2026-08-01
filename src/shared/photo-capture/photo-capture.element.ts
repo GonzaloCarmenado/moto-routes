@@ -26,11 +26,12 @@ const GALLERY_ICON = `
 
 export class PhotoCaptureElement extends BaseElement {
   static get observedAttributes(): string[] {
-    return ['disabled', 'loading'];
+    return ['disabled', 'loading', 'limit-reached'];
   }
 
   private _disabled = false;
   private _loading = false;
+  private _limitReached = false;
   private menuEl: HTMLElement | null = null;
   private button: HTMLElement | null = null;
 
@@ -62,6 +63,19 @@ export class PhotoCaptureElement extends BaseElement {
     this.updateButtonState();
   }
 
+  /** Distingue "límite de fotos alcanzado" (motivo permanente hasta que se borre una
+   * foto) del `disabled` genérico y del `loading` transitorio — cambia el texto
+   * accesible del botón sin sobrecargar la semántica de esas otras dos propiedades. */
+  get limitReached(): boolean {
+    return this._limitReached;
+  }
+
+  set limitReached(val: boolean) {
+    this._limitReached = val;
+    this.toggleAttribute('limit-reached', val);
+    this.updateButtonState();
+  }
+
   connectedCallback(): void {
     this.render();
     this.menuEl = this.shadowRoot?.querySelector('.photo-menu') as HTMLElement | null;
@@ -84,6 +98,9 @@ export class PhotoCaptureElement extends BaseElement {
     } else if (name === 'loading') {
       this._loading = value !== null;
       this.updateButtonState();
+    } else if (name === 'limit-reached') {
+      this._limitReached = value !== null;
+      this.updateButtonState();
     }
   }
 
@@ -91,14 +108,15 @@ export class PhotoCaptureElement extends BaseElement {
     if (!this.shadowRoot) return;
 
     const disabledAttr = this._disabled ? 'disabled' : '';
+    const label = this.buttonLabel();
     this.shadowRoot.innerHTML = `
       <style>${styles}</style>
       <button
         class="photo-btn"
         data-cy="photo-add-button"
         ${disabledAttr}
-        aria-label="Añadir foto"
-        title="Añadir foto"
+        aria-label="${label}"
+        title="${label}"
       >
         ${CAMERA_ICON}
         <span class="spinner" aria-hidden="true"></span>
@@ -187,10 +205,19 @@ export class PhotoCaptureElement extends BaseElement {
       btn.disabled = this._disabled || this._loading;
       btn.classList.toggle('is-loading', this._loading);
       btn.setAttribute('aria-busy', this._loading ? 'true' : 'false');
+      const label = this.buttonLabel();
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('title', label);
     }
     if (this._disabled || this._loading) {
       this.closeMenu();
     }
+  }
+
+  /** Texto accesible del botón — distingue "límite alcanzado" del estado habitual,
+   * sin depender de `loading`/`disabled` para inferir el motivo. */
+  private buttonLabel(): string {
+    return this._limitReached ? 'Límite de fotos alcanzado' : 'Añadir foto';
   }
 }
 
