@@ -4,8 +4,8 @@ import { MemoryRouteRepository } from '../shared/repositories/memory-route.repos
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import { pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
 import type * as PhotoCaptureAdapter from '../shared/services/photo-capture-adapter.service.js';
-import { isAndroidTauri } from './cockpit-native-gps.service.js';
-import type * as NativeGpsModule from './cockpit-native-gps.service.js';
+import { isAndroidTauri } from './gps/cockpit-native-gps.service.js';
+import type * as NativeGpsModule from './gps/cockpit-native-gps.service.js';
 import { listen } from '@tauri-apps/api/event';
 
 vi.mock('../shared/services/photo-capture-adapter.service.js', async (importOriginal) => {
@@ -16,7 +16,7 @@ vi.mock('../shared/services/photo-capture-adapter.service.js', async (importOrig
 // Por defecto se comporta como fuera de Android (regresión de AC-020): los tests
 // del resto del archivo, que no mencionan el provider nativo, siguen ejerciendo
 // createBrowserGpsProvider() sin cambios.
-vi.mock('./cockpit-native-gps.service.js', async (importOriginal) => {
+vi.mock('./gps/cockpit-native-gps.service.js', async (importOriginal) => {
   const actual = await importOriginal<typeof NativeGpsModule>();
   return { ...actual, isAndroidTauri: vi.fn(() => false) };
 });
