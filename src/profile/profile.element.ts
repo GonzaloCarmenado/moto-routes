@@ -193,6 +193,7 @@ class ProfileView extends BaseElement {
 
     const summary = document.createElement('p');
     summary.className = 'vehicle-summary';
+    summary.setAttribute('data-cy', 'profile-vehicle-summary');
     summary.textContent = `${VEHICLE_TYPE_LABELS[vehicle.vehicleType]} · ${vehicle.vehicleMake} ${vehicle.vehicleModel}`;
     wrapper.appendChild(summary);
 
@@ -250,19 +251,29 @@ class ProfileView extends BaseElement {
   private buildStatGrid(stats: ProfileStats): HTMLElement {
     const grid = document.createElement('div');
     grid.className = 'stat-grid';
-    grid.appendChild(this.buildStatTile('Km totales', stats.totalDistanceKm.toFixed(1), 'km'));
-    grid.appendChild(this.buildStatTile('Tiempo total', formatDuration(stats.totalDurationSeconds)));
+    grid.appendChild(this.buildStatTile('profile-stat-km-totales', 'Km totales', stats.totalDistanceKm.toFixed(1), 'km'));
     grid.appendChild(
-      this.buildStatTile('Ruta más larga', stats.longestRoute.name, `${stats.longestRoute.distanceKm.toFixed(1)} km`),
+      this.buildStatTile('profile-stat-tiempo-total', 'Tiempo total', formatDuration(stats.totalDurationSeconds)),
     );
-    grid.appendChild(this.buildStatTile('Nº de rutas', String(stats.routeCount)));
-    grid.appendChild(this.buildStatTile('Vel. media histórica', stats.avgSpeedHistoric.toFixed(1), 'km/h'));
+    grid.appendChild(
+      this.buildStatTile(
+        'profile-stat-ruta-mas-larga',
+        'Ruta más larga',
+        stats.longestRoute.name,
+        `${stats.longestRoute.distanceKm.toFixed(1)} km`,
+      ),
+    );
+    grid.appendChild(this.buildStatTile('profile-stat-num-rutas', 'Nº de rutas', String(stats.routeCount)));
+    grid.appendChild(
+      this.buildStatTile('profile-stat-vel-media', 'Vel. media histórica', stats.avgSpeedHistoric.toFixed(1), 'km/h'),
+    );
     return grid;
   }
 
-  private buildStatTile(label: string, value: string, unit?: string): HTMLElement {
+  private buildStatTile(dataCy: string, label: string, value: string, unit?: string): HTMLElement {
     const tile = document.createElement('div');
     tile.className = 'stat-tile';
+    tile.setAttribute('data-cy', dataCy);
 
     const labelEl = document.createElement('span');
     labelEl.className = 'stat-label';

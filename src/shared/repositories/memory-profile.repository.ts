@@ -22,6 +22,16 @@ export class MemoryProfileRepository implements IProfileRepository {
     return Promise.resolve(this.profile);
   }
 
+  /**
+   * Carga un perfil directamente, sin pasar por la lógica de coalescido de `save()`
+   * (pensada para el flujo normal de guardado parcial por campos). Usado por el
+   * mecanismo de siembra de tests (`applyCypressSeed`), exclusivo de entornos
+   * navegador/desarrollo — nunca invocado en Tauri.
+   */
+  seed(profile: Profile): void {
+    this.profile = { ...profile };
+  }
+
   save(patch: CreateProfile): Promise<Profile> {
     const existing = this.profile ?? EMPTY_PROFILE;
 
