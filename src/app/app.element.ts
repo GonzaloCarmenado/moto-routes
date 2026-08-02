@@ -86,9 +86,10 @@ class AppRoot extends BaseElement {
       }
     } else {
       const memRepo = new MemoryRouteRepository();
-      applyCypressSeed(memRepo);
+      const memProfileRepo = new MemoryProfileRepository();
+      applyCypressSeed(memRepo, memProfileRepo);
       this.repo = memRepo;
-      this.profileRepo = new MemoryProfileRepository();
+      this.profileRepo = memProfileRepo;
     }
     this.render();
   }

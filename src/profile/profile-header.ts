@@ -116,6 +116,7 @@ function buildAvatarPlaceholder(): SVGSVGElement {
 function buildNameElement(name: string | null): HTMLParagraphElement {
   const nameEl = document.createElement('p');
   nameEl.className = 'profile-name';
+  nameEl.setAttribute('data-cy', 'profile-name');
   nameEl.textContent = resolveDisplayName(name);
   return nameEl;
 }

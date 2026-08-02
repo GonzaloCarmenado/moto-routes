@@ -18,6 +18,7 @@
  */
 
 import type { Route, RoutePoint, RouteStop } from '../../src/shared/models/route.types.js';
+import type { Profile } from '../../src/shared/models/profile.types.js';
 
 /** Subconjunto mínimo de Route + id explícito: cada test aporta solo los campos que necesita afirmar. */
 export type SeedRoute = Partial<Route> & { id: string };
@@ -27,19 +28,22 @@ export interface VisitWithSeedOptions {
   points?: Record<string, Partial<RoutePoint>[]>;
   stops?: Record<string, Partial<RouteStop>[]>;
   photos?: unknown[];
+  /** Perfil de usuario sembrado (singleton) — opcional; si se omite, el perfil queda vacío. */
+  profile?: Profile;
   path?: string;
 }
 
 Cypress.Commands.add('visitWithSeed', (options: VisitWithSeedOptions = {}) => {
   cy.visit(options.path ?? '/', {
     onBeforeLoad(win) {
-      if (options.routes?.length) {
+      if (options.routes?.length || options.profile) {
         win.localStorage.setItem(
           'cypress-seed-routes',
           JSON.stringify({
-            routes: options.routes,
+            routes: options.routes ?? [],
             points: options.points,
             stops: options.stops,
+            profile: options.profile,
           }),
         );
       }
