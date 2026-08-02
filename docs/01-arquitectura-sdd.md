@@ -2,96 +2,98 @@
 
 ## Visión General
 
-Esta plantilla implementa un flujo de trabajo **Spec-Driven Development** optimizado para **DeepSeek + Cline**. 
-El principio fundamental es: **las especificaciones son el source of truth**, y todo el código se deriva de ellas.
+Moto Routes practica **Spec-Driven Development** sobre [OpenSpec](https://github.com/Fission-AI/OpenSpec). El principio fundamental no cambia: **las especificaciones son el source of truth** y todo el código se deriva de ellas. Lo que cambió en agosto de 2026 es la maquinaria — de un SDD propio de seis fases y siete agentes a un framework mantenido por una comunidad. El porqué está en el ADR-027 (`memory/decisions.md`).
 
-## Filosofía
-
-```
-SPECS (qué construir) → AGENTES (cómo construirlo) → CÓDIGO (implementación) → VERIFICACIÓN (contra specs)
-```
-
-No se escribe código sin una spec que lo respalde. No se modifica una spec sin actualizar el código.
+No se escribe código sin un cambio abierto que lo respalde. Si el código y la spec divergen, o se corrige el código o se actualiza la spec.
 
 ## Arquitectura de Capas
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    CAPA DE ESPECIFICACIONES              │
-│  specs/                                                  │
-│  ├── features/     (specs funcionales por feature)       │
-│  ├── api/          (contratos de API)                    │
-│  ├── data/         (modelos de datos, schemas)           │
-│  └── ui/           (especificaciones de interfaz)        │
-├─────────────────────────────────────────────────────────┤
-│                    CAPA DE AGENTES                       │
-│  agents/                                                 │
-│  ├── init-agent    (inicializa proyecto con templates)   │
-│  ├── spec-agent    (analiza y refina specs)              │
-│  ├── plan-agent    (genera plan de implementación)       │
-│  ├── task-agent    (crea issues y PRs con gh CLI)        │
-│  ├── impl-agent    (ejecuta la implementación con TDD)   │
-│  ├── review-agent  (revisa contra specs con CRÍTICO)     │
-│  └── test-agent    (valida cobertura y quality gates)    │
-├─────────────────────────────────────────────────────────┤
-│                    CAPA DE IMPLEMENTACIÓN                │
-│  src/             (código fuente)                        │
-│  tests/           (tests automatizados)                  │
-├─────────────────────────────────────────────────────────┤
-│                    CAPA DE MEMORIA                       │
-│  memory/                                                │
-│  ├── context.md    (contexto persistente del proyecto)   │
-│  ├── decisions.md  (registro de decisiones)              │
-│  └── tokens.md     (tracking de consumo)                 │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    CAPA DE CONFIGURACIÓN                     │
+│  openspec/config.yaml        ← source of truth del proyecto  │
+│  ├── context:                (stack, convenciones, diseño)   │
+│  ├── rules:                  (por artefacto)                 │
+│  └── operations:             (apply / archive)               │
+│                                                              │
+│  CLAUDE.md · .clinerules/    ← solo lo que aplica fuera      │
+│                                 del flujo de artefactos      │
+├──────────────────────────────────────────────────────────────┤
+│                    CAPA DE ESPECIFICACIONES                  │
+│  openspec/                                                   │
+│  ├── specs/       (verdad actual: qué hace el sistema hoy)   │
+│  └── changes/     (propuestas en curso, con delta specs)     │
+│      └── <cambio>/                                           │
+│          ├── proposal.md   (qué y por qué)                   │
+│          ├── specs/        (delta: ADDED/MODIFIED/REMOVED)   │
+│          ├── design.md     (cómo)                            │
+│          ├── tasks.md      (pasos, checkboxes)               │
+│          └── review.md     (veredicto del gate de cierre)    │
+├──────────────────────────────────────────────────────────────┤
+│                    CAPA DE IMPLEMENTACIÓN                    │
+│  src/             (frontend TypeScript + Web Components)     │
+│  src-tauri/       (backend Rust + Tauri 2)                   │
+│  cypress/         (tests E2E)                                │
+├──────────────────────────────────────────────────────────────┤
+│                    CAPA DE MEMORIA                           │
+│  memory/                                                     │
+│  ├── context.md   (estado actual, próximo hito)              │
+│  ├── decisions.md (ADRs)                                     │
+│  ├── tokens.md    (bitácora de sesiones)                     │
+│  └── sessions/    (resúmenes de sesiones largas)             │
+├──────────────────────────────────────────────────────────────┤
+│                    HISTÓRICO (CONGELADO)                     │
+│  specs/features/  (10 features cerradas del SDD anterior)    │
+│  specs/ui/        (design-system, frontend-conventions)      │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ## Principios Clave
 
-### 1. Spec-First
-Todo desarrollo comienza con una especificación. Las specs son documentos estructurados que definen:
-- **Qué** se debe construir
-- **Por qué** se debe construir
-- **Criterios de aceptación** claros y medibles
-- **Constraints** técnicos y de negocio
+### 1. Spec-first, delta-first
 
-### 2. Agent-Driven
-Cada fase del desarrollo es ejecutada por un agente especializado. Los agentes son "skills" que Cline/DeepSeek consumen como instrucciones de comportamiento.
+Todo desarrollo empieza con un cambio. Pero a diferencia del SDD anterior, **no se documenta el codebase entero**: se escriben specs solo de lo que se va a cambiar. Un cambio contiene *delta specs* (`ADDED` / `MODIFIED` / `REMOVED`) que describen la diferencia, no el estado completo. Al archivar el cambio, esos deltas se funden en `openspec/specs/`, que va creciendo como retrato vivo de lo que el sistema hace.
 
-### 3. Token-Aware
-DeepSeek tiene ventanas de contexto limitadas. Cada interacción debe ser consciente del consumo de tokens. Ver [04-token-management.md](04-token-management.md).
+Es lo que hace viable adoptar SDD en un proyecto ya en marcha: no hay que migrar diez features cerradas para empezar.
 
-### 4. Memory-Persistente
-El contexto crítico se persiste en archivos markdown que Cline puede leer al iniciar una sesión. Ver [05-memory-system.md](05-memory-system.md).
+### 2. Configuración única y agnóstica
 
-## Ciclo de Vida SDD
+`openspec/config.yaml` es el único sitio donde vive la metodología. La CLI lo inyecta al escribir cualquier artefacto y al ejecutar `apply`/`archive`, de modo que **Cline+DeepSeek y Claude Code reciben exactamente las mismas instrucciones** sin mantener dos copias. Ver [03-configuracion-openspec.md](03-configuracion-openspec.md).
+
+### 3. Token-aware
+
+DeepSeek tiene una ventana de 128K y el flujo debe caber en ella. OpenSpec fue elegido en parte por ser el más ligero de los frameworks evaluados. Ver [04-token-management.md](04-token-management.md).
+
+### 4. Memoria persistente
+
+`memory/` sobrevive a la migración: OpenSpec gestiona *cambios*, no el estado acumulado del proyecto ni sus decisiones de arquitectura. Ver [05-memory-system.md](05-memory-system.md).
+
+### 5. Gates propios por encima del framework
+
+OpenSpec no trae gates de revisión ni de cobertura. Los del proyecto se conservan, reubicados en `operations.apply.guidance` (TDD estricto, quality gates) y `operations.archive.guidance` (revisión con sección CRÍTICO y veredicto). El único gate con ejecución real sigue siendo el pre-commit de Husky, que es independiente de la herramienta.
+
+## Ciclo de Vida
 
 ```
-[Spec] → [Plan] → [Tasks] → [Implement] → [Review] → [Test]
-  ↑        ↑         ↑           ↑            ↑          ↑
-  └────────┴─────────┴───────────┴────────────┴─── feedback loop ──┘
+   /opsx:propose          /opsx:apply           /opsx:archive
+        │                      │                      │
+        ▼                      ▼                      ▼
+  ┌───────────┐          ┌───────────┐          ┌───────────┐
+  │  PROPOSE  │─────────▶│   APPLY   │─────────▶│  ARCHIVE  │
+  └───────────┘          └───────────┘          └───────────┘
+   proposal.md            código + tests         gate de revisión
+   specs/ (delta)         checkboxes en          review.md + veredicto
+   design.md              tasks.md               deltas → openspec/specs/
+   tasks.md               TDD estricto           cambio → archivo
+        │                                              │
+        └──────── /opsx:explore en cualquier momento ──┘
 ```
 
-1. **Spec**: El spec-agent analiza requisitos y genera/escribe la especificación
-2. **Plan**: El plan-agent genera un plan de implementación paso a paso
-3. **Tasks**: El task-agent crea issues de GitHub con `gh` a partir del plan
-4. **Implement**: El impl-agent ejecuta cada paso del plan con TDD
-5. **Review**: El review-agent verifica que la implementación cumple la spec
-6. **Test**: El test-agent valida cobertura (100% AC, 80% code, 100% pass rate)
-
-## Stack Tecnológico (Agonóstico)
-
-Esta plantilla es independiente del lenguaje/framework. La infraestructura SDD se adapta a:
-- Backend: Node.js, Python, Go, Java, etc.
-- Frontend: React, Vue, Angular, etc.
-- Mobile: React Native, Flutter, etc.
-- Infra: Docker, Kubernetes, Terraform, etc.
-
-Los agentes y specs no dependen del lenguaje. Solo la capa de implementación.
+`/opsx:explore` no es una fase: es un modo de pensar que se puede usar antes, durante o entre cualquiera de las tres.
 
 ## Métricas de Éxito
 
-- **Cobertura de spec**: % de código que tiene una spec asociada (target: 100%)
-- **Fidelidad de implementación**: % de criterios de aceptación cumplidos (target: 100%)
-- **Eficiencia de tokens**: tokens consumidos por feature implementada
-- **Tiempo de ciclo**: tiempo desde spec hasta deploy verificado
+- **Fidelidad**: % de escenarios de la spec con un test que los valida (objetivo: 100%).
+- **Cobertura de líneas**: ≥80% en Vitest (lines, functions, branches, statements).
+- **Pass rate**: 100% en Vitest y `cargo test`.
+- **Veredicto**: ningún cambio se archiva sin `APPROVED` o `APPROVED WITH MINOR ISSUES`.

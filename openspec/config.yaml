@@ -1,0 +1,203 @@
+schema: spec-driven
+
+# Source of truth del proyecto. CLAUDE.md y .clinerules/ quedan reducidos a lo
+# mínimo (regla fundamental + gobernanza + reglas de edición fuera del flujo).
+# Todo lo demás vive aquí y lo inyecta la CLI a Cline y a Claude por igual.
+
+context: |
+  Moto Routes — app móvil de tracking de rutas en moto. Target prioritario: Android
+  (APK Tauri sobre dispositivo real). Uso en manillar, con guantes, en exterior.
+
+  Stack: TypeScript 5.7 strict + Vite 6 + Web Components nativos con Shadow DOM (sin
+  framework) en frontend; Rust + Tauri 2 en backend/móvil; SQLite vía
+  @tauri-apps/plugin-sql. Tests: Vitest (TS) + cargo test (Rust) + Cypress (E2E).
+  Gestores: pnpm y Cargo.
+
+  Estructura por dominio funcional, no por tipo técnico: src/cockpit/ (grabación),
+  src/routes/list/ + src/routes/detail/, src/profile/, src/shared/. Separación estricta
+  de ficheros por responsabilidad: .element.ts (componente) + .element.css (estilos) +
+  .service.ts (efectos/IO) + .transform.ts (lógica pura) + .types.ts (tipos). Cada x.ts
+  con su x.spec.ts al lado. Lo compartido va a src/shared/ y nunca se duplica entre
+  dominios — ante la duda de si algo es shared, se pregunta antes de crear.
+
+  Diseño "Asfalto Nocturno": modo oscuro obligatorio (no hay variante clara). Tokens en
+  src/shared/styles/tokens.css (--bg-top, --panel, --amber, --ink, --font-display/ui/data,
+  --hitbox-min). Nunca se hardcodea color, fuente, espaciado, sombra ni radio. Hitbox
+  mínima 56x56px por el uso con guantes. Contraste WCAG AA mínimo y respeto de
+  prefers-reduced-motion. Un Shadow DOM no hereda index.css: cada componente importa
+  tokens.css desde su propio *.element.css.
+
+  Trazabilidad E2E: todo elemento interactivo o localizable por un test (botón, input,
+  select, link, fila, contenedor de estado loading/empty/error) lleva
+  data-cy="<contexto>-<tipo>-<accion>" único, añadido en el propio .element.ts al crearlo.
+  Nunca selectores de clase, ID o posición DOM en tests.
+
+  Seguridad: nunca secretos, tokens ni connection strings en código (solo claves públicas
+  tipo anon key). CSP estricta en Tauri sin unsafe-eval ni unsafe-inline
+  (index.html + tauri.conf.json → app.security.csp); una API externa nueva exige añadir su
+  host exacto a connect-src. Validación de inputs en frontend y backend. Dependencias
+  mínimas: se prefiere API nativa antes que añadir un paquete.
+
+  Idioma: documentación, specs y artefactos de OpenSpec en español. Código en inglés
+  (identificadores y comentarios). Las palabras estructurales del formato de spec
+  (Requirement, Scenario, WHEN/THEN, ADDED/MODIFIED/REMOVED) se mantienen en inglés
+  porque las valida la CLI — la prosa alrededor va en español.
+
+  memory/ es la memoria persistente del proyecto y OpenSpec no la sustituye:
+  memory/context.md (estado actual, stack, lección aprendida del build Android),
+  memory/decisions.md (ADRs numeradas con contexto/alternativas/consecuencias),
+  memory/sessions/. Se lee antes de empezar y se actualiza al cerrar un cambio.
+
+  Histórico: specs/features/ contiene el SDD propio anterior (10 features cerradas, formato
+  <feature>.md + .plan.md + .review.md). Está CONGELADO — se consulta como referencia de
+  lo ya implementado, nunca se amplía ni se toma como formato a seguir. Todo cambio nuevo
+  pasa por openspec/. Ver ADR-027 en memory/decisions.md para el porqué de la migración.
+
+rules:
+  proposal:
+    - Redactar en español, conciso (1-2 páginas). El "cómo" va a design.md.
+    - >-
+      Proyecto brownfield: antes de proponer, comprobar qué existe ya en src/ y en
+      specs/features/ (congelado, pero documenta lo implementado) y citar rutas reales
+      de fichero en la sección Impact.
+    - >-
+      Revisar memory/decisions.md antes de proponer: si el cambio contradice una ADR
+      aceptada, decirlo explícitamente en el Why en vez de ignorarla.
+    - >-
+      Nombrar capabilities en kebab-case y alineadas con los dominios funcionales
+      existentes (cockpit, routes, profile, shared) cuando el cambio caiga dentro de uno.
+    - >-
+      Usar skip_specs true solo en cambios sin comportamiento observable nuevo (tooling,
+      refactor puro, documentación). Nunca inventar un requisito para pasar la validación.
+
+  specs:
+    - Prosa en español; Requirement / Scenario / WHEN / THEN en inglés (los valida la CLI).
+    - >-
+      Cada Scenario debe ser verificable por un test automatizado (Vitest o Cypress).
+      Si un escenario solo se puede validar a mano en dispositivo Android real, marcarlo
+      de forma explícita como verificación manual — no disfrazarlo de automatizable.
+    - >-
+      Comportamiento observable únicamente: nada de nombres de clase o función internos,
+      ni de librerías concretas. Si la implementación puede cambiar sin cambiar el
+      escenario, el escenario está bien escrito.
+    - >-
+      Incluir escenarios de error y de límite, no solo el camino feliz: sin permisos GPS,
+      sin conexión, base de datos vacía, límites de capacidad.
+    - >-
+      Ante una ambigüedad en el requisito, preguntar al usuario antes de escribir el
+      escenario. Nunca resolverla con una suposición silenciosa.
+
+  design:
+    - >-
+      Las decisiones de arquitectura duraderas viven en memory/decisions.md como ADR
+      numerada. En design.md se registra la decisión y se enlaza la ADR — no se duplica
+      su contenido. Si el cambio introduce una decisión nueva de ese calado, crear la ADR.
+    - >-
+      Toda dependencia nueva (npm o Cargo) requiere justificación explícita en Decisions,
+      con la alternativa nativa que se descarta y por qué. La política es dependencias
+      mínimas.
+    - >-
+      Considerar siempre la restricción Android/WebView de Tauri, que es el target real:
+      CSP y connect-src, permisos en capabilities/, comportamiento en segundo plano
+      (timers y watchPosition del WebView se pausan) y coste de un puente nativo Kotlin.
+    - >-
+      Si el cambio toca src/shared/, declararlo en Risks con el radio de impacto sobre los
+      dominios que consumen ese componente.
+
+  tasks:
+    - >-
+      Ordenar por TDD: toda tarea que cambie comportamiento empieza por su test en rojo
+      y después la implementación mínima que lo pone en verde.
+    - Cada tarea debe caber en una sesión y ser verificable por sí sola.
+    - >-
+      No se crean issues de GitHub. tasks.md es la única trazabilidad de progreso del
+      cambio.
+    - >-
+      Incluir tarea explícita de verificación en dispositivo Android real cuando el cambio
+      afecte a GPS, cámara, persistencia, permisos o rendimiento del mapa.
+    - >-
+      Cerrar con una tarea de actualización de memory/context.md (estado actual) y, si
+      procede, de memory/decisions.md.
+
+operations:
+  apply:
+    guidance:
+      - >-
+        TDD estricto RED-GREEN-REFACTOR, ejecutando los tests de verdad en cada ciclo.
+        Confirmar que el test falla antes de escribir el código que lo arregla; no dar
+        por bueno un paso solo por revisión visual del código.
+      - >-
+        Antes de marcar una tarea completada, la suite relevante debe estar en verde:
+        pnpm test (Vitest), tsc --noEmit, ESLint sin warnings, y en Rust cargo test +
+        cargo clippy -- -D warnings + cargo fmt --check. La cobertura de líneas de
+        Vitest no debe bajar del 80% (lines, functions, branches, statements).
+      - >-
+        Implementar lo mínimo que satisface el escenario, sin sobre-ingeniería. Si
+        aparece la tentación de añadir algo que no está en los artefactos del cambio,
+        eso es scope creep: detenerse y preguntar en vez de ampliar por cuenta propia.
+      - >-
+        Tipos estrictos siempre: nada de any en TypeScript, y en Rust ningún unwrap()
+        ni expect() sin justificación escrita en el propio código.
+      - >-
+        No modificar tests existentes que están pasando. Solo se tocan si el propio
+        cambio invalida deliberadamente lo que verifican, y entonces se dice por qué.
+      - >-
+        No instalar ninguna dependencia npm o Cargo sin confirmarlo antes con el
+        usuario, aunque el design la contemple.
+      - >-
+        Al crear cualquier elemento interactivo, añadir su data-cy en el mismo
+        .element.ts en ese momento — nunca a posteriori cuando un test lo reclame.
+      - >-
+        Todo símbolo exportado lleva JSDoc conciso (qué y por qué, no cómo); el
+        pre-commit lo verifica con eslint-plugin-jsdoc. Los *.spec.ts están exentos.
+      - >-
+        Estilos solo en el *.element.css del componente, importando tokens.css. Nada de
+        CSS inline salvo animación o posicionamiento dinámico justificado, y ningún
+        color, fuente, espaciado o radio hardcodeado.
+      - >-
+        Los tests E2E de Cypress están desactivados en el pre-commit por un problema del
+        entorno local, pero se mantienen en el proyecto y deben seguir pasando: si el
+        cambio toca UI, ejecutarlos a mano con pnpm run test:e2e antes de cerrar.
+      - >-
+        Si durante la implementación aparece un gap, una ambigüedad o una contradicción
+        entre el código y los artefactos del cambio, detenerse y comunicarlo: o se
+        corrige el código o se actualiza el artefacto. Nunca resolverlo con una
+        suposición silenciosa ni dejarlo divergir.
+
+  archive:
+    guidance:
+      - >-
+        Antes de archivar se pasa el gate de revisión, que es obligatorio y absorbe el
+        antiguo review-agent y el test-agent. El resultado se escribe en review.md dentro
+        del directorio del cambio, para que viaje con él al archivo.
+      - >-
+        Verificar de forma independiente: releer el código y volver a ejecutar la suite
+        completa uno mismo. No aceptar como bueno el resumen de la implementación.
+      - >-
+        Mapear cada Requirement y cada Scenario del delta spec contra el test que lo
+        valida, con ruta de fichero. Objetivo 100% de cobertura de escenarios; los que
+        sean de verificación manual se listan aparte con su estado real.
+      - >-
+        review.md abre con una sección CRÍTICO con lo que un humano debe leer primero:
+        seguridad (secretos, CSP, inputs sin validar), cambios en src/shared/ y su radio
+        de impacto, actualizaciones de dependencias core, y reglas del proyecto que se
+        hayan tenido que saltar.
+      - >-
+        Clasificar cada hallazgo por categoría: gap (escenario sin implementar),
+        desviación (implementado distinto a lo especificado), calidad (complejidad,
+        tipos, legibilidad), cobertura (escenario sin test) y convenciones de frontend
+        (estructura por dominio, separación de ficheros, CSS inline injustificado).
+      - >-
+        Veredicto explícito: APPROVED, APPROVED WITH MINOR ISSUES, CHANGES REQUESTED o
+        BLOCKED. Un problema de seguridad es BLOCKED. Un escenario sin implementar, uno
+        implementado incorrectamente o una norma del proyecto saltada sin justificación
+        sólida son CHANGES REQUESTED. Un cambio en un componente compartido crítico es
+        siempre CRÍTICO aunque el resto esté correcto. No se archiva sin APPROVED o
+        APPROVED WITH MINOR ISSUES.
+      - >-
+        Ser objetivo y concreto: cada hallazgo con su ruta de fichero y línea. Nunca un
+        "se ve bien" sin evidencia. Revisar solo lo que el cambio abarca — no proponer
+        funcionalidad nueva durante la revisión.
+      - >-
+        Al archivar, actualizar memory/context.md con el estado resultante y añadir la ADR
+        a memory/decisions.md si el cambio tomó alguna decisión de arquitectura nueva.

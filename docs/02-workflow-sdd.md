@@ -2,310 +2,138 @@
 
 ## Flujo de Trabajo Detallado
 
-Este documento describe el proceso paso a paso para desarrollar cualquier feature usando SDD con DeepSeek + Cline.
+Este documento describe el proceso paso a paso para desarrollar cualquier cambio en Moto Routes con OpenSpec. Funciona igual desde Claude Code (comandos `/opsx:*`) que desde Cline + DeepSeek (workflows `/opsx-*` en `.clinerules/workflows/`): ambos ejecutan la misma CLI y reciben las mismas instrucciones desde `openspec/config.yaml`.
 
 ## Resumen del Workflow
 
 ```
-USER INPUT (requisito)
+IDEA / REQUISITO / BUG
     │
     ▼
-┌─────────────┐
-│  SPEC-AGENT │──→ specs/features/<feature>.md
-└─────────────┘
+┌──────────────────┐
+│  /opsx:explore   │  (opcional, en cualquier momento)
+└──────────────────┘  pensar, investigar el código, comparar opciones
     │
     ▼
-┌─────────────┐
-│  PLAN-AGENT │──→ specs/features/<feature>.plan.md
-└─────────────┘
+┌──────────────────┐
+│  /opsx:propose   │──→ openspec/changes/<cambio>/
+└──────────────────┘      proposal.md · specs/ · design.md · tasks.md
     │
     ▼
-┌──────────────┐
-│  TASK-AGENT  │──→ GitHub Issues (gh CLI)
-└──────────────┘
+┌──────────────────┐
+│   /opsx:apply    │──→ src/ + tests (TDD estricto)
+└──────────────────┘      checkboxes de tasks.md marcados
     │
     ▼
-┌─────────────┐     ┌──────────────┐
-│  IMPL-AGENT │────→│ tests/       │ (TDD: test first)
-└─────────────┘     │ src/         │ (then impl)
-    │               └──────────────┘
-    ▼
-┌───────────────┐
-│  REVIEW-AGENT │──→ specs/features/<feature>.review.md
-└───────────────┘
-    │
-    ▼
-┌─────────────┐
-│  TEST-AGENT │──→ Test results + coverage (100% pass, 80% code, 100% AC)
-└─────────────┘
-    │
-    ▼
-  [DONE] o [ITERATE]
+┌──────────────────┐
+│  /opsx:archive   │──→ review.md + veredicto
+└──────────────────┘      deltas fundidos en openspec/specs/
+                          cambio movido al archivo
 ```
 
-## Fase 1: Especificación (SPEC)
+## Fase 1 — Propose
 
-**Objetivo**: Transformar un requisito de usuario en una especificación estructurada y no ambigua.
+```bash
+/opsx:propose "<descripción de lo que quieres construir>"
+```
 
-### Input
-- Requisito en lenguaje natural del usuario
-- Contexto del proyecto (memory/context.md)
+Crea el directorio del cambio y genera todos sus artefactos en un solo paso.
 
-### Proceso del Spec-Agent
-1. **Análisis**: Lee el requisito y extrae:
-   - Propósito del feature
-   - Actores/usuarios involucrados
-   - Comportamiento esperado
-   - Edge cases identificables
-2. **Refinamiento**: Hace preguntas al usuario si hay ambigüedades
-3. **Estructuración**: Escribe la spec en formato estándar
+**Artefactos del schema `spec-driven`:**
 
-### Output
-Archivo `specs/features/<nombre-feature>.md` con estructura:
+| Artefacto | Fichero | Contiene | Depende de |
+|---|---|---|---|
+| `proposal` | `proposal.md` | Por qué, qué cambia, capabilities, impacto | — |
+| `specs` | `specs/<capability>/spec.md` | Delta spec: `ADDED` / `MODIFIED` / `REMOVED` | `proposal` |
+| `design` | `design.md` | Decisiones técnicas, riesgos, alternativas | `proposal` |
+| `tasks` | `tasks.md` | Pasos con checkbox, ordenados por TDD | `specs` + `design` |
+
+**Delta specs.** Una spec de cambio no describe el sistema entero, solo la diferencia:
 
 ```markdown
-# Feature: [Nombre]
+## ADDED Requirements
 
-## Descripción
-[Qué hace, por qué existe]
+### Requirement: Límite de fotos por ruta
+El sistema SHALL impedir añadir más de 100 fotos a una misma ruta.
 
-## Criterios de Aceptación
-- [ ] AC-001: [Criterio medible y verificable]
-- [ ] AC-002: [Criterio medible y verificable]
-
-## Comportamiento Esperado
-
-### Escenario: [Nombre del escenario]
-- **Dado** [precondición]
-- **Cuando** [acción]
-- **Entonces** [resultado esperado]
-
-### Escenario: [Nombre del escenario]
-- **Dado** [precondición]
-- **Cuando** [acción]
-- **Entonces** [resultado esperado]
-
-## Constraints
-- [Restricción técnica 1]
-- [Restricción de negocio 1]
-
-## Dependencias
-- [Feature/sistema del que depende]
-
-## Notas de Implementación
-- [Detalles técnicos relevantes]
+#### Scenario: Ruta con el límite alcanzado
+- **WHEN** la ruta ya tiene 100 fotos y el usuario abre el detalle
+- **THEN** el botón de añadir foto aparece deshabilitado con el texto
+  "Límite de fotos alcanzado"
 ```
 
-### Comando Cline para activar Spec-Agent
-```
-@agent:spec-agent Analiza el siguiente requisito y genera la especificación: [REQUISITO]
-```
+La prosa va en español; `Requirement`, `Scenario`, `WHEN`/`THEN` y `ADDED`/`MODIFIED`/`REMOVED` van en inglés porque los valida la CLI.
 
-## Fase 2: Planificación (PLAN)
+**Cambios sin comportamiento.** Un refactor puro, un cambio de tooling o de documentación no tiene delta spec. Se declara en el `.openspec.yaml` del cambio:
 
-**Objetivo**: Descomponer la spec en un plan de implementación paso a paso.
-
-### Input
-- Spec del feature (`specs/features/<feature>.md`)
-
-### Proceso del Plan-Agent
-1. **Descomposición**: Divide la spec en tareas atómicas
-2. **Secuenciación**: Ordena las tareas considerando dependencias
-3. **Estimación**: Estima complejidad y tokens necesarios
-4. **Diseño**: Propone arquitectura de la solución
-
-### Output
-Archivo `specs/features/<nombre-feature>.plan.md`:
-
-```markdown
-# Plan: [Nombre del Feature]
-
-## Resumen de Tareas
-| # | Tarea | Dependencias | Estimación |
-|---|-------|--------------|------------|
-| 1 | ...   | -            | Small      |
-| 2 | ...   | T1           | Medium     |
-
-## Paso 1: [Nombre de la tarea]
-- **Archivos a crear/modificar**:
-  - `src/...`
-- **AC cubiertos**: AC-001, AC-002
-- **Tests**: [qué tests escribir]
-
-## Paso 2: [Nombre de la tarea]
-...
+```yaml
+skip_specs: true
 ```
 
-### Comando Cline para activar Plan-Agent
-```
-@agent:plan-agent Basado en specs/features/<feature>.md, genera el plan de implementación
-```
+Sin ese marcador, `openspec validate` rechaza un cambio con cero deltas. No inventes un requisito para pasar la validación.
 
-## Fase 3: Creación de Tareas (TASKS)
+**`design.md` es condicional.** Se crea si hay decisiones técnicas que tomar: cambio transversal, dependencia nueva, modelo de datos, seguridad, migración o ambigüedad que conviene resolver antes de escribir código. Para un cambio pequeño y evidente, se omite.
 
-**Objetivo**: Transformar el plan de implementación en issues de GitHub para tracking real.
+## Fase 2 — Apply
 
-### Input
-- Plan del feature (`specs/features/<feature>.plan.md`)
-
-### Proceso del Task-Agent
-1. **Lee el plan** y extrae cada paso como una tarea independiente
-2. **Crea issues en GitHub** usando `gh issue create`:
-   - Título: `[Feature] Paso N: descripción`
-   - Body: Incluye AC cubiertos, archivos a modificar, tests a escribir
-   - Labels: `feature`, `<nombre-feature>`, `spec-driven`
-   - Milestone: Si existe un milestone para el feature
-3. **Vincula issues** al plan (añade URLs de issues al plan.md)
-4. **Confirma** que todos los pasos tienen su issue correspondiente
-
-### Output
-- Issues de GitHub creados y vinculados desde el plan
-- Plan actualizado con referencias a los issues (`specs/features/<feature>.plan.md`)
-
-### Comando Cline para activar Task-Agent
-```
-@agent:task-agent Crea issues de GitHub a partir de specs/features/<feature>.plan.md
+```bash
+/opsx:apply <cambio>
 ```
 
-### Requisitos Previos
-- Tener `gh` CLI instalado y autenticado (`gh auth login`)
-- Tener permisos para crear issues en el repositorio
+Recorre los checkboxes de `tasks.md` en orden, implementando cada uno y marcándolo al terminar.
 
-## Fase 4: Implementación (IMPL)
+**Disciplina de implementación** (viene de `operations.apply.guidance` en `openspec/config.yaml`):
 
-**Objetivo**: Ejecutar el plan, paso a paso, escribiendo tests primero (TDD).
+1. **TDD estricto RED-GREEN-REFACTOR.** Escribe el test, **ejecútalo y confirma que falla**, implementa lo mínimo para ponerlo en verde, refactoriza, vuelve a ejecutar. No des un paso por bueno con una revisión visual del código.
+2. **Quality gates antes de marcar cada tarea**: `pnpm test`, `tsc --noEmit`, ESLint sin warnings, y en Rust `cargo test` + `cargo clippy -- -D warnings` + `cargo fmt --check`. La cobertura de Vitest no baja del 80%.
+3. **Convenciones al crear, no después**: `data-cy` en el propio `.element.ts`, JSDoc en todo símbolo exportado, estilos solo en el `*.element.css` con tokens.
+4. **Nada de scope creep.** Si aparece algo que no está en los artefactos, párate y pregunta.
+5. **Ninguna dependencia nueva** sin confirmarlo con el usuario, aunque el design la contemple.
 
-### Input
-- Plan del feature
-- Spec del feature
+**Si aparece un gap** entre el código y los artefactos, se para y se comunica: o se corrige el código o se actualiza el artefacto. Nunca se resuelve con una suposición silenciosa. El flujo no está bloqueado por fases — se puede volver a `/opsx:update` para revisar los artefactos a mitad de la implementación.
 
-### Proceso del Impl-Agent
-1. **Toma un paso del plan**
-2. **Escribe tests** que validen los AC de ese paso
-3. **Implementa el código** mínimo para pasar los tests
-4. **Verifica**: Ejecuta tests, confirma que pasan
-5. **Repite** hasta completar todos los pasos
+## Fase 3 — Archive
 
-### Principio TDD
-```
-RED (test fails) → GREEN (minimal code) → REFACTOR (clean code)
+```bash
+/opsx:archive <cambio>
 ```
 
-### Output
-- Código fuente en `src/`
-- Tests en `tests/`
-- Updates al plan marcando tareas completadas
+Cierra el cambio: pasa el gate de revisión, funde los deltas en `openspec/specs/` y mueve el cambio al archivo.
 
-### Comando Cline para activar Impl-Agent
-```
-@agent:impl-agent Sigue el plan specs/features/<feature>.plan.md paso a paso usando TDD
-```
+**Gate de revisión** (viene de `operations.archive.guidance`). Absorbe lo que antes hacían el `review-agent` y el `test-agent`:
 
-## Fase 5: Revisión (REVIEW) — OBLIGATORIA tras IMPL
+- **Verificación independiente**: releer el código y re-ejecutar la suite completa uno mismo. No se acepta el resumen de la implementación como bueno.
+- **Mapeo escenario ↔ test** con ruta de fichero, uno por uno. Los que solo se pueden validar a mano en dispositivo Android real se listan aparte con su estado.
+- **Sección CRÍTICO** al principio de `review.md`: seguridad (secretos, CSP, inputs sin validar), cambios en `src/shared/` y su radio de impacto, actualizaciones de dependencias core, y normas del proyecto que se hayan tenido que saltar.
+- **Categorías de hallazgo**: gap, desviación, calidad, cobertura, convenciones de frontend. Cada uno con fichero y línea — nunca un "se ve bien" sin evidencia.
+- **Veredicto**:
 
-**Objetivo**: Verificar que la implementación cumple la spec original y no introduce riesgos de seguridad, inestabilidad o desviaciones en componentes compartidos.
+| Veredicto | Cuándo | ¿Archiva? |
+|---|---|---|
+| `APPROVED` | Todo cumplido y verificado | Sí |
+| `APPROVED WITH MINOR ISSUES` | Hallazgos de severidad baja, anotados | Sí |
+| `CHANGES REQUESTED` | Escenario sin implementar o incorrecto; norma saltada sin justificar | No |
+| `BLOCKED` | Problema de seguridad | No |
 
-### Input
-- Spec original
-- Código implementado
-- Tests
+Al archivar se actualiza `memory/context.md` con el estado resultante, y `memory/decisions.md` si el cambio tomó alguna decisión de arquitectura.
 
-### Proceso del Review-Agent
-1. **Comparación**: Lee la spec y verifica cada AC contra el código
-2. **Gap Analysis**: Identifica discrepancias entre spec y código
-3. **Code Quality**: Revisa estándares, patrones, buenas prácticas
-4. **Sección CRÍTICO**: Revisa seguridad, componentes compartidos, actualizaciones core, normas saltadas
-5. **Genera reporte** con hallazgos
+## Comandos de la CLI
 
-### Output
-Archivo `specs/features/<nombre-feature>.review.md`:
-
-```markdown
-# Review: [Nombre del Feature]
-
-## 📋 Ficheros Tocados
-[Tabla con archivos, tipo de cambio, descripción]
-
-## 📝 Resumen de Cambios
-[Bullet points de lo implementado]
-
-## ✅ Cumplimiento de AC
-- [x] AC-001: Implementado en src/..., test en tests/...
-- [ ] AC-002: NO IMPLEMENTADO - Gap encontrado
-
-## 🔴 CRÍTICO
-- Seguridad: [✅ Sin incidencias] o [❌ Hallazgo]
-- Componentes comunes: [✅ Ninguno] o [⚠️ Archivos afectados]
-- Actualizaciones core: [✅ Ninguna] o [⚠️ Cambios y justificación]
-- Normas saltadas: [✅ Ninguna] o [⚠️ Regla, motivo y alternativa]
-
-## ⚠️ Issues Encontrados
-- **ISSUE-001**: [Descripción] → Recomendación: [acción]
-
-## 📊 Veredicto
-- [ ] APPROVED
-- [ ] APPROVED WITH MINOR ISSUES
-- [ ] CHANGES REQUESTED
-- [ ] BLOCKED (seguridad o componente compartido crítico)
+```bash
+openspec list                              # cambios activos
+openspec list --specs                      # specs vivas
+openspec status --change <cambio>          # progreso de artefactos y tareas
+openspec show <cambio>                     # ver un cambio o spec
+openspec validate --all                    # validar todo
+openspec doctor                            # salud del root
+openspec instructions <artefacto> --change <cambio>   # instrucciones enriquecidas
 ```
 
-### ¿Cuándo se ejecuta?
+`openspec instructions` es el mecanismo que inyecta `context` y `rules` de `openspec/config.yaml`. Es lo que hace que Cline y Claude Code trabajen con las mismas reglas sin duplicarlas. Ver [03-configuracion-openspec.md](03-configuracion-openspec.md).
 
-**Automático**: El impl-agent, al completar todos los pasos del plan, recomienda ejecutar REVIEW. El workflow SDD no considera un feature como completado hasta que la fase REVIEW devuelve APPROVED.
+## Qué NO gestiona OpenSpec
 
-**Manual**: El usuario puede invocar `@agent:review-agent Revisa <feature> contra specs/features/<feature>.md` en cualquier momento.
-
-### Comando Cline para activar Review-Agent
-```
-@agent:review-agent Revisa la implementación de <feature> contra specs/features/<feature>.md
-```
-
-## Fase 6: Testing (TEST)
-
-**Objetivo**: Validación final y generación de cobertura.
-
-### Input
-- Spec con criterios de aceptación
-- Tests existentes
-- Código implementado
-
-### Proceso del Test-Agent
-1. **Ejecuta todos los tests existentes**
-2. **Analiza cobertura** (qué AC no están cubiertos)
-3. **Genera tests faltantes** para cubrir gaps
-4. **Ejecuta suite completa**, verifica que todo pasa
-5. **Genera reporte** de cobertura
-
-### Output
-- Reporte de cobertura
-- Tests adicionales (si necesario)
-
-### Comando Cline para activar Test-Agent
-```
-@agent:test-agent Ejecuta y completa cobertura de tests para <feature>
-```
-
-## Ciclo de Iteración
-
-Si el review o test encuentran issues:
-
-```
-[Issue encontrado] → [Actualizar spec si necesario] → [Re-implementar] → [Re-revisar]
-```
-
-**Regla de oro**: Si el código no coincide con la spec, O BIEN se arregla el código, O BIEN se actualiza la spec. Nunca divergen.
-
-## Inicio de Sesión con Cline
-
-Al iniciar una nueva sesión de Cline, usar este prompt para cargar el contexto:
-
-```
-Carga el contexto del proyecto desde memory/context.md. 
-Estamos trabajando con SDD. 
-El feature activo es: [NOMBRE]
-La spec está en: specs/features/[NOMBRE].md
-El plan está en: specs/features/[NOMBRE].plan.md
-Estado actual: [PENDIENTE/EN_PROGRESO/REVIEW/TEST]
-```
-
-Esto minimiza el consumo de tokens al enfocar la atención solo en lo relevante.
+- **Issues de GitHub.** No se crean. `tasks.md` es la única trazabilidad de progreso de un cambio.
+- **`memory/`.** El estado acumulado del proyecto y los ADRs son responsabilidad del equipo, no del framework.
+- **Los gates con dientes.** `rules` y `guidance` son instrucciones para el agente, no comprobaciones ejecutables. El único gate que bloquea de verdad es el pre-commit de Husky.
+- **El histórico.** `specs/features/` documenta las 10 features cerradas con el SDD anterior y está congelado. Ver `specs/README.md`.
