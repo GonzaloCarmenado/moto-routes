@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseCypressSeed } from './app-seed.transform.js';
 import type { Route, RoutePoint, RouteStop } from '../shared/models/route.types.js';
+import type { Profile } from '../shared/models/profile.types.js';
 
 function buildRoute(id: string): Route {
   return {
@@ -61,5 +62,43 @@ describe('parseCypressSeed', () => {
     const routeA = buildRoute('route-a');
     const result = parseCypressSeed(JSON.stringify({ routes: [routeA] }));
     expect(result).toEqual({ routes: [routeA], points: undefined, stops: undefined });
+  });
+
+  it('parses an optional profile when the JSON includes one', () => {
+    const routeA = buildRoute('route-a');
+    const profile: Profile = {
+      avatarPath: null,
+      name: 'Marc',
+      vehicleType: 'motorcycle',
+      vehicleMake: 'Honda',
+      vehicleModel: 'CB500X',
+    };
+    const raw = JSON.stringify({ routes: [routeA], profile });
+
+    const result = parseCypressSeed(raw);
+
+    expect(result).toEqual({ routes: [routeA], profile, points: undefined, stops: undefined });
+  });
+
+  it('leaves profile undefined when the JSON does not include it', () => {
+    const routeA = buildRoute('route-a');
+    const result = parseCypressSeed(JSON.stringify({ routes: [routeA] }));
+    expect(result).toEqual({ routes: [routeA], points: undefined, stops: undefined, profile: undefined });
+  });
+
+  it('returns null when profile is present but is not a plain object', () => {
+    expect(parseCypressSeed(JSON.stringify({ routes: [], profile: 'not-an-object' }))).toBeNull();
+  });
+
+  it('accepts a profile with all fields null (empty profile)', () => {
+    const profile: Profile = {
+      avatarPath: null,
+      name: null,
+      vehicleType: null,
+      vehicleMake: null,
+      vehicleModel: null,
+    };
+    const result = parseCypressSeed(JSON.stringify({ routes: [], profile }));
+    expect(result).toEqual({ routes: [], profile, points: undefined, stops: undefined });
   });
 });

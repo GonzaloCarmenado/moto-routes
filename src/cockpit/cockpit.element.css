@@ -1,4 +1,5 @@
 @import '../shared/styles/tokens.css';
+@import '../shared/styles/stat-tile.css';
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -131,43 +132,9 @@
   margin-top: 2px;
 }
 
-/* ==========================================================================
-   Stat tiles — distancia, tiempo, altitud
-   ========================================================================== */
-
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: var(--space-5);
-}
-
-.stat-tile {
-  min-width: 0;
-  background: var(--panel);
-  border-top: 2px solid var(--rust-line);
-  border-radius: 4px 4px var(--r-md) var(--r-md);
-  padding: var(--space-3) var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.stat-tile .stat-label {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-faint);
-  font-weight: 600;
-}
-.stat-tile .stat-value {
-  font-size: 26px;
-  color: var(--ink);
-}
-.stat-tile .stat-unit {
-  font-size: 13px;
-  color: var(--ink-soft);
-  font-weight: 500;
-}
+/* Stat tiles (.stat-grid/.stat-tile — distancia, tiempo, altitud) promovidos
+   a shared/styles/stat-tile.css, ver @import al inicio del fichero —
+   segundo consumidor real: Perfil. */
 
 .avg-speed-banner {
   background: var(--amber-soft);

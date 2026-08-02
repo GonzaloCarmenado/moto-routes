@@ -8,6 +8,7 @@
 import { isTauri } from '../shared/services/photo-capture-adapter.service.js';
 import { parseCypressSeed } from './app-seed.transform.js';
 import type { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
+import type { MemoryProfileRepository } from '../shared/repositories/memory-profile.repository.js';
 
 const CYPRESS_SEED_KEY = 'cypress-seed-routes';
 
@@ -16,12 +17,22 @@ const CYPRESS_SEED_KEY = 'cypress-seed-routes';
  * intencional (defensa en profundidad, mismo criterio que ADR-023 con
  * `PRAGMA foreign_keys`): así AC-010 queda cubierto por un test unitario real
  * sobre esta función pura, sin depender de que exista un app.element.spec.ts.
+ *
+ * El parámetro `profileRepo` es opcional para no romper las llamadas existentes
+ * de un solo argumento (tests previos de `app-seed.service.spec.ts`); en
+ * producción `app.element.ts` siempre lo pasa.
  */
-export function applyCypressSeed(repo: MemoryRouteRepository): void {
+export function applyCypressSeed(repo: MemoryRouteRepository, profileRepo?: MemoryProfileRepository): void {
   if (isTauri()) return;
 
   const seed = parseCypressSeed(localStorage.getItem(CYPRESS_SEED_KEY));
-  if (!seed || seed.routes.length === 0) return;
+  if (!seed) return;
+  // Si no hay rutas ni perfil que sembrar, no hacer nada (mantiene el
+  // comportamiento previo de "sin siembra" para el caso común).
+  if (seed.routes.length === 0 && !seed.profile) return;
 
   repo.seed(seed.routes, seed.points, seed.stops);
+  if (seed.profile && profileRepo) {
+    profileRepo.seed(seed.profile);
+  }
 }

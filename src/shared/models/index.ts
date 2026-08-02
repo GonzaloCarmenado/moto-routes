@@ -19,3 +19,11 @@ export type {
 } from './photo.types.js';
 
 export type { IPhotoRepository } from './photo.repository.js';
+
+export type {
+  Profile,
+  CreateProfile,
+  VehicleType,
+} from './profile.types.js';
+
+export type { IProfileRepository } from './profile.repository.js';

@@ -5,6 +5,7 @@
 
 import type { StopDetectionState, CockpitState } from './cockpit.types.js';
 import { formatDuration } from '../shared/utils/format.js';
+import { sanitizeText } from '../shared/utils/text.js';
 
 /**
  * Formatea la velocidad como entero para mostrar en el dial.
@@ -18,10 +19,12 @@ const ROUTE_NAME_MAX_LENGTH = 100;
 /**
  * Recorta espacios en los extremos y trunca al límite de 100 caracteres
  * (AC-003, AC-009). No decide el fallback por defecto — un resultado vacío
- * es responsabilidad del llamador (ver `buildDefaultRouteName`).
+ * es responsabilidad del llamador (ver `buildDefaultRouteName`). Wrapper
+ * fino sobre `sanitizeText` (`shared/utils/text.ts`), que generaliza esta
+ * misma regla para otros dominios (p. ej. `profile`).
  */
 export function sanitizeRouteName(raw: string): string {
-  return raw.trim().slice(0, ROUTE_NAME_MAX_LENGTH);
+  return sanitizeText(raw, ROUTE_NAME_MAX_LENGTH);
 }
 
 /** Valores formateados para mostrar en pantalla (speed/avgSpeed/dist/time/alt). */

@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { applyCypressSeed } from './app-seed.service.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
+import { MemoryProfileRepository } from '../shared/repositories/memory-profile.repository.js';
 import type { Route } from '../shared/models/route.types.js';
+import type { Profile } from '../shared/models/profile.types.js';
 
 const SEED_KEY = 'cypress-seed-routes';
 
@@ -78,10 +80,51 @@ describe('applyCypressSeed', () => {
     const getItemSpy = vi.spyOn(Storage.prototype, 'getItem');
     const repo = new MemoryRouteRepository();
     const seedSpy = vi.spyOn(repo, 'seed');
+    const profileRepo = new MemoryProfileRepository();
 
-    applyCypressSeed(repo);
+    applyCypressSeed(repo, profileRepo);
 
     expect(getItemSpy).not.toHaveBeenCalled();
+    expect(seedSpy).not.toHaveBeenCalled();
+  });
+
+  it('seeds the profile repository when the seed JSON includes a profile', () => {
+    const profile: Profile = {
+      avatarPath: null,
+      name: 'Marc',
+      vehicleType: 'motorcycle',
+      vehicleMake: 'Honda',
+      vehicleModel: 'CB500X',
+    };
+    localStorage.setItem(SEED_KEY, JSON.stringify({ routes: [], profile }));
+    const repo = new MemoryRouteRepository();
+    const profileRepo = new MemoryProfileRepository();
+
+    applyCypressSeed(repo, profileRepo);
+
+    void profileRepo.get().then((saved) => {
+      expect(saved).toEqual(profile);
+    });
+  });
+
+  it('does not seed the profile repository when the seed JSON has no profile', () => {
+    localStorage.setItem(SEED_KEY, JSON.stringify({ routes: [] }));
+    const repo = new MemoryRouteRepository();
+    const profileRepo = new MemoryProfileRepository();
+    const seedSpy = vi.spyOn(profileRepo, 'seed');
+
+    applyCypressSeed(repo, profileRepo);
+
+    expect(seedSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not seed the profile repository when the seed key is absent', () => {
+    const repo = new MemoryRouteRepository();
+    const profileRepo = new MemoryProfileRepository();
+    const seedSpy = vi.spyOn(profileRepo, 'seed');
+
+    applyCypressSeed(repo, profileRepo);
+
     expect(seedSpy).not.toHaveBeenCalled();
   });
 });
