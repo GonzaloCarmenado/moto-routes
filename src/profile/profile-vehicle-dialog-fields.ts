@@ -10,6 +10,7 @@
  */
 import type { VehicleType } from '../shared/models/index.js';
 import { buildMakeOptionsList } from './profile-vehicle-dialog.transform.js';
+import type { VehicleMake } from './vpic.service.js';
 
 /**
  * Etiquetas visibles de cada tipo de vehículo (AC-017). Exportada para que
@@ -28,7 +29,7 @@ export type VehicleDialogStatus = 'idle' | 'loading-makes' | 'loading-models' | 
 /** Selección en curso del flujo tipo→marca→modelo, usada para construir los tres selects. */
 export interface VehicleSelectState {
   type: VehicleType | null;
-  makes: string[];
+  makes: VehicleMake[];
   models: string[];
   selectedMake: string | null;
   selectedModel: string | null;
@@ -100,7 +101,7 @@ export function buildTypeSelect(state: VehicleSelectState, onChange: (value: str
 export function buildMakeCombobox(
   state: VehicleSelectState,
   onQueryChange: (value: string) => void,
-  onSelect: (value: string) => void,
+  onSelect: (make: VehicleMake) => void,
 ): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.className = 'make-combobox';
@@ -142,7 +143,7 @@ export function buildMakeCombobox(
  * destruye y recrea el propio `<input>`, perdiendo el foco/cursor mientras
  * se escribe (bug real, no solo un problema de test).
  */
-export function buildMakeOptionsListbox(state: VehicleSelectState, onSelect: (value: string) => void): HTMLElement {
+export function buildMakeOptionsListbox(state: VehicleSelectState, onSelect: (make: VehicleMake) => void): HTMLElement {
   const listbox = document.createElement('div');
   listbox.className = 'make-options';
   listbox.setAttribute('role', 'listbox');
@@ -156,7 +157,7 @@ export function buildMakeOptionsListbox(state: VehicleSelectState, onSelect: (va
   }
 
   for (const make of options) {
-    listbox.appendChild(buildMakeOption(make, make === state.selectedMake, onSelect));
+    listbox.appendChild(buildMakeOption(make, make.name === state.selectedMake, onSelect));
   }
 
   return listbox;
@@ -170,7 +171,7 @@ function buildMakeOptionsEmpty(): HTMLElement {
   return empty;
 }
 
-function buildMakeOption(make: string, isSelected: boolean, onSelect: (value: string) => void): HTMLButtonElement {
+function buildMakeOption(make: VehicleMake, isSelected: boolean, onSelect: (make: VehicleMake) => void): HTMLButtonElement {
   const option = document.createElement('button');
   option.type = 'button';
   option.className = 'make-option';
@@ -178,7 +179,7 @@ function buildMakeOption(make: string, isSelected: boolean, onSelect: (value: st
   option.setAttribute('data-cy', 'profile-marca-option');
   option.setAttribute('aria-selected', isSelected ? 'true' : 'false');
   if (isSelected) option.classList.add('is-selected');
-  option.textContent = make;
+  option.textContent = make.name;
   option.addEventListener('click', () => { onSelect(make); });
   return option;
 }

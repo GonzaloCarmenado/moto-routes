@@ -1,9 +1,9 @@
 {
   "Count": 2,
   "Message": "Results returned successfully",
-  "SearchCriteria": "Make:HONDA",
+  "SearchCriteria": "Make ID:468 | ModelYear:2026 | VehicleType:motorcycle",
   "Results": [
-    { "Make_ID": 468, "Make_Name": "HONDA", "Model_ID": 1745, "Model_Name": "CB500X" },
-    { "Make_ID": 468, "Make_Name": "HONDA", "Model_ID": 1746, "Model_Name": "Africa Twin" }
+    { "Make_ID": 468, "Make_Name": "HONDA", "Model_ID": 1745, "Model_Name": "CB500X", "VehicleTypeId": 1, "VehicleTypeName": "Motorcycle" },
+    { "Make_ID": 468, "Make_Name": "HONDA", "Model_ID": 1746, "Model_Name": "Africa Twin", "VehicleTypeId": 1, "VehicleTypeName": "Motorcycle" }
   ]
 }

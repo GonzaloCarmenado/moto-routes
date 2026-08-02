@@ -29,7 +29,7 @@
  * su resultado nunca se aplica al estado del diálogo si ya quedó obsoleto.
  */
 import { BaseElement } from '../shared/base-element.js';
-import { fetchVehicleMakes, fetchVehicleModels } from './vpic.service.js';
+import { fetchVehicleMakes, fetchVehicleModels, type VehicleMake } from './vpic.service.js';
 import { describeVehicleFetchError } from './profile-vehicle-dialog.transform.js';
 import type { Profile, VehicleType } from '../shared/models/index.js';
 import {
@@ -65,7 +65,7 @@ class ProfileVehicleDialogElement extends BaseElement {
   private previouslyFocused: HTMLElement | null = null;
 
   private type: VehicleType | null = null;
-  private makes: string[] = [];
+  private makes: VehicleMake[] = [];
   private models: string[] = [];
   private selectedMake: string | null = null;
   private selectedModel: string | null = null;
@@ -147,9 +147,13 @@ class ProfileVehicleDialogElement extends BaseElement {
   /** Ver nota en `open()`: precarga marcas/modelos del vehículo ya guardado, sin descartar la marca/modelo ya elegidos (a diferencia de `handleTypeChange`/`handleMakeChange`, pensados para una elección nueva del usuario). */
   private async preloadCurrentVehicle(type: VehicleType, make: string | null): Promise<void> {
     await this.loadMakes(type);
-    if (make && this.status !== 'error') {
-      await this.loadModels(make, type);
-    }
+    if (!make || this.status === 'error') return;
+    // La marca guardada solo se persiste como nombre (Profile.vehicleMake: string) — hace
+    // falta encontrar su id en la lista recién cargada para poder pedir sus modelos
+    // (fetchVehicleModels necesita el makeId de vPIC, no solo el nombre).
+    const matched = this.makes.find((m) => m.name === make);
+    if (!matched) return;
+    await this.loadModels(matched.id, matched.name, type);
   }
 
   private close(result: ProfileVehicleDialogResult): void {
@@ -190,14 +194,14 @@ class ProfileVehicleDialogElement extends BaseElement {
     }
   }
 
-  private async loadModels(make: string, type: VehicleType): Promise<void> {
+  private async loadModels(makeId: number, makeName: string, type: VehicleType): Promise<void> {
     const controller = this.beginRequest();
     this.status = 'loading-models';
     this.errorMessage = null;
-    this.lastFailedFetch = (): Promise<void> => this.loadModels(make, type);
+    this.lastFailedFetch = (): Promise<void> => this.loadModels(makeId, makeName, type);
     this.render();
     try {
-      const models = await fetchVehicleModels(make, type);
+      const models = await fetchVehicleModels(makeId, makeName, type);
       if (controller.signal.aborted) return;
       this.models = models;
       this.status = 'idle';
@@ -267,21 +271,21 @@ class ProfileVehicleDialogElement extends BaseElement {
     const container = this.shadowRoot?.querySelector<HTMLElement>('[data-cy="profile-marca-options"]');
     if (!container) return;
     container.replaceWith(
-      buildMakeOptionsListbox(this.currentSelectState(), (v) => { this.handleMakeSelect(v); }),
+      buildMakeOptionsListbox(this.currentSelectState(), (m) => { this.handleMakeSelect(m); }),
     );
   }
 
   /** Elegir marca descarta el modelo ya elegido y consulta los modelos de esa marca (AC-019). */
-  private handleMakeSelect(value: string): void {
-    this.selectedMake = value || null;
-    this.makeQuery = value;
+  private handleMakeSelect(make: VehicleMake): void {
+    this.selectedMake = make.name;
+    this.makeQuery = make.name;
     this.models = [];
     this.selectedModel = null;
     this.status = 'idle';
     this.errorMessage = null;
     this.lastFailedFetch = null;
-    if (this.selectedMake && this.type) {
-      void this.loadModels(this.selectedMake, this.type);
+    if (this.type) {
+      void this.loadModels(make.id, make.name, this.type);
     } else {
       this.requestController?.abort();
       this.requestController = null;
@@ -347,7 +351,7 @@ class ProfileVehicleDialogElement extends BaseElement {
         buildMakeCombobox(
           state,
           (value) => { this.handleMakeQueryChange(value); },
-          (value) => { this.handleMakeSelect(value); },
+          (make) => { this.handleMakeSelect(make); },
         ),
       ),
     );
