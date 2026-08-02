@@ -1,0 +1,167 @@
+name: CI
+
+# Replica los gates reales de .husky/pre-commit en un runner limpio, mas el build
+# y publicacion del APK Android cuando se etiqueta una version. Ver
+# openspec/changes/archive/ para el diseno completo (busqueda: ci-cd-pipeline).
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+    branches: [master]
+
+jobs:
+  quality-ts:
+    name: Quality gates — TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (tsc)
+        run: pnpm exec tsc --noEmit
+
+      - name: Documentation coverage
+        run: pnpm run docs:coverage
+
+      - name: ESLint
+        run: pnpm exec eslint src/ --max-warnings 0
+
+      - name: Unit tests (Vitest, with coverage)
+        run: pnpm exec vitest run --coverage
+
+      - name: E2E tests (Cypress)
+        run: pnpm run test:e2e
+
+  quality-tauri:
+    name: Quality gates — Tauri (Rust)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev libgtk-3-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: cargo fmt --check
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy -- -D warnings
+
+      - name: cargo test
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: cargo audit
+        working-directory: src-tauri
+        run: cargo audit --ignore RUSTSEC-2023-0071
+
+  build-and-release:
+    name: Build & release Android APK
+    needs: [quality-ts, quality-tauri]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_NDK_VERSION: 29.0.13846066
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Cache Android SDK/NDK components
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.ANDROID_HOME }}/ndk
+            ${{ env.ANDROID_HOME }}/platforms
+            ${{ env.ANDROID_HOME }}/build-tools
+          key: android-sdk-ndk${{ env.ANDROID_NDK_VERSION }}-platform36-buildtools36
+
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-36" "ndk;${{ env.ANDROID_NDK_VERSION }}" "build-tools;36.0.0"
+
+      - name: Configure Android NDK linker (overrides src-tauri/.cargo/config.toml, that one is Windows-only for local dev)
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${{ env.ANDROID_NDK_VERSION }}" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_HOME/ndk/${{ env.ANDROID_NDK_VERSION }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build APK (Tauri CLI — never a manual cargo build, see memory/context.md)
+        run: pnpm tauri android build --target aarch64 --debug
+
+      - name: Verify the APK bundles the freshly built frontend
+        run: |
+          APK=src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+          EXPECTED=$(grep -o 'index-[A-Za-z0-9_]*\.js' dist/index.html)
+          ACTUAL=$(unzip -p "$APK" assets/index.html | grep -o 'index-[A-Za-z0-9_]*\.js')
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "El APK empaqueta un frontend desactualizado (tiene $ACTUAL, se esperaba $EXPECTED)"
+            exit 1
+          fi
+
+      - name: Rename APK with the release tag
+        run: |
+          mkdir -p release
+          cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk "release/moto-routes-${GITHUB_REF_NAME}-arm64-debug.apk"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.apk
+          body: |
+            APK de depuración (sin firma de release) — instalar con `adb install -r`.
+            Cada release usa un keystore de debug distinto generado en el runner: si
+            la instalación falla por incompatibilidad de firma sobre una versión
+            anterior, desinstala primero (`adb uninstall com.motoroutes.app`).
