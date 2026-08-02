@@ -57,12 +57,27 @@ const SCHEMA = `
  * Recibe SqlDb inyectado para poder mockear en tests.
  */
 export class SqliteRouteRepository implements IRouteRepository {
-  private initialized = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor(private readonly db: SqlDb) {}
 
-  private async ensureSchema(): Promise<void> {
-    if (this.initialized) return;
+  // Memoiza la propia promesa (no un booleano) para que llamadas concurrentes
+  // a ensureSchema() —route-list, route-detail y profile-view comparten la
+  // misma instancia de repositorio y cada una la dispara en su propio mount—
+  // esperen la misma migración en curso en vez de lanzar cada una la suya:
+  // con un booleano puesto a `true` solo al final, dos llamadas que entran
+  // antes de que la primera termine ven `initialized === false` a la vez y
+  // ambas ejecutan `ensurePreviewPolylineColumn()`/`ensureColumn()`, la
+  // segunda fallando con "duplicate column name" al hacer el mismo
+  // `ALTER TABLE` dos veces (bug real, visto en dispositivo).
+  private ensureSchema(): Promise<void> {
+    if (!this.initPromise) {
+      this.initPromise = this.runMigrations();
+    }
+    return this.initPromise;
+  }
+
+  private async runMigrations(): Promise<void> {
     // SQLite tiene `foreign_keys` en OFF por defecto (por conexión, no por fichero):
     // sin esto, el ON DELETE CASCADE de route_points/route_stops/photos no se
     // aplica y delete() dejaría huérfanos. Debe ejecutarse antes de cualquier DELETE.
@@ -74,7 +89,6 @@ export class SqliteRouteRepository implements IRouteRepository {
     await this.ensurePreviewPolylineColumn();
     await this.ensureColumn('name', 'TEXT');
     await this.ensureColumn('notes', 'TEXT');
-    this.initialized = true;
   }
 
   /**

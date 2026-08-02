@@ -50,12 +50,21 @@ function rowToProfile(r: ProfileRow): Profile {
  * Recibe SqlDb inyectado para poder mockear en tests.
  */
 export class SqliteProfileRepository implements IProfileRepository {
-  private initialized = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor(private readonly db: SqlDb) {}
 
-  private async ensureSchema(): Promise<void> {
-    if (this.initialized) return;
+  // Memoiza la propia promesa (no un booleano) — mismo motivo que
+  // SqliteRouteRepository.ensureSchema(): llamadas concurrentes deben esperar
+  // la misma migración en curso en vez de disparar cada una la suya.
+  private ensureSchema(): Promise<void> {
+    if (!this.initPromise) {
+      this.initPromise = this.runMigrations();
+    }
+    return this.initPromise;
+  }
+
+  private async runMigrations(): Promise<void> {
     // A diferencia de SqliteRouteRepository/SqlitePhotoRepository (ADR-023), esta
     // tabla no tiene ninguna FOREIGN KEY (no depende de routes ni de photos), así
     // que no necesita `PRAGMA foreign_keys = ON;` — omisión intencional, no un olvido.
@@ -63,7 +72,6 @@ export class SqliteProfileRepository implements IProfileRepository {
     for (const stmt of statements) {
       await this.db.execute(stmt);
     }
-    this.initialized = true;
   }
 
   async get(): Promise<Profile | null> {
