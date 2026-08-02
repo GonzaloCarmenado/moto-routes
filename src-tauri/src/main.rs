@@ -8,5 +8,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_target(false)
         .init();
 
-    app_lib::run()
+    #[cfg(not(mobile))]
+    app_lib::run()?;
+
+    #[cfg(mobile)]
+    app_lib::run();
+
+    Ok(())
 }
