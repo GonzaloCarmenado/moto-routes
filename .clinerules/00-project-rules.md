@@ -1,8 +1,8 @@
-# CLAUDE.md — Moto Routes
+# Reglas del proyecto — Moto Routes
 
 ## Regla fundamental
 
-Este proyecto sigue **Spec-Driven Development con OpenSpec**. No se escribe código sin un cambio abierto en `openspec/changes/`. El ciclo es `/opsx:propose` → `/opsx:apply` → `/opsx:archive`. Si el código y los artefactos del cambio divergen, o se corrige el código o se actualiza el artefacto — nunca se dejan desalineados.
+Este proyecto sigue **Spec-Driven Development con OpenSpec**. No se escribe código sin un cambio abierto en `openspec/changes/`. El ciclo es `/opsx-propose` → `/opsx-apply` → `/opsx-archive` (workflows en `.clinerules/workflows/`). Si el código y los artefactos del cambio divergen, o se corrige el código o se actualiza el artefacto — nunca se dejan desalineados.
 
 ## Dónde vive la metodología
 
@@ -12,11 +12,15 @@ Detalle navegable en `docs/` (`pnpm run docs`). Histórico del SDD anterior en `
 
 ## Memoria del proyecto (leer al empezar a trabajar aquí)
 
-`memory/` es memoria **del proyecto**, no la memoria personal de Claude. Nadie te la carga automáticamente — léela tú:
+`memory/` es memoria **del proyecto**. Nadie te la carga automáticamente — léela tú:
 
 - `memory/context.md` — estado actual y próximo hito. Cárgalo antes de tocar código. Incluye la lección aprendida del build de Android: léela antes de tocarlo, no la repitas de memoria.
 - `memory/decisions.md` — ADRs. Consúltalo antes de revertir o cuestionar una decisión ya tomada; si tomas una nueva, añade el ADR aquí.
 - `memory/sessions/` — resúmenes de sesiones largas.
+
+## Tokens
+
+Ser eficiente: no cargar ficheros que la tarea no necesita, preferir referencias sobre duplicación, y proponer compactar o abrir sesión nueva si se alarga. Registrar la sesión en `memory/tokens.md` si fue significativa.
 
 ## Reglas de edición (aplican siempre, también en un fix suelto sin cambio abierto)
 
@@ -29,10 +33,10 @@ Detalle navegable en `docs/` (`pnpm run docs`). Histórico del SDD anterior en `
 
 ## Autorización explícita
 
-- No modificar `openspec/config.yaml`, este `CLAUDE.md`, `.clinerules/`, `.claude/commands/` ni `.claude/skills/` sin avisar antes — son la definición del propio workflow.
+- No modificar `openspec/config.yaml`, este fichero, `CLAUDE.md`, `.clinerules/workflows/` ni `.cline/skills/` sin avisar antes — son la definición del propio workflow.
 - No modificar `specs/` (histórico congelado) sin que el usuario lo pida.
 - No commitear archivos generados o temporales, ni `.env` con valores reales.
-- No mencionar a Claude ni a ningún asistente en mensajes de commit ni en PRs.
+- No mencionar a ningún asistente de IA en mensajes de commit ni en PRs.
 
 ## Idioma
 
