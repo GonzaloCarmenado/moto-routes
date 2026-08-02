@@ -74,3 +74,83 @@ No se detectaron gaps: los 38 AC están implementados y cada uno tiene al menos 
 - [x] APPROVED
 
 Los 38 AC están implementados y verificados con tests reales que pasan (`tsc` limpio, ESLint 0 warnings, 703/703 Vitest, 38/38 Cypress incluyendo la suite de perfil). Los dos bugs corregidos en el Paso 15 (condición de carrera en `ensureSchema()` y CSP desincronizada) están bien resueltos, con test de regresión para el primero y verificación por diff para el segundo; el análisis sobre `SqlitePhotoRepository` confirma que no comparte el bug real (solo el patrón menos idiomático, ISSUE-002, no bloqueante, fuera de alcance). ISSUE-001 (selectores de clase en `perfil.cy.ts`) quedó corregido en la misma sesión — reverificado con la suite completa en verde tras el fix. Sin bloqueantes pendientes. Feature `perfil-usuario` lista para cerrar.
+
+---
+
+# Adenda: Bloque 4 — Buscador de marca, precarga y spinner de guardado (Paso 16, AC-039 a AC-042)
+
+Revisión específica del incremento post-cierre añadido el 2026-08-02 tras verificación en dispositivo Android real. No se reabre lo ya aprobado arriba (AC-001 a AC-038); esta sección cubre exclusivamente el Bloque 4.
+
+## 📋 Ficheros Tocados
+| Archivo | Tipo | Descripción del cambio |
+|---------|------|------------------------|
+| `src/profile/profile-vehicle-dialog.transform.ts` | CREADO | Lógica pura `isKnownMake`/`buildMakeOptionsList` + `KNOWN_VEHICLE_MAKES` (44 marcas curadas) |
+| `src/profile/profile-vehicle-dialog.transform.spec.ts` | CREADO | 8 tests unitarios puros |
+| `src/profile/profile-vehicle-dialog-fields.ts` | MODIFICADO | `buildMakeSelect` (nativo) sustituido por `buildMakeCombobox`/`buildMakeOptionsListbox` (buscador + listbox de botones) |
+| `src/profile/profile-vehicle-dialog.element.ts` | MODIFICADO | `preloadCurrentVehicle()` (fix AC-039); `handleMakeQueryChange()` con parcheo aislado del DOM (fix bug de foco) |
+| `src/profile/profile-vehicle-dialog.element.css` | MODIFICADO | Estilos de `.make-combobox`/`.make-options`/`.make-option`, tokens del sistema de diseño, hitbox 56px |
+| `src/profile/profile-vehicle-dialog.element.spec.ts` | REESCRITO | 22 tests (4 nuevos + 2 renombrados) |
+| `src/profile/profile-edit-dialog.element.ts` | MODIFICADO | Estado `saving`, spinner en "Guardar", deshabilitado de controles (AC-042) |
+| `src/profile/profile-edit-dialog.element.css` | MODIFICADO | `.spinner`/`@keyframes profile-edit-spin` |
+| `src/profile/profile-edit-dialog.element.spec.ts` | MODIFICADO | +3 tests (16 en total) |
+| `src/profile/profile.element.spec.ts` | MODIFICADO | 1 test ajustado al nuevo combobox de marca |
+| `cypress/fixtures/vpic-makes-motorcycle.json` | MODIFICADO | +2 marcas minoritarias para testear filtro/priorización |
+| `cypress/e2e/perfil/perfil.cy.ts` | MODIFICADO | Helper `chooseMake()`, test de precarga nuevo, tests existentes ampliados |
+| `specs/features/perfil-usuario.md` | MODIFICADO | Bloque 4, AC-039 a AC-042 |
+| `specs/features/perfil-usuario.plan.md` | MODIFICADO | Paso 16 |
+
+## 📝 Resumen de Cambios
+- Sustituye el `<select>` nativo de marca por un buscador de texto + listbox (botones con `role="option"`), con filtro en cliente y priorización de una lista curada de ~44 fabricantes conocidos, sin ocultar nunca marcas devueltas por vPIC.
+- Corrige un bug real: al editar un vehículo ya guardado, `open()` ahora precarga marcas/modelos automáticamente vía `preloadCurrentVehicle()`, sin depender de que el usuario toque el selector de tipo.
+- Corrige un segundo bug real encontrado durante el TDD de este paso: `handleMakeQueryChange()` ya no dispara un `render()` completo en cada pulsación (que destruía y recreaba el `<input>`, perdiendo foco/cursor) — reconstruye únicamente el listbox de opciones.
+- Añade spinner + deshabilitado de controles en "Editar perfil" mientras se guarda (foto a disco + persistencia), con Escape/overlay-click ignorados durante el guardado.
+
+## ✅ Cumplimiento de AC
+| AC | Estado | Implementación | Test | Notas |
+|----|--------|-----------------|------|-------|
+| AC-039 | ✅ Cumplido | `profile-vehicle-dialog.element.ts` (`open()` → `preloadCurrentVehicle()`) | Unitario (`preloads makes and models automatically...`, `does not attempt to preload models when preloading makes fails`) + E2E (`editing an already-configured vehicle preloads...`) | Verificado que no viola AC-024 (ver sección Seguridad/CRÍTICO) |
+| AC-040 | ✅ Cumplido | `profile-vehicle-dialog-fields.ts` (`buildMakeCombobox`) + `profile-vehicle-dialog.transform.ts` (`buildMakeOptionsList`, rama con query) | Unitario (`buildMakeOptionsList` x5, `filters the rendered make options as the user types...`) + E2E (`el buscador filtra la lista sin volver a llamar a vPIC`) | Insensible a mayúsculas confirmado por test explícito |
+| AC-041 | ✅ Cumplido | `profile-vehicle-dialog.transform.ts` (`buildMakeOptionsList`, rama sin query, `KNOWN_VEHICLE_MAKES`/`isKnownMake`) | Unitario (`shows known makes first (alphabetical) then the rest (alphabetical)...`) + E2E (comprueba índice de HONDA/YAMAHA antes de las minoritarias) | Nunca oculta marcas (verificado con `.toEqual` exhaustivo, no solo `.toContain`) |
+| AC-042 | ✅ Cumplido | `profile-edit-dialog.element.ts` (`saving`, `buildSaveButton()`) + `.css` (`.spinner`) | Unitario (3 tests: spinner+disabled, Escape/overlay ignorados, recuperación tras fallo) | Nombre capturado síncronamente antes del spinner, evita pérdida de texto al re-renderizar |
+
+Los 4 AC del Bloque 4 están implementados y cada uno tiene cobertura Dado/Cuando/Entonces (unitaria y/o E2E). Verificado de forma independiente en esta revisión (no solo confiando en las notas del plan):
+- `tsc --noEmit`: sin errores.
+- `eslint src --max-warnings 0`: sin errores/warnings (todo `src/`, no solo `profile/`).
+- `vitest run`: **717/717 verdes** (coincide con lo declarado en el plan).
+- `cypress run --spec cypress/e2e/perfil/perfil.cy.ts`: **9/9 verdes**.
+
+## 🔴 CRÍTICO
+
+### Seguridad
+- ✅ Sin incidencias. No se añaden nuevos endpoints ni secretos. `KNOWN_VEHICLE_MAKES` es una constante estática sin datos sensibles.
+- ✅ **AC-024 no violado por el fix de AC-039**: `profile.element.ts` no importa ni referencia `vpic.service.ts`/`fetchVehicleMakes`/`fetchVehicleModels` en ningún punto (verificado por grep) — la sección "Mi vehículo" sigue leyendo únicamente de `IProfileRepository`. `preloadCurrentVehicle()` vive exclusivamente en `profile-vehicle-dialog.element.ts`, que solo se instancia al pulsar "Editar vehículo" (`openVehicleEditDialog`, invocado desde el manejador de ese botón). El test E2E `editing an already-configured vehicle preloads...` y el de error de vPIC confirman que la petición ocurre tras abrir el diálogo, no al cargar la vista.
+
+### Componentes Comunes Afectados
+- ✅ Ninguno. Todos los cambios están acotados a `src/profile/` y sus tests/fixtures asociados; no se toca `shared/` en este incremento.
+
+### Actualizaciones Core
+- ✅ Ninguna. Sin cambios de dependencias ni configuración de build/lint/TS.
+
+### Normas Saltadas
+- ⚠️ **`data-cy="profile-marca-option"` repetido entre las N opciones del listbox de marca** — a primera vista choca con la regla "todo elemento interactivo lleva un `data-cy` único" de `CLAUDE.md`/`docs/07-cypress-e2e.md`. Comparado con el precedente real ya existente en el proyecto (`route-card` en `src/routes/list/route-list.element.ts:125`, mismo `data-cy` repetido en cada tarjeta de una lista, desambiguado en tests con `cy.contains('[data-cy="route-card"]', route.name)`), el patrón es coherente: `perfil.cy.ts` (`chooseMake()`) desambigua igual, con `cy.get(...).contains('[data-cy="profile-marca-option"]', make)`, y el test unitario `gives every new interactive control a unique data-cy, with make options sharing one data-cy by design (same pattern as route-card)` deja la excepción documentada explícitamente en el propio código de test. Se considera una aplicación consistente de un precedente ya aceptado, no una norma saltada sin justificar — no bloqueante.
+
+## ⚠️ Issues Encontrados
+
+### ISSUE-003: El texto del buscador de marca puede quedar desincronizado de la marca realmente seleccionada — ✅ RESUELTO
+- **Severidad**: MEDIA
+- **AC afectado**: AC-040 (relacionado, no una violación directa de la letra del AC)
+- **Descripción**: `handleMakeQueryChange()` actualizaba `makeQuery` en cada pulsación pero nunca tocaba `selectedMake`/`selectedModel` ni `canSave`. Si el usuario, tras elegir una marca, escribía en el buscador sin llegar a pulsar una opción, el texto visible dejaba de coincidir con la marca realmente seleccionada, pero "Guardar" seguía habilitado y persistiría la marca antigua.
+- **Resolución**: `handleMakeQueryChange()` ahora descarta `selectedMake`/`selectedModel` (y deshabilita "Guardar"/el select de modelo) en cuanto el texto escrito deja de coincidir con la marca elegida — solo ocurre una vez por divergencia (no en cada tecla), así que no reintroduce la pérdida de foco que motivó la actualización aislada del listbox. Test de regresión nuevo (`discards the chosen make (and disables "Guardar") if the search text is edited away from it without picking a new option`).
+
+### ISSUE-004: Estado "sin resultados" del buscador de marca sin `data-cy` y sin test — ✅ RESUELTO
+- **Severidad**: BAJA
+- **Resolución**: añadido `data-cy="profile-marca-empty"` a `buildMakeOptionsEmpty()` (`profile-vehicle-dialog-fields.ts`) y test nuevo (`shows a labelled empty state when the search matches no make`).
+
+### ISSUE-005: Trazabilidad AC en nombres de test — precarga referencia "AC-017" en vez de "AC-039" — ✅ RESUELTO
+- **Severidad**: BAJA
+- **Resolución**: ambos títulos de test (unitario y E2E) renombrados para referenciar "(AC-039)".
+
+## 📊 Veredicto — Bloque 4
+- [x] APPROVED
+
+Los 4 AC del Bloque 4 (AC-039 a AC-042) están implementados correctamente y verificados con tests reales que pasan (`tsc` limpio, ESLint 0 warnings sobre todo `src/`, 719/719 Vitest, 39/39 Cypress incluidos los 9 de `perfil.cy.ts`). Los dos bugs reales descritos en el plan (precarga de marca/modelo al editar sin tocar el tipo, y pérdida de foco por `render()` completo en cada tecla) están corregidos con tests de regresión específicos. El fix de AC-039 no viola AC-024 (verificado por lectura directa: `profile.element.ts` no conoce `vpic.service.ts`). El patrón `data-cy="profile-marca-option"` compartido está justificado por precedente real (`route-card`) y correctamente desambiguado en tests. Los 3 issues no bloqueantes (ISSUE-003/004/005) quedaron resueltos en la misma sesión, reverificados con la suite completa en verde. Sin bloqueantes pendientes. Confirmado además por el usuario en dispositivo Android real (buscador, precarga y spinner de guardado funcionando correctamente).
