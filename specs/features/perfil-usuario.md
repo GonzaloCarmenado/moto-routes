@@ -6,50 +6,50 @@ Primera versión de la pantalla de Perfil, hoy un placeholder sin vista asociada
 ## Criterios de Aceptación
 
 ### Bloque 1 — Foto y nombre de perfil
-- [ ] AC-001: La pantalla de Perfil muestra, en su parte superior, una foto de perfil circular (recorte visual `border-radius: 50%` + `object-fit: cover`) y, debajo, el nombre del usuario.
-- [ ] AC-002: Si no se ha configurado ningún avatar todavía, se muestra un icono/silueta de marcador de posición en el círculo, nunca un hueco vacío ni un error.
-- [ ] AC-003: Si no se ha configurado ningún nombre todavía, se muestra un texto de marcador de posición (p. ej. "Motorista sin nombre") en vez de un espacio vacío.
-- [ ] AC-004: Existe un control "Editar" accesible desde la pantalla de Perfil que abre un modal único "Editar perfil" combinando la edición de foto y nombre.
-- [ ] AC-005: El modal "Editar perfil" muestra una previsualización en vivo de cómo quedarán avatar y nombre juntos (mismo layout que la pantalla de Perfil, no un formulario suelto), actualizada en tiempo real mientras el usuario edita, antes de guardar.
-- [ ] AC-006: Dentro del modal, un control "Cambiar foto" despliega el mismo patrón Cámara/Galería ya usado por `<photo-capture>` (`<input type="file" accept="image/*">`, con `capture="environment"` para la opción Cámara).
-- [ ] AC-007: Al elegir una nueva foto, la previsualización circular del modal se actualiza inmediatamente con la imagen elegida (recorte solo visual por CSS; sin recorte real de la imagen en esta v1).
-- [ ] AC-008: El campo de nombre tiene un límite de 100 caracteres (mismo límite que el nombre de ruta, ver AC-009 de `mejoras-guardado-rutas.md`); el usuario no puede escribir más allá de ese límite.
-- [ ] AC-009: Al pulsar "Guardar" en el modal, la foto (si se cambió) y el nombre (recortado de espacios en los extremos) se persisten juntos en la base de datos local, el modal se cierra y la pantalla de Perfil se actualiza con los nuevos datos.
-- [ ] AC-010: Al pulsar "Guardar" con el campo de nombre vacío o solo espacios en blanco, se conserva el nombre previamente guardado (o el marcador de posición de AC-003 si nunca hubo nombre) — nunca se persiste una cadena vacía como nombre.
-- [ ] AC-011: Al pulsar "Cancelar" o cerrar el modal sin guardar, ningún cambio (foto ni nombre) se persiste; la pantalla de Perfil sigue mostrando los datos previos.
-- [ ] AC-012: Si falla la persistencia al guardar (p. ej. error de BBDD), se muestra un toast de error (reutilizando el módulo compartido `showToast`) y el modal permanece abierto con los datos introducidos, para poder reintentar sin perderlos.
-- [ ] AC-013: La foto de perfil se guarda en el sistema de archivos local reutilizando el mismo servicio que las fotos de ruta (`savePhotoFile`/`getPhotoUrl` de `photo-storage.service.ts`); nunca se sube a ningún servidor externo.
+- [x] AC-001: La pantalla de Perfil muestra, en su parte superior, una foto de perfil circular (recorte visual `border-radius: 50%` + `object-fit: cover`) y, debajo, el nombre del usuario.
+- [x] AC-002: Si no se ha configurado ningún avatar todavía, se muestra un icono/silueta de marcador de posición en el círculo, nunca un hueco vacío ni un error.
+- [x] AC-003: Si no se ha configurado ningún nombre todavía, se muestra un texto de marcador de posición (p. ej. "Motorista sin nombre") en vez de un espacio vacío.
+- [x] AC-004: Existe un control "Editar" accesible desde la pantalla de Perfil que abre un modal único "Editar perfil" combinando la edición de foto y nombre.
+- [x] AC-005: El modal "Editar perfil" muestra una previsualización en vivo de cómo quedarán avatar y nombre juntos (mismo layout que la pantalla de Perfil, no un formulario suelto), actualizada en tiempo real mientras el usuario edita, antes de guardar.
+- [x] AC-006: Dentro del modal, un control "Cambiar foto" despliega el mismo patrón Cámara/Galería ya usado por `<photo-capture>` (`<input type="file" accept="image/*">`, con `capture="environment"` para la opción Cámara).
+- [x] AC-007: Al elegir una nueva foto, la previsualización circular del modal se actualiza inmediatamente con la imagen elegida (recorte solo visual por CSS; sin recorte real de la imagen en esta v1).
+- [x] AC-008: El campo de nombre tiene un límite de 100 caracteres (mismo límite que el nombre de ruta, ver AC-009 de `mejoras-guardado-rutas.md`); el usuario no puede escribir más allá de ese límite.
+- [x] AC-009: Al pulsar "Guardar" en el modal, la foto (si se cambió) y el nombre (recortado de espacios en los extremos) se persisten juntos en la base de datos local, el modal se cierra y la pantalla de Perfil se actualiza con los nuevos datos.
+- [x] AC-010: Al pulsar "Guardar" con el campo de nombre vacío o solo espacios en blanco, se conserva el nombre previamente guardado (o el marcador de posición de AC-003 si nunca hubo nombre) — nunca se persiste una cadena vacía como nombre.
+- [x] AC-011: Al pulsar "Cancelar" o cerrar el modal sin guardar, ningún cambio (foto ni nombre) se persiste; la pantalla de Perfil sigue mostrando los datos previos.
+- [x] AC-012: Si falla la persistencia al guardar (p. ej. error de BBDD), se muestra un toast de error (reutilizando el módulo compartido `showToast`) y el modal permanece abierto con los datos introducidos, para poder reintentar sin perderlos.
+- [x] AC-013: La foto de perfil se guarda en el sistema de archivos local reutilizando el mismo servicio que las fotos de ruta (`savePhotoFile`/`getPhotoUrl` de `photo-storage.service.ts`); nunca se sube a ningún servidor externo.
 
 ### Bloque 2 — Vehículo del perfil (marca y modelo) + integración con API pública NHTSA vPIC
-- [ ] AC-014: La pantalla de Perfil muestra una sección "Mi vehículo" con el tipo, marca y modelo actualmente guardados, leídos directamente de la base de datos local (sin consultar ninguna API).
-- [ ] AC-015: Si no hay ningún vehículo configurado todavía, la sección muestra un estado vacío (p. ej. "Sin vehículo configurado") con una acción para añadirlo.
-- [ ] AC-016: Existe un control "Editar vehículo" independiente del modal "Editar perfil" de avatar/nombre, que abre su propio flujo de edición.
-- [ ] AC-017: Al editar el vehículo se muestra siempre visible un selector de tipo con dos opciones, "Moto" y "Coche" — tanto la primera vez que se configura como en cualquier edición posterior, nunca se oculta una vez ya hay un vehículo guardado.
-- [ ] AC-018: Al elegir o cambiar el tipo, se consulta la API pública NHTSA vPIC (`GET /vehicles/GetMakesForVehicleType/{motorcycle|car}?format=json`) para poblar el select de marca filtrado por ese tipo. El select de modelo permanece deshabilitado y vacío hasta que se elija una marca.
-- [ ] AC-019: Al elegir una marca, se consulta `GET /vehicles/GetModelsForMake/{make}?format=json` (filtrado por el tipo de vehículo elegido) para poblar el select de modelo.
-- [ ] AC-020: Mientras se está consultando la API (marcas o modelos), el select correspondiente muestra un estado de carga visual acorde al sistema de diseño, sin bloquear el resto de la pantalla.
-- [ ] AC-021: Al pulsar "Guardar" con tipo, marca y modelo elegidos, esos tres valores se persisten juntos como el vehículo del perfil, **reemplazando** cualquier vehículo guardado previamente — nunca se acumula más de un vehículo a la vez.
-- [ ] AC-022: Si el usuario cambia de tipo a mitad de edición (p. ej. de "Moto" a "Coche"), cualquier marca/modelo ya elegido para el tipo anterior se descarta y los selects de marca/modelo vuelven a su estado inicial (marca vacía, modelo deshabilitado).
-- [ ] AC-023: Al pulsar "Cancelar" o cerrar el flujo de edición del vehículo sin guardar, ningún cambio se persiste; la pantalla de Perfil sigue mostrando el vehículo previamente guardado (o el estado vacío de AC-015).
-- [ ] AC-024: La API externa **nunca** se consulta al cargar o visualizar la pantalla de Perfil en su estado normal — solo se consulta cuando el usuario entra explícitamente en el flujo de edición del vehículo (AC-018/AC-019). La visualización normal (AC-014) siempre lee de la base de datos local.
-- [ ] AC-025: Si la API no está disponible al intentar cargar marcas o modelos durante la edición (sin conexión, timeout, error de red o respuesta no-JSON), se muestra un mensaje de error acorde al sistema de diseño (nunca una pantalla rota ni un error sin manejar en consola), y el usuario puede reintentar sin salir del flujo de edición.
-- [ ] AC-026: Si la consulta de marcas o modelos falla pero el usuario ya tenía un vehículo guardado, ese vehículo guardado no se pierde ni se borra por el fallo — solo se ve afectada la posibilidad de cambiarlo hasta que la API vuelva a estar disponible.
-- [ ] AC-027: El cliente HTTP usado para consultar la API tiene un timeout explícito (nunca queda esperando indefinidamente) y distingue en su manejo de errores entre error de red, timeout y respuesta no-JSON.
+- [x] AC-014: La pantalla de Perfil muestra una sección "Mi vehículo" con el tipo, marca y modelo actualmente guardados, leídos directamente de la base de datos local (sin consultar ninguna API).
+- [x] AC-015: Si no hay ningún vehículo configurado todavía, la sección muestra un estado vacío (p. ej. "Sin vehículo configurado") con una acción para añadirlo.
+- [x] AC-016: Existe un control "Editar vehículo" independiente del modal "Editar perfil" de avatar/nombre, que abre su propio flujo de edición.
+- [x] AC-017: Al editar el vehículo se muestra siempre visible un selector de tipo con dos opciones, "Moto" y "Coche" — tanto la primera vez que se configura como en cualquier edición posterior, nunca se oculta una vez ya hay un vehículo guardado.
+- [x] AC-018: Al elegir o cambiar el tipo, se consulta la API pública NHTSA vPIC (`GET /vehicles/GetMakesForVehicleType/{motorcycle|car}?format=json`) para poblar el select de marca filtrado por ese tipo. El select de modelo permanece deshabilitado y vacío hasta que se elija una marca.
+- [x] AC-019: Al elegir una marca, se consulta `GET /vehicles/GetModelsForMake/{make}?format=json` (filtrado por el tipo de vehículo elegido) para poblar el select de modelo.
+- [x] AC-020: Mientras se está consultando la API (marcas o modelos), el select correspondiente muestra un estado de carga visual acorde al sistema de diseño, sin bloquear el resto de la pantalla.
+- [x] AC-021: Al pulsar "Guardar" con tipo, marca y modelo elegidos, esos tres valores se persisten juntos como el vehículo del perfil, **reemplazando** cualquier vehículo guardado previamente — nunca se acumula más de un vehículo a la vez.
+- [x] AC-022: Si el usuario cambia de tipo a mitad de edición (p. ej. de "Moto" a "Coche"), cualquier marca/modelo ya elegido para el tipo anterior se descarta y los selects de marca/modelo vuelven a su estado inicial (marca vacía, modelo deshabilitado).
+- [x] AC-023: Al pulsar "Cancelar" o cerrar el flujo de edición del vehículo sin guardar, ningún cambio se persiste; la pantalla de Perfil sigue mostrando el vehículo previamente guardado (o el estado vacío de AC-015).
+- [x] AC-024: La API externa **nunca** se consulta al cargar o visualizar la pantalla de Perfil en su estado normal — solo se consulta cuando el usuario entra explícitamente en el flujo de edición del vehículo (AC-018/AC-019). La visualización normal (AC-014) siempre lee de la base de datos local.
+- [x] AC-025: Si la API no está disponible al intentar cargar marcas o modelos durante la edición (sin conexión, timeout, error de red o respuesta no-JSON), se muestra un mensaje de error acorde al sistema de diseño (nunca una pantalla rota ni un error sin manejar en consola), y el usuario puede reintentar sin salir del flujo de edición.
+- [x] AC-026: Si la consulta de marcas o modelos falla pero el usuario ya tenía un vehículo guardado, ese vehículo guardado no se pierde ni se borra por el fallo — solo se ve afectada la posibilidad de cambiarlo hasta que la API vuelva a estar disponible.
+- [x] AC-027: El cliente HTTP usado para consultar la API tiene un timeout explícito (nunca queda esperando indefinidamente) y distingue en su manejo de errores entre error de red, timeout y respuesta no-JSON.
 
 ### Bloque 3 — Estadísticas del usuario
-- [ ] AC-028: La pantalla de Perfil muestra una sección de estadísticas agregadas de todas las rutas guardadas del usuario, reutilizando el patrón visual `.stat-tile`/`.stat-grid` ya usado en el cockpit.
-- [ ] AC-029: Las estadísticas mostradas incluyen, como mínimo: kilómetros totales recorridos, tiempo total en moto, ruta más larga (por distancia), número total de rutas, y velocidad media histórica.
-- [ ] AC-030: Las estadísticas se calculan únicamente a partir de rutas con `status = 'completed'` — las rutas `active` (en curso) y `archived` quedan excluidas del cálculo.
-- [ ] AC-031: Si el usuario no tiene ninguna ruta completada guardada, la sección de estadísticas muestra un estado vacío coherente con el resto de la app (p. ej. "Todavía no hay rutas completadas"), sin errores ni valores `NaN`/`Infinity` visibles.
-- [ ] AC-032: "Ruta más larga" muestra el nombre de la ruta con mayor `totalDistance` entre las completadas (o el nombre por defecto derivado de fecha/hora si no tiene nombre propio, mismo fallback que AC-007 de `mejoras-guardado-rutas.md`) junto con su distancia.
-- [ ] AC-033: "Velocidad media histórica" se calcula como la media aritmética del campo `avgSpeed` de cada ruta completada (no como distancia total entre tiempo total), reutilizando el dato ya persistido por ruta.
-- [ ] AC-034: Las clases `.stat-tile`/`.stat-grid` (hoy definidas únicamente en `cockpit.element.css`) se promueven a `src/shared/` como parte de esta feature, al ganar un segundo consumidor real (Perfil) — siguiendo la regla ya documentada en `frontend-conventions.md` §4 y `design-system.md` §10.10, sin cambiar su apariencia visual en el cockpit.
+- [x] AC-028: La pantalla de Perfil muestra una sección de estadísticas agregadas de todas las rutas guardadas del usuario, reutilizando el patrón visual `.stat-tile`/`.stat-grid` ya usado en el cockpit.
+- [x] AC-029: Las estadísticas mostradas incluyen, como mínimo: kilómetros totales recorridos, tiempo total en moto, ruta más larga (por distancia), número total de rutas, y velocidad media histórica.
+- [x] AC-030: Las estadísticas se calculan únicamente a partir de rutas con `status = 'completed'` — las rutas `active` (en curso) y `archived` quedan excluidas del cálculo.
+- [x] AC-031: Si el usuario no tiene ninguna ruta completada guardada, la sección de estadísticas muestra un estado vacío coherente con el resto de la app (p. ej. "Todavía no hay rutas completadas"), sin errores ni valores `NaN`/`Infinity` visibles.
+- [x] AC-032: "Ruta más larga" muestra el nombre de la ruta con mayor `totalDistance` entre las completadas (o el nombre por defecto derivado de fecha/hora si no tiene nombre propio, mismo fallback que AC-007 de `mejoras-guardado-rutas.md`) junto con su distancia.
+- [x] AC-033: "Velocidad media histórica" se calcula como la media aritmética del campo `avgSpeed` de cada ruta completada (no como distancia total entre tiempo total), reutilizando el dato ya persistido por ruta.
+- [x] AC-034: Las clases `.stat-tile`/`.stat-grid` (hoy definidas únicamente en `cockpit.element.css`) se promueven a `src/shared/` como parte de esta feature, al ganar un segundo consumidor real (Perfil) — siguiendo la regla ya documentada en `frontend-conventions.md` §4 y `design-system.md` §10.10, sin cambiar su apariencia visual en el cockpit.
 
 ### Navegación e integración con `<nav-bar>`
-- [ ] AC-035: El botón "Perfil" de `<nav-bar>` (hoy sin acción, ver AC-008 de `botonera-navegacion.md`) navega a la nueva vista de Perfil al pulsarlo, dejando de ser un placeholder.
-- [ ] AC-036: Estando en la vista de Perfil, el botón "Perfil" de la nav-bar se marca como activo (mismo tratamiento visual `--amber` que ya reciben "Grabar"/"Rutas" al estar activos) y los otros dos botones quedan inactivos.
-- [ ] AC-037: Todos los controles interactivos nuevos (avatar, botón "Editar" de perfil, campo de nombre, botón "Cambiar foto", botón "Editar vehículo", selector de tipo, selects de marca/modelo, botones "Guardar"/"Cancelar" de ambos flujos de edición) llevan un atributo `data-cy` único y semántico siguiendo la convención `<contexto>-<tipo>-<accion>` del proyecto, añadido en el propio `.element.ts` al crearlos.
-- [ ] AC-038: Todos los controles interactivos de la pantalla de Perfil (avatar tocable, botones de edición, selects, botones "Guardar"/"Cancelar") cumplen la hitbox mínima de 56×56px.
+- [x] AC-035: El botón "Perfil" de `<nav-bar>` (hoy sin acción, ver AC-008 de `botonera-navegacion.md`) navega a la nueva vista de Perfil al pulsarlo, dejando de ser un placeholder.
+- [x] AC-036: Estando en la vista de Perfil, el botón "Perfil" de la nav-bar se marca como activo (mismo tratamiento visual `--amber` que ya reciben "Grabar"/"Rutas" al estar activos) y los otros dos botones quedan inactivos.
+- [x] AC-037: Todos los controles interactivos nuevos (avatar, botón "Editar" de perfil, campo de nombre, botón "Cambiar foto", botón "Editar vehículo", selector de tipo, selects de marca/modelo, botones "Guardar"/"Cancelar" de ambos flujos de edición) llevan un atributo `data-cy` único y semántico siguiendo la convención `<contexto>-<tipo>-<accion>` del proyecto, añadido en el propio `.element.ts` al crearlos.
+- [x] AC-038: Todos los controles interactivos de la pantalla de Perfil (avatar tocable, botones de edición, selects, botones "Guardar"/"Cancelar") cumplen la hitbox mínima de 56×56px.
 
 ## Comportamiento Esperado
 
