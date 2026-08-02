@@ -38,8 +38,20 @@ export function createBrowserGpsProvider(): GpsProvider {
       const id = navigator.geolocation.watchPosition(callback, () => { /* GPS error silently ignored */ });
       return (): void => { navigator.geolocation.clearWatch(id); };
     },
-    checkPermissions: (): Promise<boolean> => {
-      return Promise.resolve(navigator.geolocation !== null);
+    // Comprobar solo que `navigator.geolocation` existe (casi siempre true) dejaba
+    // `hasGpsPermission` en true de mentira tras revocarse el permiso a nivel de
+    // SO (p. ej. reinstalar el APK) — RecordingService.kt crasheaba la app entera
+    // al llamar startForeground sin permiso real. La Permissions API sí refleja
+    // el estado real; sin ella (WebView antiguo, jsdom) se mantiene el fallback previo.
+    checkPermissions: async (): Promise<boolean> => {
+      if (!navigator.geolocation) return false;
+      const permissions = (navigator as Navigator & { permissions?: Permissions }).permissions;
+      if (!permissions?.query) return true;
+      try {
+        return (await permissions.query({ name: 'geolocation' })).state === 'granted';
+      } catch {
+        return true;
+      }
     },
     requestPermissions: (): Promise<boolean> => {
       if (!navigator.geolocation) return Promise.resolve(false);
