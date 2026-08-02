@@ -155,9 +155,12 @@ operations:
         CSS inline salvo animación o posicionamiento dinámico justificado, y ningún
         color, fuente, espaciado o radio hardcodeado.
       - >-
-        Los tests E2E de Cypress están desactivados en el pre-commit por un problema del
-        entorno local, pero se mantienen en el proyecto y deben seguir pasando: si el
-        cambio toca UI, ejecutarlos a mano con pnpm run test:e2e antes de cerrar.
+        Los tests E2E de Cypress SÍ se ejecutan en el pre-commit (`.husky/pre-commit`,
+        vía `pnpm test:e2e`) y bloquean el commit si fallan — no son opcionales ni hay
+        que acordarse de correrlos a mano. Si el problema de entorno local que los
+        desactivaba en su día reaparece, correrlos a mano con `pnpm run test:e2e`
+        mientras se investiga, pero no dar un cambio por cerrado con Cypress en rojo
+        u omitido.
       - >-
         Si durante la implementación aparece un gap, una ambigüedad o una contradicción
         entre el código y los artefactos del cambio, detenerse y comunicarlo: o se

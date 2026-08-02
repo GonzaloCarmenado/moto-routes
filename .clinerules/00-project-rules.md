@@ -10,6 +10,14 @@ Este proyecto sigue **Spec-Driven Development con OpenSpec**. No se escribe cód
 
 Detalle navegable en `docs/` (`pnpm run docs`). Histórico del SDD anterior en `specs/` — congelado, ver `specs/README.md`.
 
+## Flujo de Git y Project
+
+- **Toda spec nueva empieza en su propia rama**: antes de `/opsx-propose`, crear `feature/<nombre-del-cambio>` desde `master`. No se trabaja directamente en `master` — mismo patrón que exigía el SDD anterior (`Ramas: feature/<nombre> desde main`), que la migración a OpenSpec no debía haber relajado.
+- **Todo cambio se cierra con un PR a `master`**, nunca con push directo — incluso después de un `/opsx-archive` con veredicto `APPROVED`/`APPROVED WITH MINOR ISSUES`. La descripción del PR referencia el `review.md` ya archivado en `openspec/changes/archive/<fecha>-<cambio>/`.
+- Un fix puntual sin cambio OpenSpec abierto (bug urgente, ajuste menor) sigue el mismo patrón: rama + PR, nunca directo a `master`.
+- **Esto es disciplina documentada, no un gate técnico**: ningún hook ni configuración de GitHub impide hoy saltárselo (decisión explícita — ver ADR-029 en `memory/decisions.md`). Es responsabilidad de quien commitea, agente o humano, cumplirlo igualmente.
+- **Project**: [github.com/orgs/crzverde/projects/1](https://github.com/orgs/crzverde/projects/1) ("Moto Routes"). Una card por **cambio de OpenSpec** (nunca una por tarea de `tasks.md` — eso ya se decidió que no, ver ADR-027), en el campo `Fase`: `Backlog` (idea sin `openspec/changes/` todavía) → `Propuesto` (`proposal.md` existe) → `En progreso` (`/opsx-apply` en marcha) → `En revisión` (`/opsx-archive` hecho y/o PR abierta sin mergear) → `Hecho` (PR mergeada). Gestión manual, a petición explícita — mismo criterio que rama/PR, sin automatización dentro de los skills (ver ADR-030).
+
 ## Memoria del proyecto (leer al empezar a trabajar aquí)
 
 `memory/` es memoria **del proyecto**. Nadie te la carga automáticamente — léela tú:
