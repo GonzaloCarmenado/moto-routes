@@ -42,3 +42,37 @@ describe('src-tauri/tauri.conf.json — CSP connect-src (AC-018, AC-019 habilita
     expect(connectSrc).not.toMatch(/https:\/\/\*\.nhtsa\.dot\.gov/);
   });
 });
+
+// index.html tiene su propia copia de la CSP en un meta tag, porque Tauri no la
+// inyecta ahí en runtime (ver CLAUDE.md §Seguridad) — hay que mantenerla igual
+// a mano, y ya hubo una desincronización real (sesión perfil-usuario, faltaba
+// vpic.nhtsa.dot.gov). Este test evita que se repita.
+const indexHtmlPath = resolve(process.cwd(), 'index.html');
+const indexHtml = readFileSync(indexHtmlPath, 'utf8');
+
+function extractIndexHtmlCsp(html: string): string {
+  const match = /<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]*)"/.exec(html);
+  if (!match?.[1]) {
+    throw new Error('CSP meta tag not found in index.html');
+  }
+  return match[1];
+}
+
+describe('CSP — sincronización tauri.conf.json / index.html y ausencia de unsafe-eval/unsafe-inline en script-src', () => {
+  it('the CSP in index.html matches the CSP in tauri.conf.json exactly', () => {
+    const indexCsp = extractIndexHtmlCsp(indexHtml);
+
+    expect(indexCsp).toBe(csp);
+  });
+
+  it('script-src does not allow unsafe-eval or unsafe-inline', () => {
+    const match = /script-src[^;]*;/.exec(csp);
+    if (!match) {
+      throw new Error('script-src directive not found in CSP');
+    }
+    const scriptSrc = match[0];
+
+    expect(scriptSrc).not.toContain('unsafe-eval');
+    expect(scriptSrc).not.toContain('unsafe-inline');
+  });
+});

@@ -1,5 +1,17 @@
 #!/usr/bin/env sh
 
+echo "🔒 Auditando vulnerabilidades (frontend)..."
+pnpm audit --audit-level=high || exit 1
+
+echo "🔒 Auditando vulnerabilidades (Rust)..."
+# RUSTSEC-2023-0071 (rsa, sin fix disponible): llega via sqlx-mysql, dependencia
+# transitiva de tauri-plugin-sql aunque este proyecto solo usa su feature
+# "sqlite" — la app nunca abre una conexión MySQL, así que la ruta de código
+# vulnerable (autenticación caching_sha2_password) es inalcanzable en runtime.
+# Reevaluar si tauri-plugin-sql cambia de versión. Ver design.md de
+# openspec/changes/auditoria-seguridad/ para el detalle completo.
+(cd src-tauri && cargo audit --ignore RUSTSEC-2023-0071) || exit 1
+
 echo "🔍 Ejecutando ESLint (frontend)..."
 npx eslint src/ --max-warnings 0 || exit 1
 
@@ -15,7 +27,7 @@ echo "🦀 Ejecutando Clippy (backend)..."
 echo "🦀 Ejecutando tests backend..."
 (cd src-tauri && cargo test) || exit 1
 
-# echo "🚀 Ejecutando tests E2E (Cypress) — levanta Vite en :1420 y ejecuta 30 tests headless..."
-# pnpm test:e2e || exit 1
+echo "🚀 Ejecutando tests E2E (Cypress) — levanta Vite en :1420 y ejecuta 30 tests headless..."
+pnpm test:e2e || exit 1
 
 echo "✅ Pre-commit checks superados"
