@@ -35,13 +35,13 @@ FASE 1 (Inicio de sesión):
   └── memory/context.md (~500 tokens)
       └── Solo metadata del proyecto: stack, estructura, estado actual
 
-FASE 2 (Al activar un feature):
-  └── specs/features/<feature>.md (~1000-2000 tokens)
-      └── Solo la spec del feature en el que se va a trabajar
+FASE 2 (Al abrir un cambio):
+  └── openspec/changes/<cambio>/proposal.md + specs/ (~1000-2000 tokens)
+      └── Solo los artefactos del cambio en el que se va a trabajar
 
-FASE 3 (Al implementar un paso):
-  └── specs/features/<feature>.plan.md (paso actual) (~500 tokens)
-      └── Solo el paso concreto, no todo el plan
+FASE 3 (Al implementar una tarea):
+  └── openspec/changes/<cambio>/tasks.md (tarea actual) (~500 tokens)
+      └── Solo la tarea concreta, no todo el plan
 
 FASE 4 (Al revisar):
   └── Spec + código a revisar (~2000-4000 tokens)
@@ -109,11 +109,11 @@ El archivo `memory/tokens.md` lleva un registro del consumo:
 - **Media por feature**: XX,XXX tokens
 
 ## Registro por Sesión
-| Fecha | Feature | Fase | Agente | Tokens (est.) | Notas |
-|-------|---------|------|--------|---------------|-------|
-| 2026-07-05 | auth | Spec | spec-agent | 3,200 | - |
-| 2026-07-05 | auth | Plan | plan-agent | 5,100 | - |
-| 2026-07-05 | auth | Impl | impl-agent | 8,400 | Paso 1 y 2 |
+| Fecha | Cambio | Operación | Tokens (est.) | Notas |
+|-------|--------|-----------|---------------|-------|
+| 2026-07-05 | auth | propose | 8,300 | proposal + specs + design + tasks |
+| 2026-07-05 | auth | apply | 8,400 | Tareas 1 y 2 |
+| 2026-07-05 | auth | archive | 4,100 | Gate de revisión |
 ```
 
 ### 5. Anti-Patrones que Desperdician Tokens

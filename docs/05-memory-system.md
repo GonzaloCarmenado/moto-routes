@@ -41,8 +41,8 @@ Proporcionar a Cline/DeepSeek TODO lo que necesita saber sobre el proyecto en ~5
 ```
 src/          # Código fuente
 tests/        # Tests
-specs/        # Especificaciones (SDD)
-agents/       # Skills de agentes
+openspec/     # Specs vivas y cambios (source of truth)
+specs/        # Histórico congelado del SDD anterior
 docs/         # Documentación de arquitectura
 memory/       # Sistema de memoria
 ```
@@ -89,8 +89,8 @@ src/
 ├── services/     # Lógica de negocio
 └── db/           # Migraciones y repositorios
 tests/
-specs/features/
-agents/
+openspec/specs/
+openspec/changes/
 docs/
 memory/
 ```
