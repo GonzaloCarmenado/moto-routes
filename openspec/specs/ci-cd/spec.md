@@ -2,7 +2,7 @@
 
 Dar al proyecto un CI/CD real en GitHub Actions que replique en un runner limpio, independiente del entorno de quien commitea, los mismos gates de calidad que ya exige `.husky/pre-commit` — y que, además, compile y publique el APK de Android como Release cuando se etiqueta una versión, sin depender del proceso manual y sujeto a gotchas de máquina local que existe hoy.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Los gates de calidad de TypeScript bloquean en cada push y pull request
 El job `quality-ts` de `.github/workflows/ci.yml` SHALL ejecutarse en cada push y en cada pull request, y SHALL fallar (estado rojo en GitHub) si cualquiera de sus pasos falla: `tsc --noEmit`, cobertura de documentación (`pnpm run docs:coverage`, umbral 70%), ESLint (`--max-warnings 0`), Vitest con cobertura (umbral 80%, mismos valores que `vitest.config.ts`), y los tests E2E de Cypress (`pnpm run test:e2e`).
@@ -71,7 +71,7 @@ El job `build-and-release` de `.github/workflows/ci.yml` SHALL ejecutarse única
 #### Scenario: El APK resultante se publica como asset del GitHub Release
 - **WHEN** el build de Android (`pnpm tauri android build --target aarch64 --debug`) termina con éxito
 - **THEN** el `.apk` generado queda adjunto como asset descargable en el Release de GitHub asociado al tag
-- **Nota de verificación**: verificación manual en el primer tag real que se publique (comprobar en github.com/crzverde/moto-routes/releases que el asset existe y es instalable) — no automatizable sin publicar un release de verdad.
+- **Nota de verificación**: verificado con un tag real de prueba (`v0.0.1-test`) durante la implementación de este cambio — el Release se creó con el asset `moto-routes-v0.0.1-test-arm64-debug.apk` adjunto, confirmado con `gh release view` y borrado después. No automatizable con Vitest/Cypress, requiere publicar un release de verdad.
 
 ### Requirement: El linker de Android en CI no depende de la ruta local de ninguna máquina de desarrollo
 El job `build-and-release` de `.github/workflows/ci.yml` SHALL fijar `CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER` como variable de entorno del propio job, apuntando al NDK instalado en el runner — SHALL NOT depender de ninguna ruta hardcodeada en `src-tauri/.cargo/config.toml` (que sigue existiendo tal cual para builds locales en Windows).
