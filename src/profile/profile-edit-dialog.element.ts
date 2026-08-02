@@ -54,6 +54,15 @@ class ProfileEditDialogElement extends BaseElement {
   private previewUrl: string | null = null;
   /** `blob:` URL creada por este diálogo (si la hay), para liberarla al cerrar. */
   private createdObjectUrl: string | null = null;
+  /** Nombre actual del input, seguido aparte de `this.options.name` para no perderlo si `render()` se llama a mitad de edición (p. ej. al mostrar el spinner de guardado). */
+  private currentName = '';
+  /**
+   * `true` mientras `handleSave()` está escribiendo la foto a disco y
+   * persistiendo — guardar una foto grande puede tardar perceptiblemente
+   * (AC-042); sin indicador visual, la UI parece colgada entre el click en
+   * "Guardar" y el cierre del modal.
+   */
+  private saving = false;
 
   private previewContainer: HTMLElement | null = null;
   private nameInput: HTMLInputElement | null = null;
@@ -64,7 +73,7 @@ class ProfileEditDialogElement extends BaseElement {
       this.trapFocus(event);
       return;
     }
-    if (event.key !== 'Escape') return;
+    if (event.key !== 'Escape' || this.saving) return;
     this.close('cancelled');
   };
 
@@ -108,6 +117,7 @@ class ProfileEditDialogElement extends BaseElement {
   open(options: ProfileEditDialogOptions): Promise<'saved' | 'cancelled'> {
     this.options = options;
     this.previewUrl = options.avatarUrl;
+    this.currentName = options.name ?? '';
     this.previouslyFocused = document.activeElement as HTMLElement | null;
     this.render();
     this.nameInput?.focus();
@@ -127,7 +137,7 @@ class ProfileEditDialogElement extends BaseElement {
   }
 
   private getCurrentName(): string | null {
-    return this.nameInput ? this.nameInput.value : (this.options?.name ?? null);
+    return this.nameInput ? this.nameInput.value : this.currentName;
   }
 
   private updatePreview(): void {
@@ -174,15 +184,25 @@ class ProfileEditDialogElement extends BaseElement {
     if (file) this.applyChosenPhoto(file);
   }
 
-  /** Guarda: escribe la foto a disco (si se cambió) y delega la persistencia en `onSave` (AC-009, AC-012). */
+  /**
+   * Guarda: escribe la foto a disco (si se cambió) y delega la persistencia
+   * en `onSave` (AC-009, AC-012). El nombre se captura de forma síncrona
+   * antes de mostrar el spinner de guardado (AC-042) — `render()` reconstruye
+   * `nameInput` desde `this.currentName`, así que hay que fijar ese valor
+   * primero o se perdería lo escrito por el usuario en el re-render.
+   */
   private async handleSave(): Promise<void> {
-    if (!this.options) return;
+    if (!this.options || this.saving) return;
+    const name = this.currentName;
+    this.saving = true;
+    this.render();
     try {
       const avatarPath = this.avatarFile ? await savePhotoFile(this.avatarFile) : null;
-      const name = this.nameInput?.value ?? '';
       await this.options.onSave({ avatarPath, name });
       this.close('saved');
     } catch {
+      this.saving = false;
+      this.render();
       showToast('No se pudo guardar el perfil. Inténtalo de nuevo.', 'error');
     }
   }
@@ -191,7 +211,7 @@ class ProfileEditDialogElement extends BaseElement {
     const overlay = document.createElement('div');
     overlay.className = 'overlay';
     overlay.setAttribute('data-cy', 'profile-edit-dialog-overlay');
-    overlay.addEventListener('click', () => { this.close('cancelled'); });
+    overlay.addEventListener('click', () => { if (!this.saving) this.close('cancelled'); });
     return overlay;
   }
 
@@ -212,6 +232,7 @@ class ProfileEditDialogElement extends BaseElement {
     btn.className = 'change-photo-btn';
     btn.setAttribute('data-cy', 'profile-btn-cambiar-foto');
     btn.textContent = 'Cambiar foto';
+    btn.disabled = this.saving;
     btn.addEventListener('click', (event) => {
       event.stopPropagation();
       this.toggleMenu();
@@ -269,8 +290,12 @@ class ProfileEditDialogElement extends BaseElement {
     input.setAttribute('data-cy', 'profile-input-nombre');
     input.setAttribute('maxlength', '100');
     input.setAttribute('aria-label', 'Nombre');
-    input.value = this.options?.name ?? '';
-    input.addEventListener('input', () => { this.updatePreview(); });
+    input.value = this.currentName;
+    input.disabled = this.saving;
+    input.addEventListener('input', () => {
+      this.currentName = input.value;
+      this.updatePreview();
+    });
     this.nameInput = input;
     field.appendChild(input);
 
@@ -286,18 +311,35 @@ class ProfileEditDialogElement extends BaseElement {
     cancelBtn.className = 'action action--danger';
     cancelBtn.setAttribute('data-cy', 'profile-btn-cancelar-perfil');
     cancelBtn.textContent = 'Cancelar';
+    cancelBtn.disabled = this.saving;
     cancelBtn.addEventListener('click', () => { this.close('cancelled'); });
     actions.appendChild(cancelBtn);
 
+    actions.appendChild(this.buildSaveButton());
+
+    return actions;
+  }
+
+  /** Botón "Guardar": muestra un spinner en vez del texto mientras `handleSave()` está en curso (AC-042). */
+  private buildSaveButton(): HTMLButtonElement {
     const saveBtn = document.createElement('button');
     saveBtn.type = 'button';
     saveBtn.className = 'action action--primary';
+    if (this.saving) saveBtn.classList.add('is-saving');
     saveBtn.setAttribute('data-cy', 'profile-btn-guardar-perfil');
-    saveBtn.textContent = 'Guardar';
+    saveBtn.disabled = this.saving;
+    saveBtn.setAttribute('aria-busy', this.saving ? 'true' : 'false');
+    if (this.saving) {
+      saveBtn.setAttribute('aria-label', 'Guardando…');
+      const spinner = document.createElement('span');
+      spinner.className = 'spinner';
+      spinner.setAttribute('aria-hidden', 'true');
+      saveBtn.appendChild(spinner);
+    } else {
+      saveBtn.textContent = 'Guardar';
+    }
     saveBtn.addEventListener('click', () => { void this.handleSave(); });
-    actions.appendChild(saveBtn);
-
-    return actions;
+    return saveBtn;
   }
 
   private buildDialog(): HTMLElement {
