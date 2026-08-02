@@ -51,6 +51,12 @@ function selectValue(dataCy: string, value: string): void {
   });
 }
 
+/** Elige una marca en el buscador (sustituye al `<select>` nativo, AC-040): escribe el texto y hace click en la opción exacta. */
+function chooseMake(make: string): void {
+  cy.get('[data-cy="profile-input-buscar-marca"]').clear().type(make);
+  cy.get('[data-cy="profile-marca-options"]').contains('[data-cy="profile-marca-option"]', make).click();
+}
+
 describe('Perfil - Navegación, avatar/nombre, vehículo (vPIC) y estadísticas', () => {
   it('navigates to the Profile view from the nav-bar and marks the Perfil button active (AC-035, AC-036)', () => {
     cy.visit('/');
@@ -109,7 +115,7 @@ describe('Perfil - Navegación, avatar/nombre, vehículo (vPIC) y estadísticas'
     cy.get('[data-cy="profile-name"]').should('contain', 'Marc').and('not.contain', 'Otro Nombre');
   });
 
-  it('configures a vehicle from scratch through the vPIC cascade type → make → model (AC-016..AC-019, AC-021)', () => {
+  it('configures a vehicle from scratch through the vPIC cascade type → make → model, with the make search/curation (AC-016..AC-019, AC-021, AC-040, AC-041)', () => {
     cy.intercept('GET', '**/GetMakesForVehicleType/**', { fixture: 'vpic-makes-motorcycle.json' }).as('getMakes');
     cy.intercept('GET', '**/GetModelsForMake/**', { fixture: 'vpic-models-honda.json' }).as('getModels');
 
@@ -121,15 +127,29 @@ describe('Perfil - Navegación, avatar/nombre, vehículo (vPIC) y estadísticas'
 
     // Selector de tipo siempre visible desde la primera configuración (AC-017)
     cy.get('[data-cy="profile-select-tipo-vehiculo"]').should('be.visible');
-    cy.get('[data-cy="profile-select-marca"]').should('be.disabled');
+    cy.get('[data-cy="profile-input-buscar-marca"]').should('be.disabled');
     cy.get('[data-cy="profile-select-modelo"]').should('be.disabled');
 
     selectValue('profile-select-tipo-vehiculo', 'motorcycle');
     cy.get('[data-cy="profile-select-tipo-vehiculo"]').should('have.value', 'motorcycle');
     cy.wait('@getMakes');
-    cy.get('[data-cy="profile-select-marca"]').should('not.be.disabled');
-    selectValue('profile-select-marca', 'HONDA');
-    cy.get('[data-cy="profile-select-marca"]').should('have.value', 'HONDA');
+    cy.get('[data-cy="profile-input-buscar-marca"]').should('not.be.disabled');
+
+    // Sin texto de búsqueda, las marcas conocidas (HONDA, YAMAHA) van antes que las
+    // marcas minoritarias del fixture (BAY CITY CHOPPERS, BLUE GHOST CYCLES) (AC-041).
+    cy.get('[data-cy="profile-marca-option"]').then(($opts) => {
+      const names = $opts.toArray().map((el) => el.textContent);
+      expect(names.indexOf('HONDA')).to.be.lessThan(names.indexOf('BAY CITY CHOPPERS'));
+      expect(names.indexOf('YAMAHA')).to.be.lessThan(names.indexOf('BLUE GHOST CYCLES'));
+    });
+
+    // El buscador filtra la lista sin volver a llamar a vPIC (AC-040)
+    cy.get('[data-cy="profile-input-buscar-marca"]').clear().type('blue');
+    cy.get('[data-cy="profile-marca-option"]').should('have.length', 1).and('contain', 'BLUE GHOST CYCLES');
+    cy.get('@getMakes.all').should('have.length', 1);
+
+    chooseMake('HONDA');
+    cy.get('[data-cy="profile-input-buscar-marca"]').should('have.value', 'HONDA');
     cy.wait('@getModels');
     cy.get('[data-cy="profile-select-modelo"]').should('not.be.disabled');
     selectValue('profile-select-modelo', 'CB500X');
@@ -140,6 +160,28 @@ describe('Perfil - Navegación, avatar/nombre, vehículo (vPIC) y estadísticas'
     // El modal se cierra y "Mi vehículo" muestra el vehículo guardado sin volver a consultar la API (AC-021, AC-024)
     cy.get('[data-cy="profile-select-tipo-vehiculo"]').should('not.exist');
     cy.get('[data-cy="profile-vehicle-summary"]').should('contain', 'Moto · HONDA CB500X');
+  });
+
+  it('editing an already-configured vehicle preloads makes/models without the user touching the type select (AC-039)', () => {
+    cy.intercept('GET', '**/GetMakesForVehicleType/**', { fixture: 'vpic-makes-motorcycle.json' }).as('getMakes');
+    cy.intercept('GET', '**/GetModelsForMake/**', { fixture: 'vpic-models-honda.json' }).as('getModels');
+
+    const profile = buildProfile({
+      name: 'Marc',
+      vehicleType: 'motorcycle',
+      vehicleMake: 'HONDA',
+      vehicleModel: 'CB500X',
+    });
+    cy.visitWithSeed({ profile });
+    openProfile();
+    cy.get('[data-cy="profile-btn-editar-vehiculo"]').click();
+
+    // Sin tocar el select de tipo: marca y modelo deben llegar ya cargados y seleccionados.
+    cy.wait('@getMakes');
+    cy.wait('@getModels');
+    cy.get('[data-cy="profile-input-buscar-marca"]').should('have.value', 'HONDA');
+    cy.get('[data-cy="profile-select-modelo"]').should('not.be.disabled').and('have.value', 'CB500X');
+    cy.get('[data-cy="profile-btn-guardar-vehiculo"]').should('not.be.disabled');
   });
 
   it('changing the vehicle type mid-edit discards make/model and resets the cascade (AC-022)', () => {
@@ -155,14 +197,14 @@ describe('Perfil - Navegación, avatar/nombre, vehículo (vPIC) y estadísticas'
 
     selectValue('profile-select-tipo-vehiculo', 'motorcycle');
     cy.wait('@getMakes');
-    cy.get('[data-cy="profile-select-marca"]').should('not.be.disabled');
-    selectValue('profile-select-marca', 'HONDA');
+    cy.get('[data-cy="profile-input-buscar-marca"]').should('not.be.disabled');
+    chooseMake('HONDA');
     cy.wait('@getModels');
     cy.get('[data-cy="profile-select-modelo"]').should('not.be.disabled');
 
     // Cambiar a "Coche" a mitad de edición: la marca se recarga y el modelo vuelve a deshabilitado/vacío (AC-022)
     selectValue('profile-select-tipo-vehiculo', 'car');
-    cy.get('[data-cy="profile-select-marca"]').should('not.be.disabled');
+    cy.get('[data-cy="profile-input-buscar-marca"]').should('not.be.disabled').and('have.value', '');
     cy.get('[data-cy="profile-select-modelo"]').should('be.disabled');
     cy.get('[data-cy="profile-select-modelo"] option:selected').should('have.value', '');
   });
@@ -182,8 +224,8 @@ describe('Perfil - Navegación, avatar/nombre, vehículo (vPIC) y estadísticas'
     cy.get('[data-cy="profile-vehicle-summary"]').should('contain', 'Moto · HONDA CB500X');
     cy.get('[data-cy="profile-btn-editar-vehiculo"]').click();
 
-    // El tipo está precargado desde el vehículo guardado; elegir un tipo distinto fuerza una petición nueva
-    selectValue('profile-select-tipo-vehiculo', 'car');
+    // Abrir "Editar vehículo" ya precarga la marca del tipo guardado (AC-017): con
+    // vPIC caído, el error aparece de inmediato, sin necesidad de tocar el tipo.
     cy.get('[data-cy="profile-vehicle-status"]').should('be.visible');
     cy.get('[data-cy="profile-btn-reintentar-vehiculo"]').should('be.visible').and('contain', 'Reintentar');
 

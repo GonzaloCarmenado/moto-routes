@@ -9,6 +9,7 @@
  * `createElement`/`appendChild`, nunca `innerHTML`.
  */
 import type { VehicleType } from '../shared/models/index.js';
+import { buildMakeOptionsList } from './profile-vehicle-dialog.transform.js';
 
 /**
  * Etiquetas visibles de cada tipo de vehículo (AC-017). Exportada para que
@@ -32,9 +33,17 @@ export interface VehicleSelectState {
   selectedMake: string | null;
   selectedModel: string | null;
   status: VehicleDialogStatus;
+  /** Texto escrito en el buscador de marca — vPIC no soporta filtro server-side, se filtra en cliente. */
+  makeQuery: string;
 }
 
-/** Envuelve un control en su `<div class="field">` con `<label>` asociada por `id`. */
+/**
+ * Envuelve un control en su `<div class="field">` con `<label>` asociada por
+ * `id`. `control` puede ser el propio elemento de formulario (selects) o un
+ * wrapper con un `input`/`select` dentro (combobox de marca) — en ambos
+ * casos, el `id` se asigna al elemento de formulario real para que la
+ * asociación `<label for>` funcione.
+ */
 export function buildVehicleField(labelText: string, id: string, control: HTMLElement): HTMLElement {
   const field = document.createElement('div');
   field.className = 'field';
@@ -45,7 +54,8 @@ export function buildVehicleField(labelText: string, id: string, control: HTMLEl
   label.setAttribute('for', id);
   field.appendChild(label);
 
-  control.id = id;
+  const formTarget = control.matches('input, select') ? control : control.querySelector('input, select');
+  if (formTarget) formTarget.id = id;
   field.appendChild(control);
 
   return field;
@@ -76,39 +86,101 @@ export function buildTypeSelect(state: VehicleSelectState, onChange: (value: str
   return select;
 }
 
-/** Select de marca: deshabilitado hasta elegir tipo, en estado de carga mientras `fetchVehicleMakes` está en vuelo (AC-018, AC-020). */
-export function buildMakeSelect(state: VehicleSelectState, onChange: (value: string) => void): HTMLSelectElement {
-  const select = document.createElement('select');
-  select.className = 'select';
-  select.setAttribute('data-cy', 'profile-select-marca');
-  select.setAttribute('aria-label', 'Marca del vehículo');
+/**
+ * Buscador de marca: deshabilitado hasta elegir tipo, en estado de carga
+ * mientras `fetchVehicleMakes` está en vuelo (AC-018, AC-020). vPIC no
+ * soporta ningún filtro server-side (siempre devuelve la lista completa,
+ * incluyendo fabricantes muy minoritarios) — el filtro de texto y la
+ * priorización de marcas conocidas ocurren en cliente vía
+ * `buildMakeOptionsList` (`profile-vehicle-dialog.transform.ts`). Sustituye
+ * al `<select>` nativo (usado en `buildModelSelect`/`buildTypeSelect`)
+ * porque una lista de cientos de marcas es inutilizable sin buscador,
+ * especialmente en un `<select>` táctil de móvil.
+ */
+export function buildMakeCombobox(
+  state: VehicleSelectState,
+  onQueryChange: (value: string) => void,
+  onSelect: (value: string) => void,
+): HTMLElement {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'make-combobox';
 
   const isLoading = state.status === 'loading-makes';
-  select.disabled = !state.type || isLoading;
+  const disabled = !state.type || isLoading;
 
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'select make-search-input';
+  input.setAttribute('data-cy', 'profile-input-buscar-marca');
+  input.setAttribute('aria-label', 'Buscar marca');
+  input.setAttribute('role', 'combobox');
+  input.setAttribute('aria-expanded', 'true');
+  input.setAttribute('autocomplete', 'off');
+  input.placeholder = isLoading ? 'Cargando marcas…' : 'Buscar marca…';
+  input.disabled = disabled;
+  input.value = state.makeQuery;
   if (isLoading) {
-    select.classList.add('is-loading');
-    select.setAttribute('aria-busy', 'true');
-    const loadingOption = document.createElement('option');
-    loadingOption.value = '';
-    loadingOption.textContent = 'Cargando marcas…';
-    select.appendChild(loadingOption);
-  } else {
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = 'Selecciona una marca';
-    select.appendChild(placeholder);
-    for (const make of state.makes) {
-      const option = document.createElement('option');
-      option.value = make;
-      option.textContent = make;
-      select.appendChild(option);
-    }
+    input.classList.add('is-loading');
+    input.setAttribute('aria-busy', 'true');
+  }
+  input.addEventListener('input', () => { onQueryChange(input.value); });
+  wrapper.appendChild(input);
+
+  if (!isLoading && state.type) {
+    wrapper.appendChild(buildMakeOptionsListbox(state, onSelect));
   }
 
-  select.value = state.selectedMake ?? '';
-  select.addEventListener('change', () => { onChange(select.value); });
-  return select;
+  return wrapper;
+}
+
+/**
+ * Listado desplegable de marcas filtradas/priorizadas, usado por
+ * `buildMakeCombobox` y también reconstruido de forma aislada (sin recrear
+ * el `<input>` de búsqueda ni pasar por el `render()` completo del diálogo)
+ * cada vez que el usuario teclea — ver `handleMakeQueryChange` en
+ * `profile-vehicle-dialog.element.ts`: un `render()` completo en cada pulsación
+ * destruye y recrea el propio `<input>`, perdiendo el foco/cursor mientras
+ * se escribe (bug real, no solo un problema de test).
+ */
+export function buildMakeOptionsListbox(state: VehicleSelectState, onSelect: (value: string) => void): HTMLElement {
+  const listbox = document.createElement('div');
+  listbox.className = 'make-options';
+  listbox.setAttribute('role', 'listbox');
+  listbox.setAttribute('data-cy', 'profile-marca-options');
+  listbox.setAttribute('aria-label', 'Marcas disponibles');
+
+  const options = buildMakeOptionsList(state.makes, state.makeQuery);
+  if (options.length === 0) {
+    listbox.appendChild(buildMakeOptionsEmpty());
+    return listbox;
+  }
+
+  for (const make of options) {
+    listbox.appendChild(buildMakeOption(make, make === state.selectedMake, onSelect));
+  }
+
+  return listbox;
+}
+
+function buildMakeOptionsEmpty(): HTMLElement {
+  const empty = document.createElement('p');
+  empty.className = 'make-options-empty';
+  empty.setAttribute('data-cy', 'profile-marca-empty');
+  empty.textContent = 'No se encontraron marcas con ese nombre';
+  return empty;
+}
+
+function buildMakeOption(make: string, isSelected: boolean, onSelect: (value: string) => void): HTMLButtonElement {
+  const option = document.createElement('button');
+  option.type = 'button';
+  option.className = 'make-option';
+  option.setAttribute('role', 'option');
+  option.setAttribute('data-cy', 'profile-marca-option');
+  option.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+  if (isSelected) option.classList.add('is-selected');
+  option.textContent = make;
+  option.addEventListener('click', () => { onSelect(make); });
+  return option;
 }
 
 /** Select de modelo: deshabilitado hasta elegir marca, en estado de carga mientras `fetchVehicleModels` está en vuelo (AC-019, AC-020). */

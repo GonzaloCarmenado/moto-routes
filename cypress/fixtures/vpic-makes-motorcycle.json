@@ -1,9 +1,11 @@
 {
-  "Count": 2,
+  "Count": 4,
   "Message": "Results returned successfully",
   "SearchCriteria": "VehType:motorcycle",
   "Results": [
     { "MakeId": 468, "MakeName": "HONDA", "VehicleTypeId": 2, "VehicleTypeName": "Motorcycle" },
-    { "MakeId": 474, "MakeName": "YAMAHA", "VehicleTypeId": 2, "VehicleTypeName": "Motorcycle" }
+    { "MakeId": 474, "MakeName": "YAMAHA", "VehicleTypeId": 2, "VehicleTypeName": "Motorcycle" },
+    { "MakeId": 9721, "MakeName": "BAY CITY CHOPPERS", "VehicleTypeId": 2, "VehicleTypeName": "Motorcycle" },
+    { "MakeId": 9722, "MakeName": "BLUE GHOST CYCLES", "VehicleTypeId": 2, "VehicleTypeName": "Motorcycle" }
   ]
 }

@@ -164,7 +164,9 @@ describe('profile-view — vista principal', () => {
     selectValue(dialog.shadowRoot!.querySelector('[data-cy="profile-select-tipo-vehiculo"]')!, 'motorcycle');
     await waitRender();
 
-    selectValue(dialog.shadowRoot!.querySelector('[data-cy="profile-select-marca"]')!, 'Honda');
+    const makeOption = Array.from(dialog.shadowRoot!.querySelectorAll<HTMLButtonElement>('[data-cy="profile-marca-option"]'))
+      .find((btn) => btn.textContent === 'Honda');
+    makeOption?.click();
     await waitRender();
 
     selectValue(dialog.shadowRoot!.querySelector('[data-cy="profile-select-modelo"]')!, 'CB500X');
