@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach, afterAll } from 'vitest';
 import type * as ExternalApiServiceModule from '../shared/http/external-api.service.js';
 
 const { fetchJsonMock } = vi.hoisted(() => ({ fetchJsonMock: vi.fn() }));
@@ -37,7 +37,7 @@ describe('fetchVehicleMakes', () => {
     );
   });
 
-  it('devuelve solo los nombres de marca, ordenados alfabéticamente', async () => {
+  it('devuelve id + nombre de cada marca, ordenadas alfabéticamente por nombre', async () => {
     fetchJsonMock.mockResolvedValue({
       Results: [
         { MakeId: 2, MakeName: 'Yamaha' },
@@ -47,7 +47,10 @@ describe('fetchVehicleMakes', () => {
 
     const result = await fetchVehicleMakes('motorcycle');
 
-    expect(result).toEqual(['Honda', 'Yamaha']);
+    expect(result).toEqual([
+      { id: 1, name: 'Honda' },
+      { id: 2, name: 'Yamaha' },
+    ]);
   });
 
   it('propaga un ExternalApiError sin envolverlo si fetchJson rechaza', async () => {
@@ -62,65 +65,72 @@ describe('fetchVehicleMakes', () => {
 });
 
 describe('fetchVehicleModels', () => {
+  const REAL_YEAR = 2026;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(`${String(REAL_YEAR)}-01-15T00:00:00Z`));
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it('llama a fetchJson con la URL exacta para la marca dada', async () => {
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
+  it('llama primero a GetModelsForMakeIdYear con el makeId, el año actual y el tipo de vehículo', async () => {
     fetchJsonMock.mockResolvedValue({ Results: [] } satisfies VpicModelResult);
 
-    await fetchVehicleModels('Honda', 'motorcycle');
+    await fetchVehicleModels(474, 'Honda', 'motorcycle');
 
     expect(fetchJsonMock).toHaveBeenCalledWith(
-      'https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMake/Honda?format=json',
+      `https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMakeIdYear/makeId/474/modelyear/${String(REAL_YEAR)}/vehicletype/motorcycle?format=json`,
     );
   });
 
-  it('filtra por tipo de vehículo cuando la respuesta sí trae VehicleTypeName', async () => {
-    fetchJsonMock.mockResolvedValue({
+  it('devuelve los modelos ya filtrados por vPIC cuando GetModelsForMakeIdYear trae resultados, sin llamar al fallback', async () => {
+    fetchJsonMock.mockResolvedValueOnce({
       Results: [
-        {
-          Make_ID: 1,
-          Make_Name: 'Honda',
-          Model_ID: 1,
-          Model_Name: 'CB500X',
-          VehicleTypeName: 'Motorcycle',
-        },
-        {
-          Make_ID: 1,
-          Make_Name: 'Honda',
-          Model_ID: 2,
-          Model_Name: 'Civic',
-          VehicleTypeName: 'Passenger Car',
-        },
+        { Make_ID: 474, Make_Name: 'Honda', Model_ID: 1, Model_Name: 'CB500X', VehicleTypeName: 'Motorcycle' },
+        { Make_ID: 474, Make_Name: 'Honda', Model_ID: 2, Model_Name: 'Gold Wing', VehicleTypeName: 'Motorcycle' },
       ],
     } satisfies VpicModelResult);
 
-    const result = await fetchVehicleModels('Honda', 'motorcycle');
+    const result = await fetchVehicleModels(474, 'Honda', 'motorcycle');
 
-    expect(result).toEqual(['CB500X']);
+    expect(result).toEqual(['CB500X', 'Gold Wing']);
+    expect(fetchJsonMock).toHaveBeenCalledTimes(1);
   });
 
-  it('devuelve todos los modelos sin filtrar cuando ninguno trae campo de tipo (shape real de la API)', async () => {
-    fetchJsonMock.mockResolvedValue({
-      Results: [
-        { Make_ID: 1, Make_Name: 'Honda', Model_ID: 1, Model_Name: 'CB500X' },
-        { Make_ID: 1, Make_Name: 'Honda', Model_ID: 2, Model_Name: 'CBR600RR' },
-      ],
-    } satisfies VpicModelResult);
+  it('cae al endpoint sin filtrar (GetModelsForMake) cuando GetModelsForMakeIdYear no devuelve nada', async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ Results: [] } satisfies VpicModelResult)
+      .mockResolvedValueOnce({
+        Results: [
+          { Make_ID: 474, Make_Name: 'Honda', Model_ID: 1, Model_Name: 'CB500X' },
+          { Make_ID: 474, Make_Name: 'Honda', Model_ID: 2, Model_Name: 'Civic' },
+        ],
+      } satisfies VpicModelResult);
 
-    const result = await fetchVehicleModels('Honda', 'motorcycle');
+    const result = await fetchVehicleModels(474, 'Honda', 'motorcycle');
 
-    expect(result).toEqual(['CB500X', 'CBR600RR']);
+    expect(fetchJsonMock).toHaveBeenNthCalledWith(
+      2,
+      'https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMake/Honda?format=json',
+    );
+    expect(result).toEqual(['CB500X', 'Civic']);
   });
 
-  it('propaga un ExternalApiError sin envolverlo si fetchJson rechaza', async () => {
+  it('propaga un ExternalApiError sin envolverlo ni intentar el fallback si GetModelsForMakeIdYear rechaza', async () => {
     const error = new ExternalApiError('timeout', 'boom');
     fetchJsonMock.mockRejectedValue(error);
 
-    const promise = fetchVehicleModels('Honda', 'motorcycle');
+    const promise = fetchVehicleModels(474, 'Honda', 'motorcycle');
 
     await expect(promise).rejects.toBe(error);
     await expect(promise).rejects.toMatchObject({ kind: 'timeout' });
+    expect(fetchJsonMock).toHaveBeenCalledTimes(1);
   });
 });

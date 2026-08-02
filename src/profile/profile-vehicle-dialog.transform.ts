@@ -5,6 +5,7 @@
  * completa) y traducción de errores de red a mensajes de usuario.
  */
 import { ExternalApiError } from '../shared/http/external-api.service.js';
+import type { VehicleMake } from './vpic.service.js';
 
 /**
  * Marcas de moto/coche ampliamente conocidas o internacionales, mostradas
@@ -47,16 +48,17 @@ export function isKnownMake(makeName: string): boolean {
  * @param query - Texto de búsqueda tal como lo escribió el usuario.
  * @returns Las marcas a mostrar, en el orden final.
  */
-export function buildMakeOptionsList(makes: string[], query: string): string[] {
+export function buildMakeOptionsList(makes: VehicleMake[], query: string): VehicleMake[] {
+  const byName = (a: VehicleMake, b: VehicleMake): number => a.name.localeCompare(b.name);
   const trimmed = query.trim().toLowerCase();
   if (trimmed === '') {
-    const known = makes.filter(isKnownMake).sort((a, b) => a.localeCompare(b));
-    const rest = makes.filter((m) => !isKnownMake(m)).sort((a, b) => a.localeCompare(b));
+    const known = makes.filter((m) => isKnownMake(m.name)).sort(byName);
+    const rest = makes.filter((m) => !isKnownMake(m.name)).sort(byName);
     return [...known, ...rest];
   }
   return makes
-    .filter((m) => m.toLowerCase().includes(trimmed))
-    .sort((a, b) => a.localeCompare(b));
+    .filter((m) => m.name.toLowerCase().includes(trimmed))
+    .sort(byName);
 }
 
 /**

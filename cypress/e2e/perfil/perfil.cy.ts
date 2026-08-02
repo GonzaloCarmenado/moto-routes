@@ -117,7 +117,7 @@ describe('Perfil - Navegación, avatar/nombre, vehículo (vPIC) y estadísticas'
 
   it('configures a vehicle from scratch through the vPIC cascade type → make → model, with the make search/curation (AC-016..AC-019, AC-021, AC-040, AC-041)', () => {
     cy.intercept('GET', '**/GetMakesForVehicleType/**', { fixture: 'vpic-makes-motorcycle.json' }).as('getMakes');
-    cy.intercept('GET', '**/GetModelsForMake/**', { fixture: 'vpic-models-honda.json' }).as('getModels');
+    cy.intercept('GET', '**/GetModelsForMakeIdYear/**', { fixture: 'vpic-models-honda.json' }).as('getModels');
 
     cy.visitWithSeed({ profile: buildProfile({ name: 'Marc' }) });
     openProfile();
@@ -164,7 +164,7 @@ describe('Perfil - Navegación, avatar/nombre, vehículo (vPIC) y estadísticas'
 
   it('editing an already-configured vehicle preloads makes/models without the user touching the type select (AC-039)', () => {
     cy.intercept('GET', '**/GetMakesForVehicleType/**', { fixture: 'vpic-makes-motorcycle.json' }).as('getMakes');
-    cy.intercept('GET', '**/GetModelsForMake/**', { fixture: 'vpic-models-honda.json' }).as('getModels');
+    cy.intercept('GET', '**/GetModelsForMakeIdYear/**', { fixture: 'vpic-models-honda.json' }).as('getModels');
 
     const profile = buildProfile({
       name: 'Marc',
@@ -189,7 +189,7 @@ describe('Perfil - Navegación, avatar/nombre, vehículo (vPIC) y estadísticas'
     // es indiferente para esta aserción, que solo comprueba que la marca se recarga y
     // que el modelo vuelve a vacío/deshabilitado al cambiar el tipo.
     cy.intercept('GET', '**/GetMakesForVehicleType/**', { fixture: 'vpic-makes-motorcycle.json' }).as('getMakes');
-    cy.intercept('GET', '**/GetModelsForMake/**', { fixture: 'vpic-models-honda.json' }).as('getModels');
+    cy.intercept('GET', '**/GetModelsForMakeIdYear/**', { fixture: 'vpic-models-honda.json' }).as('getModels');
 
     cy.visitWithSeed({ profile: buildProfile({ name: 'Marc' }) });
     openProfile();

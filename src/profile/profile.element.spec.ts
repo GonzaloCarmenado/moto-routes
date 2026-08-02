@@ -152,7 +152,7 @@ describe('profile-view — vista principal', () => {
   });
 
   it('after saving profile-vehicle-dialog, "Mi vehículo" updates without any additional vPIC call (AC-016, AC-021, AC-024)', async () => {
-    vi.mocked(fetchVehicleMakes).mockResolvedValue(['Honda']);
+    vi.mocked(fetchVehicleMakes).mockResolvedValue([{ id: 474, name: 'Honda' }]);
     vi.mocked(fetchVehicleModels).mockResolvedValue(['CB500X']);
     const profileRepo = new MemoryProfileRepository();
     const view = await createView(profileRepo, new MemoryRouteRepository());

@@ -6,7 +6,7 @@
 
 /** Un resultado individual de `GetMakesForVehicleType`. */
 export interface VpicMakeEntry {
-  /** Identificador numérico de la marca en vPIC (no usado hoy, documentado por completitud). */
+  /** Identificador numérico de la marca en vPIC — necesario para `GetModelsForMakeIdYear` (ver `fetchVehicleModels`). */
   MakeId: number;
   /** Nombre de la marca, tal como lo expone la API. */
   MakeName: string;
@@ -19,10 +19,10 @@ export interface VpicMakeResult {
 }
 
 /**
- * Un resultado individual de `GetModelsForMake`. El campo `VehicleTypeName`
- * es opcional y best-effort: la documentación pública de vPIC indica que
- * este endpoint concreto normalmente NO lo incluye (ver decisión de diseño
- * #10 de `perfil-usuario.plan.md`) — se modela por si la API lo añadiera.
+ * Un resultado individual de `GetModelsForMakeIdYear` (con `vehicletype` en
+ * la ruta) o de `GetModelsForMake` (fallback sin filtrar). `VehicleTypeName`
+ * solo viene informado por el primero — verificado contra la API real
+ * (`curl`) el 2026-08-02: `GetModelsForMake` nunca lo incluye.
  */
 export interface VpicModelEntry {
   /** Identificador de la marca asociada al modelo. */
@@ -33,11 +33,11 @@ export interface VpicModelEntry {
   Model_ID: number;
   /** Nombre del modelo, tal como lo expone la API. */
   Model_Name: string;
-  /** Tipo de vehículo del modelo, si la API lo incluye (best-effort, ver JSDoc de la interfaz). */
+  /** Tipo de vehículo del modelo — presente solo en `GetModelsForMakeIdYear`. */
   VehicleTypeName?: string;
 }
 
-/** Respuesta de `GET /vehicles/GetModelsForMake/{make}?format=json`. */
+/** Respuesta de `GetModelsForMakeIdYear` (filtrada por tipo) o `GetModelsForMake` (sin filtrar, fallback). */
 export interface VpicModelResult {
   /** Listado de modelos de la marca consultada. */
   Results: VpicModelEntry[];

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { openVehicleEditDialog } from './profile-vehicle-dialog.element.js';
-import { fetchVehicleMakes, fetchVehicleModels } from './vpic.service.js';
+import { fetchVehicleMakes, fetchVehicleModels, type VehicleMake } from './vpic.service.js';
 import { ExternalApiError } from '../shared/http/external-api.service.js';
 
 vi.mock('./vpic.service.js', () => ({
@@ -15,6 +15,13 @@ vi.mock('./vpic.service.js', () => ({
 // mismo patrón que `profile-edit-dialog.element.spec.ts`.
 const cssPath = resolve(process.cwd(), 'src/profile/profile-vehicle-dialog.element.css');
 const dialogStyles = readFileSync(cssPath, 'utf8');
+
+/** Ids fijos de marca para los tests — vPIC los asigna de verdad, aquí solo hace falta que sean estables. */
+const HONDA: VehicleMake = { id: 474, name: 'HONDA' };
+const YAMAHA: VehicleMake = { id: 475, name: 'YAMAHA' };
+const SEAT: VehicleMake = { id: 476, name: 'SEAT' };
+const BAY_CITY_CHOPPERS: VehicleMake = { id: 9721, name: 'BAY CITY CHOPPERS' };
+const ZERO_MOTORCYCLES: VehicleMake = { id: 9723, name: 'ZERO MOTORCYCLES' };
 
 function getDialog(): HTMLElement {
   const el = document.body.querySelector('profile-vehicle-dialog');
@@ -93,7 +100,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
   });
 
   it('preloads makes and models automatically when editing an already-saved vehicle, without the user touching the type select (AC-039)', async () => {
-    vi.mocked(fetchVehicleMakes).mockResolvedValue(['HONDA', 'YAMAHA']);
+    vi.mocked(fetchVehicleMakes).mockResolvedValue([HONDA, YAMAHA]);
     vi.mocked(fetchVehicleModels).mockResolvedValue(['CB500X', 'CBR600RR']);
 
     void openVehicleEditDialog({
@@ -104,11 +111,22 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
     await flush();
 
     expect(fetchVehicleMakes).toHaveBeenCalledWith('motorcycle');
-    expect(fetchVehicleModels).toHaveBeenCalledWith('HONDA', 'motorcycle');
+    expect(fetchVehicleModels).toHaveBeenCalledWith(HONDA.id, HONDA.name, 'motorcycle');
     const refreshed = getDialog();
     expect(makeSearchInput(refreshed).value).toBe('HONDA');
     expect(modelSelect(refreshed).disabled).toBe(false);
     expect(modelSelect(refreshed).value).toBe('CB500X');
+  });
+
+  it('does not attempt to preload models when the saved make is no longer present in the current catalog', async () => {
+    vi.mocked(fetchVehicleMakes).mockResolvedValue([YAMAHA]);
+
+    void openVehicleEditDialog({
+      current: { vehicleType: 'motorcycle', vehicleMake: 'HONDA', vehicleModel: 'CB500X' },
+    });
+    await flush();
+
+    expect(fetchVehicleModels).not.toHaveBeenCalled();
   });
 
   it('does not attempt to preload models when preloading makes for an existing vehicle fails', async () => {
@@ -123,7 +141,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
   });
 
   it('choosing "Moto" calls fetchVehicleMakes and shows a loading state on the make search input while pending (AC-018, AC-020)', async () => {
-    const { promise } = deferred<string[]>();
+    const { promise } = deferred<VehicleMake[]>();
     vi.mocked(fetchVehicleMakes).mockReturnValue(promise);
 
     void openVehicleEditDialog({ current: null });
@@ -138,7 +156,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
   });
 
   it('populates the make options and keeps the model select disabled/empty once fetchVehicleMakes resolves (AC-018)', async () => {
-    const { promise, resolve } = deferred<string[]>();
+    const { promise, resolve } = deferred<VehicleMake[]>();
     vi.mocked(fetchVehicleMakes).mockReturnValue(promise);
 
     void openVehicleEditDialog({ current: null });
@@ -146,7 +164,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
     selectValue(typeSelect(dialog), 'motorcycle');
     await flush();
 
-    resolve(['HONDA', 'YAMAHA']);
+    resolve([HONDA, YAMAHA]);
     await flush();
 
     const refreshed = getDialog();
@@ -158,7 +176,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
   });
 
   it('shows known makes first (alphabetical) then the rest (alphabetical) when the search is empty (AC-041)', async () => {
-    vi.mocked(fetchVehicleMakes).mockResolvedValue(['ZERO MOTORCYCLES', 'YAMAHA', 'BAY CITY CHOPPERS', 'HONDA']);
+    vi.mocked(fetchVehicleMakes).mockResolvedValue([ZERO_MOTORCYCLES, YAMAHA, BAY_CITY_CHOPPERS, HONDA]);
 
     void openVehicleEditDialog({ current: null });
     const dialog = getDialog();
@@ -172,7 +190,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
   });
 
   it('filters the rendered make options as the user types, without re-querying vPIC (AC-040)', async () => {
-    vi.mocked(fetchVehicleMakes).mockResolvedValue(['HONDA', 'YAMAHA', 'BAY CITY CHOPPERS']);
+    vi.mocked(fetchVehicleMakes).mockResolvedValue([HONDA, YAMAHA, BAY_CITY_CHOPPERS]);
 
     void openVehicleEditDialog({ current: null });
     let dialog = getDialog();
@@ -188,7 +206,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
   });
 
   it('discards the chosen make (and disables "Guardar") if the search text is edited away from it without picking a new option', async () => {
-    vi.mocked(fetchVehicleMakes).mockResolvedValue(['HONDA', 'YAMAHA']);
+    vi.mocked(fetchVehicleMakes).mockResolvedValue([HONDA, YAMAHA]);
     vi.mocked(fetchVehicleModels).mockResolvedValue(['CB500X']);
 
     void openVehicleEditDialog({ current: null });
@@ -214,7 +232,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
   });
 
   it('shows a labelled empty state when the search matches no make', async () => {
-    vi.mocked(fetchVehicleMakes).mockResolvedValue(['HONDA', 'YAMAHA']);
+    vi.mocked(fetchVehicleMakes).mockResolvedValue([HONDA, YAMAHA]);
 
     void openVehicleEditDialog({ current: null });
     let dialog = getDialog();
@@ -231,8 +249,8 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
     expect(empty?.textContent).toContain('No se encontraron marcas');
   });
 
-  it('choosing a make calls fetchVehicleModels, fills the search input with the chosen make and shows a loading state on the model select while pending (AC-019, AC-020)', async () => {
-    vi.mocked(fetchVehicleMakes).mockResolvedValue(['HONDA', 'YAMAHA']);
+  it('choosing a make calls fetchVehicleModels with its makeId, fills the search input with the chosen make and shows a loading state on the model select while pending (AC-019, AC-020)', async () => {
+    vi.mocked(fetchVehicleMakes).mockResolvedValue([HONDA, YAMAHA]);
     const { promise } = deferred<string[]>();
     vi.mocked(fetchVehicleModels).mockReturnValue(promise);
 
@@ -245,7 +263,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
     clickMakeOption(dialog, 'HONDA');
     await flush();
 
-    expect(fetchVehicleModels).toHaveBeenCalledWith('HONDA', 'motorcycle');
+    expect(fetchVehicleModels).toHaveBeenCalledWith(HONDA.id, HONDA.name, 'motorcycle');
     const refreshed = getDialog();
     expect(makeSearchInput(refreshed).value).toBe('HONDA');
     const model = modelSelect(refreshed);
@@ -254,7 +272,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
   });
 
   it('populates the model select once fetchVehicleModels resolves (AC-019)', async () => {
-    vi.mocked(fetchVehicleMakes).mockResolvedValue(['HONDA']);
+    vi.mocked(fetchVehicleMakes).mockResolvedValue([HONDA]);
     vi.mocked(fetchVehicleModels).mockResolvedValue(['CB500X', 'CBR600RR']);
 
     void openVehicleEditDialog({ current: null });
@@ -272,7 +290,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
   });
 
   it('changing type mid-edit discards the chosen make/model, re-fetches makes for the new type and resets the model select (AC-022)', async () => {
-    vi.mocked(fetchVehicleMakes).mockResolvedValueOnce(['HONDA']).mockResolvedValueOnce(['SEAT']);
+    vi.mocked(fetchVehicleMakes).mockResolvedValueOnce([HONDA]).mockResolvedValueOnce([SEAT]);
     vi.mocked(fetchVehicleModels).mockResolvedValue(['CB500X']);
 
     void openVehicleEditDialog({ current: null });
@@ -314,7 +332,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
   it('clicking "Reintentar" after a makes failure calls fetchVehicleMakes again with the same type (AC-025)', async () => {
     vi.mocked(fetchVehicleMakes)
       .mockRejectedValueOnce(new ExternalApiError('timeout', 'boom'))
-      .mockResolvedValueOnce(['HONDA']);
+      .mockResolvedValueOnce([HONDA]);
 
     void openVehicleEditDialog({ current: null });
     const dialog = getDialog();
@@ -333,7 +351,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
   });
 
   it('clicking "Reintentar" after a models failure calls fetchVehicleModels again with the same make/type (AC-025)', async () => {
-    vi.mocked(fetchVehicleMakes).mockResolvedValue(['HONDA']);
+    vi.mocked(fetchVehicleMakes).mockResolvedValue([HONDA]);
     vi.mocked(fetchVehicleModels)
       .mockRejectedValueOnce(new ExternalApiError('network', 'boom'))
       .mockResolvedValueOnce(['CB500X']);
@@ -351,7 +369,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
     await flush();
 
     expect(fetchVehicleModels).toHaveBeenCalledTimes(2);
-    expect(fetchVehicleModels).toHaveBeenNthCalledWith(2, 'HONDA', 'motorcycle');
+    expect(fetchVehicleModels).toHaveBeenNthCalledWith(2, HONDA.id, HONDA.name, 'motorcycle');
     const recovered = getDialog();
     expect(modelSelect(recovered).disabled).toBe(false);
   });
@@ -372,7 +390,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
   });
 
   it('clicking "Guardar" with type+make+model chosen resolves { action: "save", ... } (AC-021)', async () => {
-    vi.mocked(fetchVehicleMakes).mockResolvedValue(['HONDA']);
+    vi.mocked(fetchVehicleMakes).mockResolvedValue([HONDA]);
     vi.mocked(fetchVehicleModels).mockResolvedValue(['CB500X']);
 
     const openPromise = openVehicleEditDialog({ current: null });
@@ -398,7 +416,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
   });
 
   it('disables the "Guardar" button while make or model is still missing', async () => {
-    vi.mocked(fetchVehicleMakes).mockResolvedValue(['HONDA']);
+    vi.mocked(fetchVehicleMakes).mockResolvedValue([HONDA]);
     vi.mocked(fetchVehicleModels).mockResolvedValue(['CB500X']);
 
     void openVehicleEditDialog({ current: null });
@@ -419,7 +437,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
   });
 
   it('clicking "Cancelar" resolves { action: "cancel" } without ever resolving with a save action, and aborts any pending request (AC-023)', async () => {
-    const { promise, resolve } = deferred<string[]>();
+    const { promise, resolve } = deferred<VehicleMake[]>();
     vi.mocked(fetchVehicleMakes).mockReturnValue(promise);
 
     const openPromise = openVehicleEditDialog({ current: null });
@@ -432,7 +450,7 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
 
     // La petición se resuelve tarde, ya con el diálogo cerrado: su resultado debe ignorarse
     // (no debe reaparecer el diálogo en el documento ni lanzar ningún error).
-    resolve(['HONDA']);
+    resolve([HONDA]);
     await flush();
     expect(document.body.querySelector('profile-vehicle-dialog')).toBeNull();
   });
@@ -456,8 +474,8 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
   });
 
   it('ignores a stale response when the type is changed twice before the first fetchVehicleMakes resolves (race condition, AC-023)', async () => {
-    const first = deferred<string[]>();
-    const second = deferred<string[]>();
+    const first = deferred<VehicleMake[]>();
+    const second = deferred<VehicleMake[]>();
     vi.mocked(fetchVehicleMakes)
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise);
@@ -472,19 +490,19 @@ describe('openVehicleEditDialog (AC-016 a AC-023, AC-025, AC-026, AC-037 a AC-04
     await flush();
 
     // La primera petición (moto) llega tarde: su resultado debe descartarse.
-    first.resolve(['HONDA']);
+    first.resolve([HONDA]);
     await flush();
     let refreshed = getDialog();
     expect(makeOptionButtons(refreshed).map((b) => b.textContent)).not.toContain('HONDA');
 
-    second.resolve(['SEAT']);
+    second.resolve([SEAT]);
     await flush();
     refreshed = getDialog();
     expect(makeOptionButtons(refreshed).map((b) => b.textContent)).toContain('SEAT');
   });
 
   it('gives every new interactive control a unique data-cy, with make options sharing one data-cy by design (same pattern as route-card) (AC-037)', async () => {
-    vi.mocked(fetchVehicleMakes).mockResolvedValue(['HONDA', 'YAMAHA']);
+    vi.mocked(fetchVehicleMakes).mockResolvedValue([HONDA, YAMAHA]);
 
     void openVehicleEditDialog({ current: null });
     let dialog = getDialog();

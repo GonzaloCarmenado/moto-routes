@@ -6,9 +6,15 @@
  */
 import { fetchJson } from '../shared/http/external-api.service.js';
 import type { VehicleType } from '../shared/models/index.js';
-import type { VpicMakeResult, VpicModelEntry, VpicModelResult } from './vpic.types.js';
+import type { VpicMakeResult, VpicModelResult } from './vpic.types.js';
 
 const VPIC_BASE_URL = 'https://vpic.nhtsa.dot.gov/api/vehicles';
+
+/** Marca de vehículo tal como la expone `fetchVehicleMakes` — conserva el `id` de vPIC, necesario para `fetchVehicleModels`. */
+export interface VehicleMake {
+  id: number;
+  name: string;
+}
 
 /**
  * Consulta las marcas disponibles para un tipo de vehículo dado.
@@ -16,47 +22,45 @@ const VPIC_BASE_URL = 'https://vpic.nhtsa.dot.gov/api/vehicles';
  * (mismo `kind`, sin envolver) para que el llamador pueda reaccionar
  * (reintento, mensaje de error) sin perder información.
  * @param type - Tipo de vehículo (`motorcycle` o `car`).
- * @returns Nombres de marca, ordenados alfabéticamente.
+ * @returns Marcas (id + nombre), ordenadas alfabéticamente por nombre.
  */
-export async function fetchVehicleMakes(type: VehicleType): Promise<string[]> {
+export async function fetchVehicleMakes(type: VehicleType): Promise<VehicleMake[]> {
   const result = await fetchJson<VpicMakeResult>(
     `${VPIC_BASE_URL}/GetMakesForVehicleType/${type}?format=json`,
   );
-  return result.Results.map((entry) => entry.MakeName).sort((a, b) => a.localeCompare(b));
+  return result.Results
+    .map((entry) => ({ id: entry.MakeId, name: entry.MakeName }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**
- * Filtra modelos por tipo de vehículo de forma defensiva y best-effort:
- * si algún resultado trae `VehicleTypeName`, filtra por él; si ninguno lo
- * trae (shape real esperado de `GetModelsForMake` según la documentación
- * pública de vPIC — ver decisión de diseño #10 de `perfil-usuario.plan.md`),
- * devuelve todos los modelos sin filtrar ni lanzar error.
- * @param entries - Modelos devueltos por la API.
- * @param type - Tipo de vehículo elegido por el usuario.
- * @returns Los modelos filtrados por tipo, o todos si la API no informa tipo.
- */
-function filterModelsByVehicleType(
-  entries: VpicModelEntry[],
-  type: VehicleType,
-): VpicModelEntry[] {
-  const hasTypeInfo = entries.some((entry) => entry.VehicleTypeName !== undefined);
-  if (!hasTypeInfo) {
-    return entries;
-  }
-  return entries.filter((entry) => entry.VehicleTypeName?.toLowerCase().includes(type));
-}
-
-/**
- * Consulta los modelos disponibles para una marca, filtrados de forma
- * best-effort por tipo de vehículo (ver `filterModelsByVehicleType`).
- * Cualquier `ExternalApiError` lanzado por `fetchJson` se propaga tal cual.
- * @param make - Nombre de la marca (tal como la devolvió `fetchVehicleMakes`).
+ * Consulta los modelos de una marca, filtrados por tipo de vehículo.
+ *
+ * `GetModelsForMake/{make}` (el endpoint "obvio") nunca informa el tipo de
+ * vehículo de cada modelo — verificado contra la API real el 2026-08-02: un
+ * fabricante que vende coches y motos (p. ej. Honda) devuelve ambos mezclados
+ * sin ningún campo que permita distinguirlos. El único endpoint de vPIC que sí
+ * filtra por tipo es `GetModelsForMakeIdYear/makeId/{id}/modelyear/{year}/vehicletype/{type}`
+ * (confirmado con datos reales), pero exige un año de modelo concreto —
+ * se usa el año actual. Si esa consulta no devuelve nada (marca discontinuada,
+ * o vPIC sin datos para ese año concreto), se recurre a `GetModelsForMake`
+ * sin filtrar antes que no mostrar ningún modelo.
+ * @param makeId - Identificador vPIC de la marca (de `fetchVehicleMakes`).
+ * @param makeName - Nombre de la marca (para el fallback sin filtrar).
  * @param type - Tipo de vehículo elegido por el usuario.
  * @returns Nombres de modelo.
  */
-export async function fetchVehicleModels(make: string, type: VehicleType): Promise<string[]> {
-  const result = await fetchJson<VpicModelResult>(
-    `${VPIC_BASE_URL}/GetModelsForMake/${encodeURIComponent(make)}?format=json`,
+export async function fetchVehicleModels(makeId: number, makeName: string, type: VehicleType): Promise<string[]> {
+  const year = new Date().getFullYear();
+  const filtered = await fetchJson<VpicModelResult>(
+    `${VPIC_BASE_URL}/GetModelsForMakeIdYear/makeId/${String(makeId)}/modelyear/${String(year)}/vehicletype/${type}?format=json`,
   );
-  return filterModelsByVehicleType(result.Results, type).map((entry) => entry.Model_Name);
+  if (filtered.Results.length > 0) {
+    return filtered.Results.map((entry) => entry.Model_Name);
+  }
+
+  const unfiltered = await fetchJson<VpicModelResult>(
+    `${VPIC_BASE_URL}/GetModelsForMake/${encodeURIComponent(makeName)}?format=json`,
+  );
+  return unfiltered.Results.map((entry) => entry.Model_Name);
 }
