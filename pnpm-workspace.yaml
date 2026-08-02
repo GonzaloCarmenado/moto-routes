@@ -3,4 +3,20 @@ allowBuilds:
   esbuild: true
 
 overrides:
-  postcss: 8.5.16
+  # RUSTSEC/GHSA de esta sesión (auditoria-seguridad) — ver openspec/changes/auditoria-seguridad/.
+  # postcss 8.5.16 (fijado antes en documentacion-codigo) quedó por debajo del fix de
+  # GHSA-r28c-9q8g-f849 (path traversal en source maps); se sube a la última estable.
+  postcss: 8.5.25
+  # vitepress@1.6.4 (última estable — no hay una posterior que lo traiga ya arreglado)
+  # arrastra internamente vite@5.4.21 + esbuild@0.21.5, vulnerables (GHSA-fx2h-pf6j-xcff,
+  # GHSA-67mh-4wv8-2f99, GHSA-4w7w-66w2-5vf9, GHSA-v6wh-96g9-6wx3). El vite de nivel
+  # superior del proyecto ya estaba en la versión segura (6.4.3, usado por vitest);
+  # se fuerza esa misma versión en todo el árbol, incluida la copia interna de vitepress.
+  vite: ^6.4.3
+  # brace-expansion (GHSA-3jxr-9vmj-r5cp, GHSA-mh99-v99m-4gvg) aparece en 3 líneas
+  # major distintas (minimatch v3 vía eslint, v9 vía vitest coverage, v10 vía
+  # typescript-eslint/typedoc) — override acotado por padre para no forzar un
+  # major que su consumidor no espera.
+  minimatch@3>brace-expansion: 1.1.18
+  minimatch@9>brace-expansion: 2.1.4
+  minimatch@10>brace-expansion: 5.0.9
