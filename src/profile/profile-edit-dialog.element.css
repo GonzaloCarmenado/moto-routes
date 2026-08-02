@@ -158,14 +158,35 @@
   cursor: pointer;
 }
 
+.action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .action--primary {
   background: var(--amber);
   border-color: var(--amber);
   color: var(--bg-bottom);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .action--danger {
   background: transparent;
   border-color: var(--danger);
   color: var(--danger);
+}
+
+.action--primary .spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--bg-bottom);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: profile-edit-spin 0.7s linear infinite;
+}
+
+@keyframes profile-edit-spin {
+  to { transform: rotate(360deg); }
 }

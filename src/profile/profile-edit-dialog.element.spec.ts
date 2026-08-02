@@ -145,6 +145,62 @@ describe('openProfileEditDialog (AC-004 a AC-013, AC-037, AC-038)', () => {
     expect(onSave).toHaveBeenCalledWith({ avatarPath: null, name: '   ' });
   });
 
+  it('shows a spinner on "Guardar" and disables Cancelar/name input/Cambiar foto while saving is in flight (AC-042)', async () => {
+    let resolveOnSave!: () => void;
+    const onSave = vi.fn(() => new Promise<void>((resolve) => { resolveOnSave = resolve; }));
+
+    void openProfileEditDialog({ avatarUrl: null, name: 'Marc', onSave });
+    const dialog = getDialog();
+    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]')?.click();
+    await flush();
+
+    const saveBtn = dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]');
+    expect(saveBtn?.disabled).toBe(true);
+    expect(saveBtn?.classList.contains('is-saving')).toBe(true);
+    expect(saveBtn?.getAttribute('aria-busy')).toBe('true');
+    expect(saveBtn?.querySelector('.spinner')).not.toBeNull();
+    expect(dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-cancelar-perfil"]')?.disabled).toBe(true);
+    expect(dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-cambiar-foto"]')?.disabled).toBe(true);
+    expect(nameInput(dialog).disabled).toBe(true);
+
+    resolveOnSave();
+    await flush();
+    expect(document.body.querySelector('profile-edit-dialog')).toBeNull();
+  });
+
+  it('ignores Escape and overlay clicks while saving is in flight', async () => {
+    const onSave = vi.fn(() => new Promise<void>(() => { /* never resolves */ }));
+
+    const openPromise = openProfileEditDialog({ avatarUrl: null, name: 'Marc', onSave });
+    const dialog = getDialog();
+    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]')?.click();
+    await flush();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    (dialog.shadowRoot!.querySelector('.overlay') as HTMLElement).click();
+    await flush();
+
+    let settled = false;
+    void openPromise.then(() => { settled = true; });
+    await flush();
+    expect(settled).toBe(false);
+  });
+
+  it('re-enables the controls and hides the spinner if saving fails (AC-012, AC-042)', async () => {
+    const onSave = vi.fn().mockRejectedValue(new Error('fallo de BBDD'));
+
+    void openProfileEditDialog({ avatarUrl: null, name: 'Marc', onSave });
+    const dialog = getDialog();
+    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]')?.click();
+    await flush();
+
+    const saveBtn = dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]');
+    expect(saveBtn?.disabled).toBe(false);
+    expect(saveBtn?.classList.contains('is-saving')).toBe(false);
+    expect(saveBtn?.textContent).toBe('Guardar');
+    expect(nameInput(dialog).disabled).toBe(false);
+  });
+
   it('clicking "Cancelar" resolves "cancelled" without calling savePhotoFile or onSave (AC-011)', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     const openPromise = openProfileEditDialog({ avatarUrl: null, name: null, onSave });
