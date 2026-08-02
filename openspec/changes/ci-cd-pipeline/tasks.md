@@ -25,8 +25,8 @@
 
 ## 5. Verificación real en GitHub Actions (no solo estructural)
 
-- [ ] 5.1 Push de la rama, abrir la PR, confirmar en la propia UI de GitHub que `quality-ts` y `quality-tauri` se disparan y terminan en verde con datos reales (no solo el test estructural local)
-- [ ] 5.2 Si algo falla en CI que no falla en local, investigar como señal real (diferencia de entorno Linux/Windows, versión de herramienta, etc.) y corregir — no relajar ningún umbral para "hacerlo pasar" (decisión ya tomada con el usuario)
+- [x] 5.1 PR #87 abierta. Confirmado en GitHub real: `quality-ts` y `quality-tauri` terminan en verde con **todos** sus pasos en éxito (incluido Cypress E2E completo en `ubuntu-latest`, sin necesitar Xvfb ni configuración adicional), `build-and-release` se salta correctamente (push normal, sin tag) — ver `gh run view 30761009506 --json`
+- [x] 5.2 No hizo falta: 0 diferencias entre local y CI en el primer intento real, nada que corregir ni ningún umbral que relajar
 - [ ] 5.3 Desde una rama aparte de prueba, empujar un tag `v0.0.1-test`, confirmar que `build-and-release` se dispara, compila, y publica el Release con el asset correctamente nombrado — revisar el resultado y borrar el tag/release de prueba antes de mergear esta PR
 
 ## 6. Cierre

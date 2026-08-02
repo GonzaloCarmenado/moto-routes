@@ -116,6 +116,19 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # ${{ env.X }} en un campo estructurado (path:, key:) solo ve variables
+      # declaradas en un bloque `env:` del workflow, nunca variables de entorno
+      # del runner en tiempo de ejecucion (esas solo existen dentro de `run:`
+      # como $ANDROID_HOME) - hay que promocionarla explicitamente via GITHUB_ENV
+      # antes de poder usarla como expresion en el paso de cache siguiente.
+      - name: Resolve ANDROID_HOME
+        run: |
+          if [ -z "$ANDROID_HOME" ]; then
+            echo "ANDROID_HOME not set by the runner" >&2
+            exit 1
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+
       - name: Cache Android SDK/NDK components
         uses: actions/cache@v4
         with:
@@ -124,6 +137,15 @@ jobs:
             ${{ env.ANDROID_HOME }}/platforms
             ${{ env.ANDROID_HOME }}/build-tools
           key: android-sdk-ndk${{ env.ANDROID_NDK_VERSION }}-platform36-buildtools36
+
+      - name: Locate Android cmdline-tools (not on PATH by default on ubuntu-latest)
+        run: |
+          SDKMANAGER_BIN=$(find "$ANDROID_HOME" -maxdepth 4 -name sdkmanager -type f | head -n1)
+          if [ -z "$SDKMANAGER_BIN" ]; then
+            echo "sdkmanager not found under ANDROID_HOME=$ANDROID_HOME" >&2
+            exit 1
+          fi
+          dirname "$SDKMANAGER_BIN" >> "$GITHUB_PATH"
 
       - name: Install Android SDK components
         run: |
