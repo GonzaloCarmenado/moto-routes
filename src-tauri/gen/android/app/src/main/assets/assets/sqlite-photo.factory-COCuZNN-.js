@@ -1,0 +1,3 @@
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/index-C6QA8QZG.js","assets/index-6mSwwmeh.js","assets/index-B0IzoEzb.css"])))=>i.map(i=>d[i]);
+import{_ as a}from"./index-6mSwwmeh.js";async function s(){try{const{default:r}=await a(async()=>{const{default:t}=await import("./index-C6QA8QZG.js");return{default:t}},__vite__mapDeps([0,1,2])),o=await r.load("sqlite:moto-routes.db");return{execute:(t,e)=>o.execute(t,e),select:(t,e)=>o.select(t,e)}}catch{throw new Error("SqlitePhotoRepository: Tauri SQL plugin not available. This repository requires Tauri environment (Desktop/Android). Use MemoryPhotoRepository for development/testing.")}}export{s as createSqlitePhotoDb};
+//# sourceMappingURL=sqlite-photo.factory-COCuZNN-.js.map
