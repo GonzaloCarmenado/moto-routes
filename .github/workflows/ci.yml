@@ -89,6 +89,12 @@ jobs:
     needs: [quality-ts, quality-tauri]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    # El GITHUB_TOKEN automatico solo tiene contents: read por defecto -- sin esto,
+    # softprops/action-gh-release falla con 403 "Resource not accessible by
+    # integration" al intentar crear el Release. Acotado a este job (no a todo el
+    # workflow), coherente con el principio de permisos minimos de ADR-014.
+    permissions:
+      contents: write
     env:
       ANDROID_NDK_VERSION: 29.0.13846066
     steps:
