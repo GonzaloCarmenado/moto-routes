@@ -6,6 +6,7 @@
 
 import type { CypressSeedData } from './app-seed.types.js';
 import type { RoutePoint, RouteStop } from '../shared/models/route.types.js';
+import type { Profile } from '../shared/models/profile.types.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -27,10 +28,16 @@ export function parseCypressSeed(raw: string | null): CypressSeedData | null {
   }
 
   if (!isRecord(parsed) || !Array.isArray(parsed.routes)) return null;
+  // Si el seed incluye una clave `profile` pero no es un objeto plano, el seed
+  // es inválido — no se puede sembrar un perfil a partir de un valor no-objeto
+  // (se valida con `'profile' in parsed` para distinguir "no incluido" de
+  // "incluido e inválido"; un perfil vacío con todos los campos a null es válido).
+  if ('profile' in parsed && !isRecord(parsed.profile)) return null;
 
   return {
     routes: parsed.routes as CypressSeedData['routes'],
     ...(isRecord(parsed.points) ? { points: parsed.points as Record<string, RoutePoint[]> } : {}),
     ...(isRecord(parsed.stops) ? { stops: parsed.stops as Record<string, RouteStop[]> } : {}),
+    ...(isRecord(parsed.profile) ? { profile: parsed.profile as unknown as Profile } : {}),
   };
 }
