@@ -75,6 +75,55 @@ describe('nav-bar', () => {
     expect(grabarBtn?.querySelector('.record-dot')).not.toBeNull();
     expect(grabarBtn?.querySelector('.nav-label')?.textContent).toBe('Grabar');
   });
+
+  it('emits nav-perfil event on window when Perfil button is clicked (AC-035)', () => {
+    const root = navBar.shadowRoot;
+    const perfilBtn = root?.querySelector('[data-cy="nav-perfil"]') as HTMLButtonElement;
+
+    const handler = vi.fn();
+    window.addEventListener('nav-perfil', handler);
+    perfilBtn?.click();
+
+    expect(handler).toHaveBeenCalledOnce();
+    window.removeEventListener('nav-perfil', handler);
+  });
+
+  it('setting activeView to "profile" marks Perfil active and Grabar/Rutas inactive (AC-036)', () => {
+    const root = navBar.shadowRoot;
+    (navBar as HTMLElement & { activeView: 'cockpit' | 'routes' | 'profile' }).activeView = 'profile';
+
+    const perfilBtn = root?.querySelector('[data-cy="nav-perfil"]');
+    const grabarBtn = root?.querySelector('[data-cy="nav-grabar"]');
+    const rutasBtn = root?.querySelector('[data-cy="nav-rutas"]');
+
+    expect(perfilBtn?.classList.contains('nav-item--active')).toBe(true);
+    expect(grabarBtn?.classList.contains('nav-item--active')).toBe(false);
+    expect(rutasBtn?.classList.contains('nav-item--active')).toBe(false);
+  });
+
+  it('setting activeView to "routes" marks Rutas active and the other two inactive (regression: Rutas never toggled active before)', () => {
+    const root = navBar.shadowRoot;
+    (navBar as HTMLElement & { activeView: 'cockpit' | 'routes' | 'profile' }).activeView = 'routes';
+
+    const perfilBtn = root?.querySelector('[data-cy="nav-perfil"]');
+    const grabarBtn = root?.querySelector('[data-cy="nav-grabar"]');
+    const rutasBtn = root?.querySelector('[data-cy="nav-rutas"]');
+
+    expect(rutasBtn?.classList.contains('nav-item--active')).toBe(true);
+    expect(grabarBtn?.classList.contains('nav-item--active')).toBe(false);
+    expect(perfilBtn?.classList.contains('nav-item--active')).toBe(false);
+  });
+
+  it('defaults to "cockpit" as active view without assigning activeView explicitly (regression)', () => {
+    const root = navBar.shadowRoot;
+    const grabarBtn = root?.querySelector('[data-cy="nav-grabar"]');
+    const rutasBtn = root?.querySelector('[data-cy="nav-rutas"]');
+    const perfilBtn = root?.querySelector('[data-cy="nav-perfil"]');
+
+    expect(grabarBtn?.classList.contains('nav-item--active')).toBe(true);
+    expect(rutasBtn?.classList.contains('nav-item--active')).toBe(false);
+    expect(perfilBtn?.classList.contains('nav-item--active')).toBe(false);
+  });
 });
 
 describe('nav-bar CSS — centrado del punto en el botón Grabar (AC-018)', () => {

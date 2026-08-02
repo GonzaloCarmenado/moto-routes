@@ -1,0 +1,61 @@
+/**
+ * Estilos del bloque "avatar circular + nombre" construido por
+ * `profile-header.ts` (AC-001, AC-002, AC-003, AC-005, AC-038). Vive en el
+ * dominio `profile/` (no en `shared/styles/`) porque sus dos consumidores
+ * reales (`profile-edit-dialog.element.css` aquí, y `profile.element.css`
+ * en el Paso 13) pertenecen ambos al mismo dominio funcional — no hace
+ * falta promoverlo a `shared/` (frontend-conventions.md §4, "shared solo
+ * con 2+ consumidores reales" se refiere a consumidores de *dominios*
+ * distintos). Ambos ficheros deben importar este `.css` en vez de
+ * duplicar las reglas, para garantizar el mismo layout por diseño.
+ */
+@import '../shared/styles/tokens.css';
+
+.profile-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.avatar {
+  width: 96px;
+  height: 96px;
+  min-width: var(--hitbox-min);
+  min-height: var(--hitbox-min);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--panel-sunken);
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.avatar:hover {
+  border-color: var(--amber);
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatar-placeholder {
+  width: 48px;
+  height: 48px;
+}
+
+.profile-name {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: center;
+}

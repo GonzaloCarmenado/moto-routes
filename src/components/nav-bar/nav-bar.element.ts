@@ -2,10 +2,40 @@ import styles from './nav-bar.element.css?inline';
 import { BaseElement } from '../../shared/base-element.js';
 import { APP_EVENTS, dispatchAppEvent } from '../../shared/app-events.js';
 
+/** Vista activa que `<nav-bar>` es capaz de representar visualmente. */
+export type NavBarActiveView = 'cockpit' | 'routes' | 'profile';
+
+/**
+ * Mapa `data-cy` del botón → vista que representa, usado por
+ * `updateActiveClasses()` para no repetir comparaciones ad-hoc por botón.
+ */
+const VIEW_BY_DATA_CY: Record<string, NavBarActiveView> = {
+  'nav-grabar': 'cockpit',
+  'nav-rutas': 'routes',
+  'nav-perfil': 'profile',
+};
+
 class NavBar extends BaseElement {
+  private _activeView: NavBarActiveView = 'cockpit';
+  private navButtons: HTMLButtonElement[] = [];
+
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
+  }
+
+  /**
+   * Vista actualmente activa, reflejada visualmente con `nav-item--active`
+   * en el botón correspondiente (AC-036). Por defecto `'cockpit'`, para no
+   * alterar el comportamiento visual inicial ya existente (Grabar activo).
+   */
+  set activeView(view: NavBarActiveView) {
+    this._activeView = view;
+    this.updateActiveClasses();
+  }
+
+  get activeView(): NavBarActiveView {
+    return this._activeView;
   }
 
   connectedCallback(): void {
@@ -19,6 +49,10 @@ class NavBar extends BaseElement {
     dispatchAppEvent(APP_EVENTS.NAV_RUTAS);
   }
 
+  private handlePerfilClick(): void {
+    dispatchAppEvent(APP_EVENTS.NAV_PERFIL);
+  }
+
   private buildRutasBtn(): HTMLButtonElement {
     const btn = document.createElement('button');
     btn.className = 'nav-item';
@@ -30,7 +64,7 @@ class NavBar extends BaseElement {
 
   private buildGrabarBtn(): HTMLButtonElement {
     const btn = document.createElement('button');
-    btn.className = 'nav-item nav-item--record nav-item--active';
+    btn.className = 'nav-item nav-item--record';
     btn.setAttribute('data-cy', 'nav-grabar');
     btn.setAttribute('aria-label', 'Ir a grabar ruta');
     btn.innerHTML = '<span class="record-dot"></span><span class="nav-label">Grabar</span>';
@@ -43,17 +77,27 @@ class NavBar extends BaseElement {
     btn.className = 'nav-item';
     btn.setAttribute('data-cy', 'nav-perfil');
     btn.innerHTML = this.buildProfileIcon() + '<span class="nav-label">Perfil</span>';
+    btn.addEventListener('click', () => { this.handlePerfilClick(); });
     return btn;
   }
 
   protected render(): void {
     const nav = document.createElement('nav');
     nav.className = 'bottom-nav';
-    nav.appendChild(this.buildRutasBtn());
-    nav.appendChild(this.buildGrabarBtn());
-    nav.appendChild(this.buildPerfilBtn());
+    this.navButtons = [this.buildRutasBtn(), this.buildGrabarBtn(), this.buildPerfilBtn()];
+    for (const btn of this.navButtons) nav.appendChild(btn);
 
     this.renderShadow(styles, nav);
+    this.updateActiveClasses();
+  }
+
+  /** Quita `nav-item--active` de los tres botones y la añade solo al que corresponde a `activeView` (AC-036). */
+  private updateActiveClasses(): void {
+    for (const btn of this.navButtons) {
+      const dataCy = btn.getAttribute('data-cy') ?? '';
+      const isActive = VIEW_BY_DATA_CY[dataCy] === this._activeView;
+      btn.classList.toggle('nav-item--active', isActive);
+    }
   }
 
   private buildListIcon(): string {
