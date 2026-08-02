@@ -233,6 +233,15 @@ describe('preview_polyline column migration (AC-025, AC-032)', () => {
 
     expect(alterTableCalls).toHaveLength(0);
   });
+
+  it('runs the migration exactly once when two callers race on the same shared repository instance (regression: route-list + profile-view both mount and call getAll() concurrently on app start, previously causing a "duplicate column name" SQLite error on the second ALTER TABLE)', async () => {
+    const { db, alterTableCalls } = createMigrationMockDb({ hasNameColumn: true, hasNotesColumn: true });
+    const repo = new SqliteRouteRepository(db);
+
+    await Promise.all([repo.getAll(), repo.getAll()]);
+
+    expect(alterTableCalls).toHaveLength(1);
+  });
 });
 
 describe('name/notes columns migration (AC-004, AC-007, AC-015)', () => {
