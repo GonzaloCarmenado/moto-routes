@@ -27,9 +27,12 @@
 
 - [x] 5.1 PR #87 abierta. Confirmado en GitHub real: `quality-ts` y `quality-tauri` terminan en verde con **todos** sus pasos en éxito (incluido Cypress E2E completo en `ubuntu-latest`, sin necesitar Xvfb ni configuración adicional), `build-and-release` se salta correctamente (push normal, sin tag) — ver `gh run view 30761009506 --json`
 - [x] 5.2 No hizo falta: 0 diferencias entre local y CI en el primer intento real, nada que corregir ni ningún umbral que relajar
-- [ ] 5.3 Desde una rama aparte de prueba, empujar un tag `v0.0.1-test`, confirmar que `build-and-release` se dispara, compila, y publica el Release con el asset correctamente nombrado — revisar el resultado y borrar el tag/release de prueba antes de mergear esta PR
+- [x] 5.3 Tag `v0.0.1-test` empujado 3 veces (2 fallos reales corregidos en vivo, ver abajo) hasta build-and-release completo: APK compilado, verificado, renombrado y publicado como asset del Release (`moto-routes-v0.0.1-test-arm64-debug.apk`). Tag y Release de prueba borrados tras confirmar. **2 gaps reales encontrados y corregidos, ninguno detectable con el test estructural local** (exactamente el tipo de cosa para la que existe este paso, no relajado ni ignorado):
+  1. `sdkmanager: command not found` — `ubuntu-latest` trae el Android SDK preinstalado pero `cmdline-tools/*/bin` no está en `PATH` por defecto. Corregido localizándolo dinámicamente con `find` (no se asume una subruta de versión concreta).
+  2. `${{ env.ANDROID_HOME }}` en el paso de caché era una expresión inválida — en un campo estructurado (`path:`, `key:`) solo ve variables declaradas en un bloque `env:` del workflow, nunca variables de entorno del runner en tiempo de ejecución. Corregido promocionándola explícitamente vía `$GITHUB_ENV` en un paso previo.
+  3. `403 Resource not accessible by integration` al publicar el Release — el `GITHUB_TOKEN` automático solo tiene `contents: read` por defecto. Corregido con `permissions: contents: write` acotado al job `build-and-release` (no a todo el workflow).
 
 ## 6. Cierre
 
-- [ ] 6.1 Actualizar `memory/context.md` con el resultado (CI real funcionando, decisiones de runner/Java/NDK, limitación de firma aceptada)
-- [ ] 6.2 Añadir ADR a `memory/decisions.md` — hay decisiones de arquitectura reales aquí (job único vs 3 workflows, sin firma de release, trigger por tag) que superan el umbral de "solo reafirma una ADR existente"
+- [x] 6.1 `memory/context.md` actualizado con el resultado completo (CI real funcionando, los 3 gaps encontrados en la verificación real y su corrección, decisiones de runner/Java/NDK, limitación de firma aceptada)
+- [x] 6.2 ADR-031 añadida a `memory/decisions.md` con las 4 alternativas descartadas
