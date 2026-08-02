@@ -1,91 +1,43 @@
-# Cline Rules - Plantilla SDD para DeepSeek
+# Reglas del proyecto — Moto Routes
 
-# ============================================================
-# REGLAS GLOBALES - Aplican en todas las sesiones
-# ============================================================
+## Regla fundamental
 
-## Metodología
-- Este proyecto sigue SPEC-DRIVEN DEVELOPMENT (SDD)
-- No se escribe código sin una especificación previa
-- El source of truth son las specs en specs/features/
-- Todo desarrollo sigue TDD: tests antes que implementación
+Este proyecto sigue **Spec-Driven Development con OpenSpec**. No se escribe código sin un cambio abierto en `openspec/changes/`. El ciclo es `/opsx-propose` → `/opsx-apply` → `/opsx-archive` (workflows en `.clinerules/workflows/`). Si el código y los artefactos del cambio divergen, o se corrige el código o se actualiza el artefacto — nunca se dejan desalineados.
 
-## Workflow
-- Fase 1: SPEC → specs/features/<feature>.md
-- Fase 2: PLAN → specs/features/<feature>.plan.md
-- Fase 3: TASKS → GitHub Issues (gh CLI)
-- Fase 4: IMPL → src/ + tests/ (TDD: RED → GREEN → REFACTOR)
-- Fase 5: REVIEW → specs/features/<feature>.review.md
-- Fase 6: TEST → Validación final: 100% pass, 80% code coverage, 100% AC coverage
+## Dónde vive la metodología
 
-## Memoria
-- Al iniciar cada sesión, cargar memory/context.md
-- Leer memory/decisions.md cuando sea relevante
-- Actualizar memory/tokens.md al final de cada sesión
-- Mantener memory/context.md actualizado con el estado del proyecto
+**`openspec/config.yaml` es el source of truth del proyecto**: stack, convenciones, diseño, seguridad, disciplina TDD y el gate de revisión. La CLI lo inyecta automáticamente al escribir artefactos y al ejecutar `apply`/`archive`, así que no lo repitas aquí ni lo copies a ningún artefacto. Este fichero solo recoge lo que aplica **fuera** de ese flujo.
+
+Detalle navegable en `docs/` (`pnpm run docs`). Histórico del SDD anterior en `specs/` — congelado, ver `specs/README.md`.
+
+## Memoria del proyecto (leer al empezar a trabajar aquí)
+
+`memory/` es memoria **del proyecto**. Nadie te la carga automáticamente — léela tú:
+
+- `memory/context.md` — estado actual y próximo hito. Cárgalo antes de tocar código. Incluye la lección aprendida del build de Android: léela antes de tocarlo, no la repitas de memoria.
+- `memory/decisions.md` — ADRs. Consúltalo antes de revertir o cuestionar una decisión ya tomada; si tomas una nueva, añade el ADR aquí.
+- `memory/sessions/` — resúmenes de sesiones largas.
 
 ## Tokens
-- Ser eficiente con el uso de tokens
-- No cargar archivos que no sean necesarios para la tarea
-- Preferir documentos atómicos y referencias sobre duplicación
-- Si la sesión se alarga, proponer compactar o iniciar nueva sesión
 
-## Código
-- Seguir las convenciones definidas en memory/context.md
-- Usar tipos estrictos si el lenguaje lo permite
-- **Todo símbolo exportado (clase, función, constante, tipo) debe tener JSDoc conciso (qué/porqué, no cómo) — el pre-commit lo verifica con `eslint-plugin-jsdoc` (`publicOnly: true`). Archivos `*.spec.ts` exentos**
-- No hacer over-engineering: implementar solo lo que pide la spec
-- La documentación del proyecto se genera con `pnpm docs` (VitePress en `docs/`, API reference en `docs/api/`, Rust en `src-tauri/target/doc/`) — consultarla antes de implementar
+Ser eficiente: no cargar ficheros que la tarea no necesita, preferir referencias sobre duplicación, y proponer compactar o abrir sesión nueva si se alarga. Registrar la sesión en `memory/tokens.md` si fue significativa.
 
-## Tests E2E (Cypress)
-- Todo elemento interactivo debe tener `data-cy="contexto-tipo-accion"` único
-- NUNCA usar selectores de clase, ID o posición DOM en tests E2E
-- Tests autocontenidos y paralelizables: cada describe crea y limpia sus datos
-- Validar TODOS los campos de un formulario, no solo los obligatorios
-- No validar IDs autogenerados (pueden variar entre entornos)
-- Ver docs/07-cypress-e2e.md para convenciones completas
+## Reglas de edición (aplican siempre, también en un fix suelto sin cambio abierto)
 
-## Diseño Visual (Design Tokens)
-- La filosofía visual está en specs/ui/design-system.md — consultar antes de crear UI
-- Los design tokens están en src/shared/styles/tokens.css — usar var(--token) siempre
-- NUNCA hardcodear colores, fuentes, espaciados, sombras ni radios
-- Mobile-first, respetar prefers-reduced-motion, contraste WCAG AA mínimo
+- **`data-cy` obligatorio**: todo elemento interactivo o localizable por un test lleva `data-cy="<contexto>-<tipo>-<accion>"` único, añadido en su propio `.element.ts` al crearlo. Nunca selectores de clase, ID o posición DOM en tests.
+- **Nunca hardcodear** color, fuente, espaciado, sombra ni radio: siempre `var(--token)` de `src/shared/styles/tokens.css`. Modo oscuro obligatorio, hitbox mínima 56×56px.
+- **Sin CSS inline** salvo animación o posicionamiento dinámico justificado. Los estilos van en el `*.element.css` del componente, que importa `tokens.css` (un Shadow DOM no hereda `index.css`).
+- **Componentes compartidos** van en `src/shared/`, nunca duplicados entre dominios. Si dudas si algo es shared, pregunta antes de crearlo.
+- **JSDoc conciso** (qué y por qué, no cómo) en todo símbolo exportado; el pre-commit lo verifica. Los `*.spec.ts` están exentos.
+- **Nunca secretos** en código — van a variables de entorno o GitHub Secrets. Solo claves públicas pueden vivir en código.
 
-## Convenciones de Frontend
-- La estructura de carpetas es por dominio funcional (clientes/, mascotas/), no por tipo técnico
-- Separación estricta de archivos: .element.ts + .element.css + .service.ts + .transform.ts + .types.ts
-- Prohibido CSS inline (salvo animaciones o posicionamiento dinámico justificado)
-- Componentes compartidos van en src/shared/, nunca se duplican entre dominios
-- Antes de crear un nuevo componente, preguntar si debería ir en shared/
-- Ver specs/ui/frontend-conventions.md para todas las reglas
+## Autorización explícita
 
-## Agentes
-- Los agentes son skills especializados definidos en agents/
-- Invocar el agente adecuado según la fase del workflow:
-  - @agent:init-agent → Para inicializar el proyecto con una plantilla
-  - @agent:spec-agent → Para crear/escribir especificaciones
-  - @agent:plan-agent → Para planificar implementación
-  - @agent:task-agent → Para crear issues en GitHub
-  - @agent:impl-agent → Para implementar (TDD)
-  - @agent:review-agent → Para revisar contra specs
-  - @agent:test-agent → Para validar cobertura de tests
-
-## Seguridad
-- NUNCA incluir secretos, contraseñas, tokens o cadenas de conexión en el código
-- Usar GitHub Secrets + variables de entorno para todas las credenciales
-- Solo las claves públicas (ej: Supabase anon key) pueden estar en código
-- CSP debe ser siempre restrictiva: sin unsafe-eval ni unsafe-inline en producción
-- El pre-commit hook audita dependencias: bloquea en critical/high, warning en moderate
-- Mantener las dependencias al mínimo necesario
-- Validar inputs tanto en frontend como en backend (defensa en profundidad)
-
-## Archivos Prohibidos
-- NO modificar specs/ sin autorización explícita
-- NO modificar .clinerules sin revisión
-- NO hacer commit de archivos generados/temporales
-- NO hacer commit de archivos .env con valores reales
+- No modificar `openspec/config.yaml`, este fichero, `CLAUDE.md`, `.clinerules/workflows/` ni `.cline/skills/` sin avisar antes — son la definición del propio workflow.
+- No modificar `specs/` (histórico congelado) sin que el usuario lo pida.
+- No commitear archivos generados o temporales, ni `.env` con valores reales.
+- No mencionar a ningún asistente de IA en mensajes de commit ni en PRs.
 
 ## Idioma
-- Documentación y specs en español
-- Código en inglés (nombres de variables, funciones, comentarios)
-- Commits en español o inglés, ser consistente
+
+Documentación, specs y artefactos en español. Código en inglés (identificadores y comentarios). Commits consistentes dentro del mismo PR.

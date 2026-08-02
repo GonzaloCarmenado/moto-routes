@@ -16,7 +16,7 @@ hero:
 
 features:
   - title: Spec-Driven Development
-    details: Flujo completo Spec → Plan → Tasks → Impl → Review → Test. Los agentes (Cline y Claude) trabajan sobre specs en specs/features/.
+    details: Flujo Propose → Apply → Archive sobre OpenSpec, con delta specs. Cline y Claude comparten la misma configuración en openspec/config.yaml.
   - title: TypeScript + Tauri 2
     details: Frontend TypeScript 5.7 strict con Web Components nativos, backend Rust, target Android prioritario.
   - title: 30 tests E2E en verde

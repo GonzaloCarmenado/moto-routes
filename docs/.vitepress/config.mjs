@@ -19,7 +19,7 @@ export default defineConfig({
         items: [
           { text: 'Arquitectura SDD', link: '/01-arquitectura-sdd' },
           { text: 'Workflow SDD', link: '/02-workflow-sdd' },
-          { text: 'Agentes y Skills', link: '/03-agentes-skills' },
+          { text: 'Configuración de OpenSpec', link: '/03-configuracion-openspec' },
           { text: 'Gestión de Tokens', link: '/04-token-management' },
           { text: 'Sistema de Memoria', link: '/05-memory-system' },
           { text: 'Seguridad', link: '/06-seguridad' },
