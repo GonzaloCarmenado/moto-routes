@@ -30,10 +30,11 @@
  */
 import { BaseElement } from '../shared/base-element.js';
 import { fetchVehicleMakes, fetchVehicleModels } from './vpic.service.js';
-import { ExternalApiError } from '../shared/http/external-api.service.js';
+import { describeVehicleFetchError } from './profile-vehicle-dialog.transform.js';
 import type { Profile, VehicleType } from '../shared/models/index.js';
 import {
-  buildMakeSelect,
+  buildMakeCombobox,
+  buildMakeOptionsListbox,
   buildModelSelect,
   buildTypeSelect,
   buildVehicleActions,
@@ -58,26 +59,6 @@ export type ProfileVehicleDialogResult =
   | { action: 'save'; vehicleType: VehicleType; vehicleMake: string; vehicleModel: string }
   | { action: 'cancel' };
 
-/**
- * Traduce un fallo de `fetchVehicleMakes`/`fetchVehicleModels` a un mensaje
- * acorde al sistema de diseño (AC-025) — nunca un error técnico crudo en
- * pantalla.
- * @param err - Error capturado (idealmente un `ExternalApiError`).
- * @returns Mensaje legible para el usuario.
- */
-function describeVehicleFetchError(err: unknown): string {
-  if (err instanceof ExternalApiError) {
-    if (err.kind === 'timeout') {
-      return 'La consulta al catálogo de vehículos ha tardado demasiado. Comprueba tu conexión e inténtalo de nuevo.';
-    }
-    if (err.kind === 'invalid-json') {
-      return 'El catálogo de vehículos ha devuelto una respuesta inesperada. Inténtalo de nuevo.';
-    }
-    return 'No se pudo conectar con el catálogo de vehículos. Comprueba tu conexión e inténtalo de nuevo.';
-  }
-  return 'No se pudo cargar la información del vehículo. Inténtalo de nuevo.';
-}
-
 class ProfileVehicleDialogElement extends BaseElement {
   private options: ProfileVehicleDialogOptions | null = null;
   private onResolve: ((value: ProfileVehicleDialogResult) => void) | null = null;
@@ -88,6 +69,8 @@ class ProfileVehicleDialogElement extends BaseElement {
   private models: string[] = [];
   private selectedMake: string | null = null;
   private selectedModel: string | null = null;
+  /** Texto del buscador de marca (AC-039/AC-040) — vPIC no filtra server-side, se filtra en cliente. */
+  private makeQuery = '';
   private status: VehicleDialogStatus = 'idle';
   private errorMessage: string | null = null;
   /** Reintenta exactamente la última petición que falló (marcas o modelos), sin duplicar "qué llamar" (AC-025). */
@@ -109,8 +92,8 @@ class ProfileVehicleDialogElement extends BaseElement {
     const root = this.shadowRoot;
     if (!root) return;
     const focusables = Array.from(
-      root.querySelectorAll<HTMLButtonElement | HTMLSelectElement>(
-        '[data-cy="profile-select-tipo-vehiculo"], [data-cy="profile-select-marca"], [data-cy="profile-select-modelo"], [data-cy="profile-btn-reintentar-vehiculo"], .action',
+      root.querySelectorAll<HTMLButtonElement | HTMLSelectElement | HTMLInputElement>(
+        '[data-cy="profile-select-tipo-vehiculo"], [data-cy="profile-input-buscar-marca"], [data-cy="profile-select-modelo"], [data-cy="profile-btn-reintentar-vehiculo"], .action',
       ),
     ).filter((el) => !el.disabled);
     if (focusables.length === 0) return;
@@ -144,10 +127,29 @@ class ProfileVehicleDialogElement extends BaseElement {
   open(options: ProfileVehicleDialogOptions): Promise<ProfileVehicleDialogResult> {
     this.options = options;
     this.type = options.current?.vehicleType ?? null;
+    this.selectedMake = options.current?.vehicleMake ?? null;
+    this.selectedModel = options.current?.vehicleModel ?? null;
+    this.makeQuery = this.selectedMake ?? '';
     this.previouslyFocused = document.activeElement as HTMLElement | null;
     this.render();
     this.shadowRoot?.querySelector<HTMLElement>('[data-cy="profile-select-tipo-vehiculo"]')?.focus();
+    // Precarga marcas (y modelos, si ya había una marca guardada) para un vehículo
+    // ya existente, sin esperar a que el usuario "toque" el selector de tipo — antes
+    // de este fix, editar un vehículo sin cambiar el tipo dejaba "Marca" sin cargar
+    // nunca (bug real, reportado en dispositivo). No viola AC-024: abrir "Editar
+    // vehículo" ya es entrar en el flujo de edición, la única condición de esa AC.
+    if (this.type) {
+      void this.preloadCurrentVehicle(this.type, this.selectedMake);
+    }
     return new Promise((resolve) => { this.onResolve = resolve; });
+  }
+
+  /** Ver nota en `open()`: precarga marcas/modelos del vehículo ya guardado, sin descartar la marca/modelo ya elegidos (a diferencia de `handleTypeChange`/`handleMakeChange`, pensados para una elección nueva del usuario). */
+  private async preloadCurrentVehicle(type: VehicleType, make: string | null): Promise<void> {
+    await this.loadMakes(type);
+    if (make && this.status !== 'error') {
+      await this.loadModels(make, type);
+    }
   }
 
   private close(result: ProfileVehicleDialogResult): void {
@@ -216,6 +218,7 @@ class ProfileVehicleDialogElement extends BaseElement {
     this.models = [];
     this.selectedMake = null;
     this.selectedModel = null;
+    this.makeQuery = '';
     this.status = 'idle';
     this.errorMessage = null;
     this.lastFailedFetch = null;
@@ -228,9 +231,50 @@ class ProfileVehicleDialogElement extends BaseElement {
     }
   }
 
+  /**
+   * Filtra la lista de marcas mostradas sin volver a consultar vPIC (AC-040)
+   * — puro cliente. Reconstruye solo el listbox (`buildMakeOptionsListbox`),
+   * no todo el diálogo vía `render()`: un `render()` completo en cada
+   * pulsación destruiría y recrearía el propio `<input>` de búsqueda,
+   * perdiendo el foco/cursor mientras el usuario escribe (bug real, no solo
+   * de test — ver JSDoc de `buildMakeOptionsListbox`).
+   */
+  private handleMakeQueryChange(value: string): void {
+    this.makeQuery = value;
+
+    // Si el texto ya no coincide con la marca elegida, esa elección deja de ser
+    // válida: sin este descarte, "Guardar" seguiría persistiendo la marca antigua
+    // aunque el buscador mostrara un texto distinto (nunca elegido de verdad) —
+    // el texto visible del buscador debe reflejar siempre lo que se guardaría.
+    // Solo ocurre una vez por divergencia (deja de repetirse en cuanto
+    // `selectedMake` ya es `null`), así que el `render()` completo aquí no
+    // penaliza cada pulsación — a diferencia del filtro normal, que solo
+    // reconstruye el listbox para no perder el foco del `<input>` mientras se
+    // escribe (ver JSDoc de `buildMakeOptionsListbox`).
+    if (this.selectedMake !== null && this.selectedMake !== value) {
+      this.selectedMake = null;
+      this.models = [];
+      this.selectedModel = null;
+      this.status = 'idle';
+      this.errorMessage = null;
+      this.lastFailedFetch = null;
+      this.requestController?.abort();
+      this.requestController = null;
+      this.render();
+      return;
+    }
+
+    const container = this.shadowRoot?.querySelector<HTMLElement>('[data-cy="profile-marca-options"]');
+    if (!container) return;
+    container.replaceWith(
+      buildMakeOptionsListbox(this.currentSelectState(), (v) => { this.handleMakeSelect(v); }),
+    );
+  }
+
   /** Elegir marca descarta el modelo ya elegido y consulta los modelos de esa marca (AC-019). */
-  private handleMakeChange(value: string): void {
+  private handleMakeSelect(value: string): void {
     this.selectedMake = value || null;
+    this.makeQuery = value;
     this.models = [];
     this.selectedModel = null;
     this.status = 'idle';
@@ -281,6 +325,7 @@ class ProfileVehicleDialogElement extends BaseElement {
       selectedMake: this.selectedMake,
       selectedModel: this.selectedModel,
       status: this.status,
+      makeQuery: this.makeQuery,
     };
   }
 
@@ -299,7 +344,11 @@ class ProfileVehicleDialogElement extends BaseElement {
       buildVehicleField(
         'Marca',
         'profile-vehicle-make-select',
-        buildMakeSelect(state, (value) => { this.handleMakeChange(value); }),
+        buildMakeCombobox(
+          state,
+          (value) => { this.handleMakeQueryChange(value); },
+          (value) => { this.handleMakeSelect(value); },
+        ),
       ),
     );
     wrapper.appendChild(

@@ -80,6 +80,62 @@
   color: var(--ink-faint);
 }
 
+.make-combobox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.make-search-input::placeholder {
+  color: var(--ink-faint);
+}
+
+.make-options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel-sunken);
+  padding: var(--space-1);
+}
+
+.make-option {
+  min-height: var(--hitbox-min);
+  text-align: left;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  padding: 0 var(--space-3);
+  cursor: pointer;
+}
+
+.make-option:hover,
+.make-option:focus-visible {
+  background: var(--amber-soft);
+  outline: none;
+}
+
+.make-option.is-selected {
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-weight: 600;
+}
+
+.make-options-empty {
+  margin: 0;
+  padding: var(--space-3);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
 .vehicle-status {
   display: flex;
   flex-direction: column;
