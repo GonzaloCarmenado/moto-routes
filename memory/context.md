@@ -150,6 +150,12 @@ adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-u
 
 **Gotcha del CLI**: cada `pnpm tauri android build` resetea `src-tauri/gen/android/app/tauri.properties` (`tauri.android.versionCode`) a `1000`. Si el dispositivo ya tiene instalado un `versionCode` mayor (de una build anterior), `adb install -r` falla con `INSTALL_FAILED_VERSION_DOWNGRADE`. No hay forma de evitarlo sin tocar el CLI — si pasa, `adb uninstall com.motoroutes.app` (pierde datos locales de prueba del dispositivo) y reinstalar.
 
+**Gotcha grave (2026-08-02) — el build puede empaquetar frontend desactualizado sin avisar**: en builds sucesivas donde solo cambia el frontend (sin tocar Rust), `pnpm tauri android build` a veces **no vuelve a copiar el `dist/` recién generado dentro del APK** — el paso de `pnpm build` (`beforeBuildCommand`) sí se ejecuta y `dist/` queda correcto, pero el APK final sigue conteniendo el bundle JS de una build anterior (verificado con hashes de archivo distintos entre `dist/assets/index-*.js` y lo que de verdad contenía el APK). No hay ningún error ni warning — el build "termina bien" y el APK se instala sin problema, pero ejecuta código viejo. **Siempre verificar el contenido real del APK antes de dar una build por buena**:
+```bash
+unzip -p src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk assets/index.html
+```
+Comparar el hash del `<script src="/assets/index-XXXX.js">` con el de `dist/index.html` recién generado — si no coinciden, el APK está desactualizado. Fix que funcionó: forzar una reconstrucción completa de `app/build` (en este caso se resolvió solo al volver a ejecutar `pnpm tauri android build` tras haber quedado `app/build` en un estado roto por un intento fallido de invocar `gradlew` directamente) y reverificar con el mismo comando `unzip` antes de instalar. **No dar nunca una verificación visual del usuario por buena sin haber confirmado primero, con este comando, que el APK instalado contiene el código que se cree que contiene** — en esta sesión se le pidió al usuario que probara una build que en realidad era una versión vieja, y confirmó "funciona" sin haber probado el cambio real.
+
 ## Convenciones
 - **Estilo de código**: TypeScript strict mode + ESLint strict + Prettier
 - **Commits**: Conventional Commits
