@@ -139,26 +139,26 @@ src-tauri/                    # Backend (Rust)
 └── Cargo.toml                # Dependencias Rust
 
 tests/                        # Test setup
-specs/                        # Especificaciones SDD
-├── features/                 # Features specs
-├── api/                      # API contracts
-├── data/                     # Data models
-└── ui/                       # Design system
-agents/                       # Agentes SDD
+openspec/                     # Source of truth SDD
+├── config.yaml               # Configuración del proyecto
+├── specs/                    # Specs vivas
+└── changes/                  # Cambios en curso
+specs/                        # Histórico congelado (SDD anterior)
+├── features/                 # Features cerradas
+└── ui/                       # Design system y convenciones
 docs/                         # Documentación arquitectura
 memory/                       # Sistema de memoria persistente
 ```
 
 ## Metodología
 
-Este proyecto sigue **Spec-Driven Development (SDD)**:
+Este proyecto sigue **Spec-Driven Development** sobre [OpenSpec](https://github.com/Fission-AI/OpenSpec). No se escribe código sin un cambio abierto en `openspec/changes/`.
 
-1. **SPEC** → `specs/features/<feature>.md`
-2. **PLAN** → `specs/features/<feature>.plan.md`
-3. **TASKS** → GitHub Issues
-4. **IMPL** → `src/` + `tests/` (TDD: RED → GREEN → REFACTOR)
-5. **REVIEW** → `specs/features/<feature>.review.md`
-6. **TEST** → Validación final
+1. **PROPOSE** (`/opsx:propose`) → `proposal.md` · delta specs · `design.md` · `tasks.md`
+2. **APPLY** (`/opsx:apply`) → `src/` + tests (TDD: RED → GREEN → REFACTOR)
+3. **ARCHIVE** (`/opsx:archive`) → gate de revisión, veredicto y deltas fundidos en `openspec/specs/`
+
+La metodología completa vive en `openspec/config.yaml`. Ver `docs/01-arquitectura-sdd.md`.
 
 ## Quality Gates
 
@@ -175,7 +175,7 @@ Este proyecto sigue **Spec-Driven Development (SDD)**:
 |-----------|-------------|
 | `docs/01-arquitectura-sdd.md` | Arquitectura SDD |
 | `docs/02-workflow-sdd.md` | Workflow completo |
-| `docs/03-agentes-skills.md` | Agentes y skills |
+| `docs/03-configuracion-openspec.md` | Configuración de OpenSpec |
 | `docs/04-token-management.md` | Gestión de tokens |
 | `docs/05-memory-system.md` | Sistema de memoria |
 | `docs/06-seguridad.md` | Seguridad y CSP |
