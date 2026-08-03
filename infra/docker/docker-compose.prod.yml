@@ -1,0 +1,11 @@
+services:
+  api:
+    build:
+      context: ../../apps/api
+    # El PostgreSQL de producción es nativo del propio servidor (no un contenedor),
+    # escuchando solo en 127.0.0.1/::1. network_mode: host hace que ese loopback
+    # sea el mismo dentro y fuera del contenedor, sin tocar pg_hba.conf/postgresql.conf.
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - .env.prod
