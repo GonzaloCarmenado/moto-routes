@@ -38,6 +38,8 @@ docs/reference/
 
 # Docker (infra/docker) — credenciales de desarrollo local, ver .env.example
 infra/docker/.env
+# Credenciales del servidor de producción, ver .env.prod.example (despliegue-servidor-tailscale)
+infra/docker/.env.prod
 
 # OS
 Thumbs.db
