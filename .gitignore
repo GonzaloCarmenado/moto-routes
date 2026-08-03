@@ -1,6 +1,8 @@
 node_modules/
 dist/
 coverage/
+# target/ (build output de Maven, apps/api) — sin `/` intermedio, cubre cualquier profundidad
+target/
 *.local
 *.log
 .DS_Store
@@ -9,15 +11,13 @@ coverage/
 *.so
 rustup-init.exe
 
-# Rust
-src-tauri/target/
-
-# Android (Tauri generated)
-src-tauri/gen/android/build/
-src-tauri/gen/android/.gradle/
-src-tauri/gen/android/local.properties
-src-tauri/gen/android/app/build/
-src-tauri/gen/android/app/src/main/jniLibs/
+# Android (Tauri generated) — rutas con `/` intermedio ancladas a la raíz,
+# prefijadas con apps/mobile/ tras el monorepo (ver ADR-032)
+apps/mobile/src-tauri/gen/android/build/
+apps/mobile/src-tauri/gen/android/.gradle/
+apps/mobile/src-tauri/gen/android/local.properties
+apps/mobile/src-tauri/gen/android/app/build/
+apps/mobile/src-tauri/gen/android/app/src/main/jniLibs/
 
 # IDE
 .vscode/
@@ -26,15 +26,18 @@ src-tauri/gen/android/app/src/main/jniLibs/
 *.swo
 
 # Cypress
-cypress/screenshots/
-cypress/videos/
-cypress/downloads/
+apps/mobile/cypress/screenshots/
+apps/mobile/cypress/videos/
+apps/mobile/cypress/downloads/
 
 # Documentación generada
 docs/api/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 docs/reference/
+
+# Docker (infra/docker) — credenciales de desarrollo local, ver .env.example
+infra/docker/.env
 
 # OS
 Thumbs.db
