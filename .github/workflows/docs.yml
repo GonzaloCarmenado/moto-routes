@@ -29,5 +29,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Tauri Linux build dependencies (needed by cargo doc, same as quality-tauri in ci.yml)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev libgtk-3-dev
+
       - name: Build docs (VitePress + TypeDoc + cargo doc)
         run: pnpm run docs
