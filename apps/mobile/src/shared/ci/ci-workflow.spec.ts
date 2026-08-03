@@ -7,7 +7,9 @@ import { resolve } from 'node:path';
 // del proyecto y no se instala sin confirmarlo antes). No valida sintaxis YAML
 // per se — GitHub Actions ya rechaza un workflow mal formado al ejecutarlo — solo
 // que la estructura y los comandos esperados están presentes y en el job correcto.
-const workflowPath = resolve(process.cwd(), '.github/workflows/ci.yml');
+// El workflow vive en la raíz del repo (transversal), dos niveles por encima
+// de apps/mobile (cwd real cuando Vitest se ejecuta desde aquí).
+const workflowPath = resolve(process.cwd(), '../../.github/workflows/ci.yml');
 
 function readWorkflow(): string {
   if (!existsSync(workflowPath)) return '';
@@ -57,36 +59,47 @@ describe('job quality-ts', () => {
     expect(job()).toMatch(/cache:\s*pnpm/);
   });
 
-  it('runs tsc --noEmit', () => {
-    expect(job()).toMatch(/tsc --noEmit/);
+  it('installs dependencies at the repo root (single workspace lockfile)', () => {
+    expect(job()).toMatch(/pnpm install --frozen-lockfile/);
   });
 
-  it('runs the documentation coverage check', () => {
-    expect(job()).toMatch(/docs:coverage/);
+  it('runs the documentation coverage check at the repo root (root package.json owns docs:*)', () => {
+    const match = /name: Documentation coverage[\s\S]*?run: pnpm run docs:coverage/.exec(job());
+
+    expect(match).not.toBeNull();
+    expect(match?.[0]).not.toMatch(/working-directory/);
   });
 
-  it('runs ESLint with zero warnings allowed', () => {
-    expect(job()).toMatch(/eslint .*--max-warnings 0/);
+  it('runs tsc --noEmit inside apps/mobile', () => {
+    expect(job()).toMatch(/name: Typecheck[\s\S]*?working-directory: apps\/mobile[\s\S]*?run: pnpm exec tsc --noEmit/);
   });
 
-  it('runs Vitest with coverage', () => {
-    expect(job()).toMatch(/vitest run --coverage/);
+  it('runs ESLint with zero warnings allowed inside apps/mobile', () => {
+    expect(job()).toMatch(
+      /name: ESLint[\s\S]*?working-directory: apps\/mobile[\s\S]*?run: pnpm exec eslint src\/ --max-warnings 0/,
+    );
   });
 
-  it('runs the Cypress E2E suite', () => {
-    expect(job()).toMatch(/test:e2e/);
+  it('runs Vitest with coverage inside apps/mobile', () => {
+    expect(job()).toMatch(
+      /name: Unit tests[\s\S]*?working-directory: apps\/mobile[\s\S]*?run: pnpm exec vitest run --coverage/,
+    );
+  });
+
+  it('runs the Cypress E2E suite inside apps/mobile', () => {
+    expect(job()).toMatch(/name: E2E tests[\s\S]*?working-directory: apps\/mobile[\s\S]*?run: pnpm run test:e2e/);
   });
 });
 
 describe('job quality-tauri', () => {
   const job = (): string => extractJob(readWorkflow(), 'quality-tauri');
 
-  it('caches Cargo via a rust-cache action', () => {
-    expect(job()).toMatch(/rust-cache@v\d/);
+  it('caches Cargo via a rust-cache action scoped to apps/mobile/src-tauri', () => {
+    expect(job()).toMatch(/rust-cache@v\d[\s\S]*?workspaces:\s*apps\/mobile\/src-tauri/);
   });
 
-  it('runs cargo fmt --check', () => {
-    expect(job()).toMatch(/cargo fmt --check/);
+  it('runs cargo fmt --check inside apps/mobile/src-tauri', () => {
+    expect(job()).toMatch(/working-directory:\s*apps\/mobile\/src-tauri[\s\S]*?run: cargo fmt --check/);
   });
 
   it('runs cargo clippy denying warnings', () => {
@@ -126,9 +139,16 @@ describe('job build-and-release', () => {
     expect(job()).toMatch(/actions\/cache@v\d/);
   });
 
-  it('builds via the Tauri CLI, never a manual cargo build', () => {
-    expect(job()).toMatch(/tauri android build --target aarch64 --debug/);
+  it('builds via the Tauri CLI inside apps/mobile, never a manual cargo build', () => {
+    expect(job()).toMatch(
+      /name: Build APK[\s\S]*?working-directory: apps\/mobile[\s\S]*?run: pnpm tauri android build --target aarch64 --debug/,
+    );
     expect(job()).not.toMatch(/cargo build --target aarch64-linux-android/);
+  });
+
+  it('verifies the freshly built APK against apps/mobile paths', () => {
+    expect(job()).toMatch(/apps\/mobile\/src-tauri\/gen\/android\/app\/build\/outputs\/apk/);
+    expect(job()).toMatch(/apps\/mobile\/dist\/index\.html/);
   });
 
   it('publishes the APK as a GitHub Release asset', () => {
