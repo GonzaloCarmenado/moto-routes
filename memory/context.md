@@ -2,25 +2,29 @@
 
 ## Identidad
 - **Nombre**: Moto Routes (Ride Tracker)
-- **Propósito**: Aplicación móvil para motociclistas que combina navegación GPS, grabación de rutas y bitácora multimedia.
+- **Propósito**: Aplicación móvil para motociclistas que combina navegación GPS, grabación de rutas y bitácora multimedia. Desde la sesión `entorno-api-docker` (2026-08-03), monorepo: app móvil (`apps/mobile/`) + API backend (`apps/api/`).
 - **Repositorio**: d:\Git\Otros\moto-routes
 
 ## Stack Tecnológico
-- **Lenguaje Frontend**: TypeScript 5.7 (strict mode)
-- **Lenguaje Backend**: Rust (stable, edition 2021)
+- **Lenguaje Frontend**: TypeScript 5.7 (strict mode) — `apps/mobile/`
+- **Lenguaje Móvil/Desktop backend**: Rust (stable, edition 2021) — `apps/mobile/src-tauri/`
+- **Lenguaje API backend**: Java 21 + Spring Boot 3.5.13 (Maven, wrapper `mvnw`) — `apps/api/`
+- **BBDD API backend**: PostgreSQL 16 (Docker, imagen `postgres:16-trixie`)
 - **Bundler**: Vite 6
 - **Desktop/Mobile Framework**: Tauri 2
 - **UI**: Web Components nativos (Custom Elements v1)
 - **Testing Frontend**: Vitest 3 (jsdom, coverage v8) → 80% threshold
-- **Testing Backend**: cargo test (unit + integration)
+- **Testing Móvil backend**: cargo test (unit + integration)
+- **Testing API backend**: JUnit 5 + Mockito + AssertJ (vía `spring-boot-starter-test`)
 - **Linting TS**: ESLint 9 (strictTypeChecked + stylistic)
 - **Linting Rust**: Clippy (deny warnings)
 - **Formatting TS**: Prettier 3
 - **Formatting Rust**: rustfmt
-- **Git Hooks**: Husky 9 (pre-commit, en orden: `pnpm audit --audit-level=high` + `cargo audit` con excepciones documentadas → ESLint → Vitest → Clippy → rustfmt → cargo test → E2E Cypress vía `pnpm test:e2e`. El paso de auditoría real se cableó en la sesión `auditoria-seguridad` — antes solo estaba documentado en `docs/06-seguridad.md`, nunca implementado)
-- **Package Manager**: pnpm + Cargo
-- **Security**: CSP estricto, permisos mínimos, sin eval, path validation
-- **BBDD Local**: SQLite vía `@tauri-apps/plugin-sql` (archivo: `moto-routes.db`)
+- **Git Hooks**: Husky 9 (pre-commit, en orden: `pnpm audit --audit-level=high` + `cargo audit` con excepciones documentadas → ESLint → Vitest → Clippy → rustfmt → cargo test → E2E Cypress vía `pnpm test:e2e`. El paso de auditoría real se cableó en la sesión `auditoria-seguridad` — antes solo estaba documentado en `docs/06-seguridad.md`, nunca implementado. Desde `entorno-api-docker`, todos los comandos de `apps/mobile` se ejecutan con `cd apps/mobile && ...`/`cd apps/mobile/src-tauri && ...`, el hook en sí sigue viviendo en `.husky/` de la raíz)
+- **Package Manager**: pnpm (workspace: `packages: [apps/mobile]`) + Cargo + Maven
+- **Security**: CSP estricto, permisos mínimos, sin eval, path validation (app móvil); sin secretos en código en `apps/api` (credenciales de Postgres vía `infra/docker/.env`, no versionado)
+- **BBDD Local (app móvil)**: SQLite vía `@tauri-apps/plugin-sql` (archivo: `moto-routes.db`)
+- **Docker**: `infra/docker/docker-compose.yml` (servicios `api`+`postgres`, ambos con imagen base Debian 13/trixie — ver [[ADR-032]]), solo para desarrollo local, sin despliegue real todavía
 
 ## Herramientas de Desarrollo
 - **GitHub CLI**: `gh` (oficial, ya instalado) → issues, PRs, releases
@@ -28,64 +32,62 @@
 - **Cline**: Extensión VSCode con DeepSeek como modelo
 
 ## Estructura del Proyecto
+
+Monorepo desde `entorno-api-docker` (2026-08-03, ver [[ADR-032]]): `apps/mobile/` (app móvil, todo lo que antes vivía en la raíz) + `apps/api/` (backend Java nuevo) + `infra/docker/` (orquestación local). `package.json`/`pnpm-lock.yaml` de la raíz son solo para la documentación transversal (`docs:*`) y `husky` — `apps/mobile/package.json` es el paquete pnpm real del workspace (`pnpm-workspace.yaml` → `packages: [apps/mobile]`).
+
 ```
-src/                          # Frontend (TypeScript + Vite)
-├── app/
-│   └── app.element.ts        # Componente raíz <app-root>, monta <cockpit-view>
-├── cockpit/                  # Dominio "cockpit" (grabación de ruta)
-│   ├── cockpit.element.ts    # Web Component <cockpit-view>
-│   ├── cockpit.element.css   # Estilos del cockpit
-│   ├── cockpit.service.ts    # Estado de grabación (GPS, pausas, invisible)
-│   └── cockpit.transform.ts  # Formateo/cálculos (distancia, velocidad, duración)
-├── assets/
-│   └── fonts/                 # Subset .woff2 auto-alojado (Roboto Slab, Barlow, Barlow Semi Condensed)
-├── components/
-│   └── counter/
-│       ├── counter.element.ts    # Ejemplo: <app-counter>
-│       ├── counter.element.css   # Estilos del counter
-│       └── counter.element.spec.ts
-├── routes/                    # Dominio "routes" (listado, detalle, timeline)
-├── shared/
-│   ├── styles/
-│   │   └── tokens.css        # Design tokens globales
-│   ├── utils/
-│   │   └── dom.ts            # Utilidades DOM
-│   ├── repositories/
-│   │   ├── sqlite-route.repository.ts  # Repositorio SQLite para rutas
-│   │   ├── sqlite-route.factory.ts     # Factory para crear la conexión
-│   │   └── sqlite-route.repository.spec.ts
-│   ├── models/
-│   │   └── route.repository.spec.ts    # Suite de tests compartida
-│   └── tauri/
-│       └── commands.ts       # Wrappers tipados para invoke()
-├── index.css                 # Estilos base globales
-├── main.ts                   # Entry point
-└── vite-env.d.ts             # Type declarations
-src-tauri/                    # Backend (Rust)
-├── src/
-│   ├── main.rs               # Entry point de Tauri
-│   ├── lib.rs                # Librería con comandos
-│   └── commands/
-│       └── mod.rs            # Comandos Tauri
-├── capabilities/
-│   └── default.json          # Permisos explícitos (mínimo privilegio)
-├── icons/                    # Iconos de la app (generados por tauri icon)
-├── Cargo.toml
-├── tauri.conf.json
-├── build.rs
-├── .gitignore
-└── .cargo/
-    └── config.toml           # Cross-compiler NDK para Android
-tests/
-└── setup.ts                  # Test setup global
-specs/features/               # Especificaciones funcionales por feature
-specs/api/                    # Contratos de API
+package.json                  # Raíz: solo docs:* (typedoc/vitepress) + husky, sin deps de la app
+pnpm-workspace.yaml           # packages: [apps/mobile]
+typedoc.json                  # entryPoints: apps/mobile/src (se queda en la raíz)
+scripts/
+├── docs-coverage.mjs         # Lee docs/api/coverage.json — se queda en la raíz
+└── docs-prepare.mjs          # Copia memory/decisions.md y specs/ui/ a docs/reference/ — se queda en la raíz
+apps/
+├── mobile/                    # App móvil (Tauri + frontend) — antes en la raíz del repo
+│   ├── src/                   # Frontend (TypeScript + Vite)
+│   │   ├── app/
+│   │   │   └── app.element.ts        # Componente raíz <app-root>, monta <cockpit-view>
+│   │   ├── cockpit/                  # Dominio "cockpit" (grabación de ruta)
+│   │   ├── routes/                   # Dominio "routes" (listado, detalle, timeline)
+│   │   ├── shared/
+│   │   │   ├── styles/tokens.css     # Design tokens globales
+│   │   │   ├── repositories/         # Repositorios SQLite
+│   │   │   └── tauri/commands.ts     # Wrappers tipados para invoke()
+│   │   ├── index.css
+│   │   ├── main.ts
+│   │   └── vite-env.d.ts
+│   ├── src-tauri/                    # Backend móvil (Rust)
+│   │   ├── src/{main,lib}.rs, commands/mod.rs
+│   │   ├── capabilities/default.json # Permisos explícitos (mínimo privilegio)
+│   │   ├── Cargo.toml, tauri.conf.json, build.rs
+│   │   └── .cargo/config.toml        # Cross-compiler NDK para Android
+│   ├── cypress/                       # E2E
+│   ├── tests/setup.ts                 # Test setup global Vitest
+│   ├── scripts/                       # kill-port.mjs, setup-android.sh, pull-db.{cmd,ps1}
+│   └── package.json, tsconfig.json, vite.config.ts, vitest.config.ts, cypress.config.ts, eslint.config.js
+└── api/                        # API backend (Java 21 + Spring Boot 3.5.13 + Maven)
+    ├── src/main/java/com/motoroutes/api/
+    │   ├── MotoRoutesApiApplication.java
+    │   └── ping/{PingController,PingService,PingResult}.java   # GET /api/ping — consulta real a Postgres
+    ├── src/test/java/com/motoroutes/api/ping/PingControllerTest.java
+    ├── src/main/resources/application.properties  # DB_URL/DB_USERNAME/DB_PASSWORD vía env, sin defaults
+    ├── Dockerfile                  # Multi-stage, ambas etapas debian:trixie(-slim) — ver [[ADR-032]]
+    ├── pom.xml
+    └── mvnw, mvnw.cmd, .mvn/       # Maven Wrapper 3.9.9
+infra/
+└── docker/
+    ├── docker-compose.yml    # Servicios api + postgres (postgres:16-trixie), solo desarrollo local
+    ├── postgres/init.sql     # Tabla dummy `healthcheck`, vía docker-entrypoint-initdb.d/
+    ├── .env.example           # Versionado — claves sin valores reales
+    └── .env                   # NO versionado (.gitignore) — credenciales triviales de solo dev
+specs/features/               # Especificaciones funcionales por feature (histórico SDD, congelado)
+specs/api/                    # Contratos de API (SDD histórico — no confundir con apps/api/)
 specs/data/                   # Modelos de datos, schemas
 specs/ui/
 ├── design-system.md          # Filosofía visual + design tokens (actualizado)
 └── frontend-conventions.md   # Reglas de frontend
-agents/                       # Skills de agentes SDD
-docs/                         # Documentación SDD
+openspec/                     # Metodología SDD activa (proposals/specs/design/tasks)
+docs/                         # Documentación transversal (VitePress + TypeDoc + cargo doc)
 memory/                       # Sistema de memoria persistente
 ```
 
@@ -111,6 +113,11 @@ memory/                       # Sistema de memoria persistente
 - **Build**: tsc sin errores + cargo build exitoso + vite build exitoso + tauri build exitoso
 
 ## Estado Actual del Proyecto
+- **Sesión 2026-08-03 — monorepo + primer backend (`entorno-api-docker`, ADR-032)**: primer paso hacia un servidor propio de Moto Routes (hasta ahora solo SQLite local). Reorganización a monorepo (`apps/mobile/` + `apps/api/` + `infra/docker/`) en el mismo cambio que el backend nuevo, porque la reorganización solo tenía motivo por su llegada.
+  **Reorganización**: `git mv` de todo el contenido de raíz de la app móvil a `apps/mobile/` (preserva historial). **Gap real encontrado durante `apply`, no previsto en la propuesta**: `typedoc.json`/`scripts/docs-coverage.mjs`/`scripts/docs-prepare.mjs` leen `memory/`/`specs/ui/` y escriben en `docs/` — todos transversales, no exclusivos de la app móvil — así que NO se movieron; en su lugar, `package.json` raíz nuevo (solo scripts `docs:*` + `husky`, tres `devDependencies`, ninguna nueva) y `pnpm-lock.yaml` se quedan en la raíz (un workspace pnpm tiene un único lockfile). `pnpm-workspace.yaml` → `packages: [apps/mobile]`. CI (`ci.yml`) y `.husky/pre-commit` actualizados con TDD real (test en rojo confirmado antes de tocar cada fichero, verde después): `ci-workflow.spec.ts` y `pre-commit-audit-gate.spec.ts` ahora leen `.github/`/`.husky/` con `../../` (viven en `apps/mobile/src/` pero esos ficheros son transversales). **Segundo gap real, en Rust**: `cargo clippy` falló tras el `git mv` con un error de build script inexplicable a primera vista — la carpeta `target/` (gitignored, pero movida igualmente por ser un `git mv` de directorio a nivel de filesystem) traía cacheado un `OUT_DIR` con la ruta absoluta *anterior* al movimiento; resuelto con `cargo clean`. Sin regresiones: 759/759 Vitest, tsc/ESLint limpios, cargo test 5/5, 39/39 Cypress.
+  **Backend nuevo (`apps/api/`)**: Java 21 + Spring Boot 3.5.13 + Maven (wrapper `mvnw` generado con el plugin oficial vía un contenedor Maven desechable, sin instalar Maven en local — coherencia con "todo en Docker"). Único endpoint `GET /api/ping` (`PingController`/`PingService`/`PingResult`) que ejecuta `SELECT now()` de verdad contra Postgres — 200 con el timestamp real si hay conexión, 503 controlado si no la hay. Test unitario (`PingControllerTest`, JUnit+Mockito+AssertJ, sin contexto Spring) con TDD real: rojo (error de compilación) confirmado antes de implementar, verde (2/2, `BUILD SUCCESS`) después, ejecutado dentro de un contenedor Maven (`docker run ... mvn test`) al no haber Maven instalado en local.
+  **Docker**: `apps/api/Dockerfile` multi-stage, ambas etapas `debian:trixie`/`debian:trixie-slim` — confirmado en un contenedor real que `openjdk-21-jdk-headless`/`openjdk-21-jre-headless` y `maven` (3.9.9-1) existen tal cual en los repos de trixie (`eclipse-temurin`, la imagen oficial de OpenJDK, no publica todavía ninguna variante trixie). `infra/docker/docker-compose.yml` (`postgres:16-trixie` + `api`, `healthcheck`/`depends_on: condition: service_healthy`, volumen persistente). **Tercer gap real**: la propuesta inicial contemplaba credenciales de Postgres inline en el compose (justificadas como "no es un secreto real" por ser solo de desarrollo) — corregido antes de implementar porque la regla del proyecto de "nunca secretos en código" no tiene esa excepción; ahora vía `infra/docker/.env` (no versionado) + `.env.example` (versionado, documenta las claves). **Verificación end-to-end real con Docker** (no solo tests): `docker compose up --build` arranca ambos contenedores; `curl /api/ping` → 200 con timestamp real; `INSERT` manual + `docker compose down`/`up` (sin `-v`) → la fila persiste; `docker stop` de `postgres` con la API arriba → 503 controlado, sin crash.
+  **Nueva ADR-032** en `memory/decisions.md` (decisiones de arquitectura: monorepo por `apps/`, Spring Boot sobre `HttpServer` plano, imágenes Debian trixie vía `apt` en vez de `eclipse-temurin`, sin Flyway/Liquibase todavía). Tres nuevas capabilities sincronizadas a `openspec/specs/`: `monorepo-layout`, `api-backend`, `local-dev-environment` (12/12 escenarios con verificación real, ninguno sin ningún tipo de verificación). **Cerrado con `/opsx:archive`: veredicto APPROVED WITH MINOR ISSUES** (`review.md`, verificación independiente con re-ejecución completa de toda la suite — TS, Rust, Java, Docker E2E — no solo revisión de código). Dos issues pendientes no bloqueantes, ambos dependientes de un entorno al que esta sesión no tiene acceso, no de comportamiento incorrecto conocido: (1) el `ci.yml` actualizado tiene cobertura estructural fuerte (`ci-workflow.spec.ts`) pero no se ha ejecutado todavía en un runner real de GitHub Actions — se confirma con la propia PR, mismo criterio que ya advertía ADR-031 sobre los límites de un test estructural; (2) `pnpm tauri android build` no se ha vuelto a ejecutar tras el movimiento a `apps/mobile/` — no obligatorio por criterio del propio proyecto (cambio puramente estructural, no toca GPS/cámara/persistencia/permisos/mapa), pero recomendado como build de humo antes de dar la reorganización por cerrada del todo. Cambio archivado en `openspec/changes/archive/2026-08-03-entorno-api-docker/`. Rama `feature/entorno-api-docker`, sin PR abierta todavía.
 - **Sesión 2026-08-02 (6) — CI/CD real en GitHub Actions (`ci-cd-pipeline`, ADR-031)**: hasta ahora el único workflow (`docs.yml`) estaba roto y ningún gate de calidad corría server-side — todo vivía solo en `.husky/pre-commit`, saltable. Segundo cambio OpenSpec real sobre código (`propose→apply→archive` completo). **Un solo workflow `.github/workflows/ci.yml` con 3 jobs** (no 3 ficheros — `needs:` solo funciona dentro del mismo fichero, `workflow_run` habría sido más lento): `quality-ts` (tsc, cobertura de docs, ESLint, Vitest 80%, Cypress E2E) y `quality-tauri` (fmt, clippy, cargo test, cargo audit con la misma excepción `RUSTSEC-2023-0071`) en cada push a `master` y cada PR; `build-and-release` (`needs: [quality-ts, quality-tauri]`, solo en tags `v*`) compila el APK Android y lo publica como asset de un GitHub Release — debug sin firma (decisión confirmada, sin secretos nuevos). Trigger ya estaba bien acotado desde el principio (`push.branches: [master]`, nunca ramas sueltas — lo que parecía "correr en cada rama" era el trigger `pull_request` re-disparándose en cada commit de la PR abierta, comportamiento correcto).
   **Hallazgo real durante `propose`**: `src-tauri/.cargo/config.toml` tenía hardcodeada una ruta de Windows de esta máquina en concreto para el linker del NDK — inservible en cualquier runner. Resuelto sobreescribiendo `CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER` por variable de entorno del job, sin tocar el fichero (sigue haciendo falta tal cual en local).
   **3 gaps reales encontrados en la primera ejecución de verdad en GitHub Actions** (tag de prueba `v0.0.1-test`, ninguno detectable con el test estructural local — exactamente para lo que sirve verificar en CI real y no solo confiar en el test): (1) `sdkmanager` no está en `PATH` por defecto en `ubuntu-latest` pese a traer el SDK preinstalado — localizado dinámicamente con `find`; (2) `${{ env.ANDROID_HOME }}` en un campo estructurado (`path:` de `actions/cache`) es una expresión inválida si no se declara en un bloque `env:` del workflow — variables de entorno del runner en tiempo de ejecución no cuentan, hay que promocionarlas vía `$GITHUB_ENV` antes; (3) el `GITHUB_TOKEN` automático solo tiene `contents: read` por defecto, `softprops/action-gh-release` fallaba con 403 — añadido `permissions: contents: write` acotado solo al job `build-and-release`. Tras corregir los 3, el tag de prueba compiló, verificó (mismo comando de `memory/context.md` para detectar frontend desactualizado) y publicó el Release correctamente — tag/release de prueba borrados después.
@@ -140,7 +147,7 @@ memory/                       # Sistema de memoria persistente
 - **Sesión 2026-07-27 (2) — feature `mejoras-guardado-rutas` (18/18 AC, 11/11 pasos del plan)**: nombre de ruta al guardar, notas editables, fix nav-bar. Mergeado a `master` (PR #48).
 - **Sesión 2026-07-27 — fix: GPS no grababa en segundo plano**: foreground service real vía JNI. Mergeado a `master` (PR #47).
 - **Fase**: APK Android compilado y funcional, con persistencia de rutas y fotos verificada en dispositivo real. Todas las features mergeadas a `master`.
-- **Feature activo**: Ninguno. `perfil-usuario` (ver sesión 2026-08-02 (2) arriba) cerrado: `review-agent` en APPROVED (38/38 AC), sin commitear/pushear a `origin/master` todavía, issues GitHub #66-#80 sin cerrar. `cobertura-e2e` (ver sesión 2026-08-01 (3) arriba) cerrado: `review-agent` en APPROVED (45/45 AC), sin commitear/pushear a `origin/master` todavía. `mejoras-visuales-mapa` (ver sesión 2026-08-01 arriba) cerrado: commiteado (`d947afe` + commit del review), issues GitHub #54-#60 cerradas, `review-agent` en APPROVED WITH MINOR ISSUES — sin pushear a `origin/master` todavía. `grabacion-rutas` Fase 2 cerrado (AC-024 verificado en dispositivo real). `deuda-tecnica-auditoria` commiteado, mergeado y pusheado a `origin/master`. ISSUE-001 del review de `mejoras-fotos-mapa` (verificación visual en Android real + migración ALTER TABLE) **resuelto (2026-07-31)**, confirmado por el usuario.
+- **Feature activo**: Ninguno. `entorno-api-docker` (ver sesión 2026-08-03 arriba) cerrado: `/opsx:archive` en APPROVED WITH MINOR ISSUES, sin commitear/pushear/PR todavía. `perfil-usuario` (ver sesión 2026-08-02 (2) arriba) cerrado: `review-agent` en APPROVED (38/38 AC), sin commitear/pushear a `origin/master` todavía, issues GitHub #66-#80 sin cerrar. `cobertura-e2e` (ver sesión 2026-08-01 (3) arriba) cerrado: `review-agent` en APPROVED (45/45 AC), sin commitear/pushear a `origin/master` todavía. `mejoras-visuales-mapa` (ver sesión 2026-08-01 arriba) cerrado: commiteado (`d947afe` + commit del review), issues GitHub #54-#60 cerradas, `review-agent` en APPROVED WITH MINOR ISSUES — sin pushear a `origin/master` todavía. `grabacion-rutas` Fase 2 cerrado (AC-024 verificado en dispositivo real). `deuda-tecnica-auditoria` commiteado, mergeado y pusheado a `origin/master`. ISSUE-001 del review de `mejoras-fotos-mapa` (verificación visual en Android real + migración ALTER TABLE) **resuelto (2026-07-31)**, confirmado por el usuario.
 - **Sesión 2026-07-31 — fix: cronómetro se quedaba atrás en segundo plano**: `elapsedTime` se calculaba incrementando un contador en cada tick de `setInterval(1000ms)` — mismo mecanismo que Chromium pausa/retrasa en segundo plano (por lo que el GPS ya usa eventos nativos). Distancia/velocidad venían de puntos GPS reales con timestamp correcto, pero la duración se quedaba muy corta → velocidad media disparada (~500 km/h reportado en una ruta real). Fix: `elapsedTime` ahora se deriva del reloj de pared (`Date.now()` menos tiempo en pausa) tanto en el tick como al llegar cada punto GPS (`computeElapsedSeconds()` en `cockpit.service.ts`), autocorrigiéndose si el intervalo se retrasa. 484/484 tests TS pasan, `tsc`/ESLint sin errores. Commiteado y pusheado a `origin/master` (`48c25ec`). **Pendiente igual que con el fix de GPS**: no dar por resuelto sin una prueba real de trayecto largo con pantalla bloqueada — build Android en curso para esa prueba.
 - **Limpieza de GitHub (2026-07-31)**: cerrados 15 issues obsoletos (#13-17 Fases persistencia-rutas, #33-42 Pasos fotos-ruta) — trabajo ya mergeado en `master`, issues nunca cerrados tras el merge. Mergeado PR #50 (ADR: adoptar OpenSpec en vez de SDD custom, propuesto por `viictoryraves`) — decisión de arquitectura pendiente de discutir en detalle.
 - **AC-017/AC-018/AC-019 de `grabacion-rutas` cerrados como NO implementados (2026-07-31)**: `grabacion-rutas.review.md` los marcaba erróneamente como "✅ Cubierto" citando solo el test del algoritmo puro (`detectStop`); en realidad nunca se persiste ninguna parada (`buildStops()` en `cockpit-persist.service.ts` devuelve siempre `[]`, aunque la tabla `route_stops` y el repositorio ya soportan guardarlas). Corregido el review y añadida nota en `grabacion-rutas.md`. Decisión: no se implementa aquí — la persistencia real de paradas (con diccionario de datos, migraciones, etc.) se abordará en una **spec nueva y dedicada** sobre paradas.
@@ -148,8 +155,11 @@ memory/                       # Sistema de memoria persistente
 - **Último push (2026-07-31)**: `48c25ec` (fix cronómetro) pusheado a `origin/master`.
 
 ## Desarrollo Web (Vite)
+Desde `entorno-api-docker` (2026-08-03), todos los comandos de esta sección y de "Build Android" se ejecutan **desde `apps/mobile/`**, no desde la raíz del repo (monorepo — ver [[ADR-032]]). Las rutas de fichero mencionadas más abajo (`src-tauri/...`, `dist/...`) son relativas a `apps/mobile/`.
+
 Para lanzar el proyecto en modo web (sin Tauri), usar:
 ```bash
+cd apps/mobile
 pnpm run dev
 ```
 
@@ -157,6 +167,7 @@ pnpm run dev
 
 ## Build Android
 ```powershell
+cd apps/mobile
 pnpm tauri android build --target aarch64 --debug
 adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
 ```
