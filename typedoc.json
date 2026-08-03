@@ -1,5 +1,5 @@
 {
-  "entryPoints": ["src"],
+  "entryPoints": ["apps/mobile/src"],
   "entryPointStrategy": "expand",
   "out": "docs/api",
   "plugin": ["typedoc-plugin-coverage"],
@@ -18,10 +18,16 @@
     "Accessor",
     "TypeAlias"
   ],
-  "exclude": ["**/*.spec.ts", "**/__mocks__/**", "**/*.css.ts", "src/vite-env.d.ts", "src/shared/tauri-plugins/**"],
+  "exclude": [
+    "**/*.spec.ts",
+    "**/__mocks__/**",
+    "**/*.css.ts",
+    "apps/mobile/src/vite-env.d.ts",
+    "apps/mobile/src/shared/tauri-plugins/**"
+  ],
   "excludeExternals": true,
   "excludePrivate": true,
   "excludeProtected": true,
   "skipErrorChecking": true,
-  "tsconfig": "./tsconfig.json"
+  "tsconfig": "./apps/mobile/tsconfig.json"
 }

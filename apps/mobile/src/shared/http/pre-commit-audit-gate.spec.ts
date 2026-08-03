@@ -8,7 +8,9 @@ import { resolve } from 'node:path';
 // deja esa verificación como regresión automática: si alguien edita el hook
 // y pierde el `|| exit 1` de cualquiera de las dos auditorías, este test
 // falla en vez de que el gate se rompa en silencio.
-const preCommitPath = resolve(process.cwd(), '.husky/pre-commit');
+// .husky/ vive en la raíz del repo (hooks Git son transversales al monorepo,
+// no exclusivos de apps/mobile), dos niveles por encima del cwd real de Vitest.
+const preCommitPath = resolve(process.cwd(), '../../.husky/pre-commit');
 const preCommit = readFileSync(preCommitPath, 'utf8');
 
 describe('.husky/pre-commit — gate de auditoría de dependencias (frontend y Rust)', () => {
@@ -30,5 +32,23 @@ describe('.husky/pre-commit — gate de auditoría de dependencias (frontend y R
     expect(eslintIndex).toBeGreaterThan(-1);
     expect(pnpmAuditIndex).toBeLessThan(eslintIndex);
     expect(cargoAuditIndex).toBeLessThan(eslintIndex);
+  });
+});
+
+describe('.husky/pre-commit — comandos de apps/mobile resuelven la ruta correcta tras el monorepo', () => {
+  it('runs cargo commands inside apps/mobile/src-tauri', () => {
+    expect(preCommit).toMatch(/cd apps\/mobile\/src-tauri && cargo audit --ignore RUSTSEC-2023-0071/);
+    expect(preCommit).toMatch(/cd apps\/mobile\/src-tauri && cargo fmt --check/);
+    expect(preCommit).toMatch(/cd apps\/mobile\/src-tauri && cargo clippy -- -D warnings/);
+    expect(preCommit).toMatch(/cd apps\/mobile\/src-tauri && cargo test/);
+  });
+
+  it('runs ESLint and Vitest inside apps/mobile', () => {
+    expect(preCommit).toMatch(/cd apps\/mobile && npx eslint src\/ --max-warnings 0/);
+    expect(preCommit).toMatch(/cd apps\/mobile && npx vitest run --coverage --silent/);
+  });
+
+  it('runs the Cypress E2E suite inside apps/mobile', () => {
+    expect(preCommit).toMatch(/cd apps\/mobile && pnpm test:e2e/);
   });
 });
