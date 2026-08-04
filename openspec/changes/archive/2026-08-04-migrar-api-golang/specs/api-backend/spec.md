@@ -1,10 +1,4 @@
-# api-backend Specification
-
-## Purpose
-
-Servicio backend de Moto Routes (`apps/api`) que expone un endpoint de prueba capaz de confirmar, de forma verificable, que la API responde y que su conexión a PostgreSQL funciona de verdad.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: El endpoint de prueba verifica la conectividad real con la base de datos
 La API SHALL exponer un endpoint HTTP (por ejemplo `GET /api/ping` o `GET /api/health`) que, al ser invocado, ejecute una consulta real contra PostgreSQL en vez de devolver una respuesta estática, de modo que su resultado refleje el estado real de la conexión.
@@ -23,6 +17,8 @@ La cadena de conexión y credenciales de PostgreSQL SHALL leerse desde variables
 #### Scenario: No hay credenciales hardcodeadas en el código fuente
 - **WHEN** se inspeccionan los ficheros versionados de `apps/api` (código fuente, ficheros de configuración, `Dockerfile`)
 - **THEN** ningún fichero contiene una contraseña o cadena de conexión real; los valores se referencian como variables de entorno
+
+## ADDED Requirements
 
 ### Requirement: La migración de implementación preserva el comportamiento observable existente
 Al sustituir la implementación de `apps/api`, el comportamiento observable de los endpoints ya existentes en el momento de la migración SHALL permanecer igual: mismas rutas, mismos códigos de estado y mismo formato de respuesta ante los mismos escenarios (base de datos disponible o no disponible).
