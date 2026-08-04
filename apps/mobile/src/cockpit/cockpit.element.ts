@@ -34,7 +34,6 @@ import {
   buildControls,
   buildGpsOverlay,
   buildPhotoGalleryElement,
-  buildMarkStopButton,
   updateLiveDisplay,
   type ProgressArc,
   type PhotoGalleryElement,
@@ -184,11 +183,20 @@ class CockpitView extends BaseElement {
     this.longPress.release();
   }
 
+  /**
+   * Pausar la grabación es también el gesto de marcar una parada manual
+   * (petición real de usuario tras probar en dispositivo: un botón dedicado
+   * aparte de Pausar generaba confusión — "el botón de parada" se esperaba
+   * que fuera este). La pausa ocurre siempre; el modal de tipo es opcional
+   * (cancelarlo no revierte la pausa, ver `markStopFlow`). Reanudar nunca
+   * abre el modal — solo pausar.
+   */
   private handlePauseResume(): void {
     if (!this.service) return;
     const state = this.service.getCurrentState();
     if (state.status === 'recording') {
       this.service.pauseRecording();
+      void markStopFlow(this.service, this.stopTypesCache);
     } else if (state.status === 'paused') {
       this.service.resumeRecording();
     }
@@ -217,11 +225,6 @@ class CockpitView extends BaseElement {
       void this.handlePhotoCapture(event.detail.source);
     }) as EventListener);
     return photoCapture;
-  }
-
-  private handleMarkStop(): void {
-    if (!this.service) return;
-    void markStopFlow(this.service, this.stopTypesCache);
   }
 
   private buildGalleryElement(): PhotoGalleryElement {
@@ -281,8 +284,6 @@ class CockpitView extends BaseElement {
 
     this.photoCaptureEl = isActive ? this.buildPhotoCaptureButton() : null;
     if (this.photoCaptureEl) screen.appendChild(this.photoCaptureEl);
-
-    if (isActive) screen.appendChild(buildMarkStopButton(() => { this.handleMarkStop(); }));
 
     if (isActive && state) {
       screen.appendChild(this.buildGalleryElement());

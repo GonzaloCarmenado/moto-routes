@@ -32,6 +32,12 @@ describe('Cockpit - Grabación de Rutas', () => {
     cy.get('[data-cy="cockpit-master-btn"]').click();
     cy.get('[data-cy="cockpit-pause-btn"]').click();
     cy.get('[data-cy="cockpit-pause-btn"]').should('have.attr', 'aria-label', 'Reanudar ruta');
+    // Pausar abre también el modal de tipo de parada (catalogo-tipos-parada) — se
+    // cierra sin elegir (botón Cancelar) antes de continuar, no bloquea el toggle
+    // de pausa. `cy.type('{esc}')` no vale aquí: el foco delegado al Shadow DOM del
+    // diálogo hace que `document.activeElement` sea el propio custom element, no un
+    // elemento "typeable" válido para Cypress.
+    cy.get('[data-cy="stop-type-dialog-cancel"]').click();
     cy.get('[data-cy="cockpit-pause-btn"]').click();
     cy.get('[data-cy="cockpit-pause-btn"]').should('have.attr', 'aria-label', 'Pausar ruta');
   });

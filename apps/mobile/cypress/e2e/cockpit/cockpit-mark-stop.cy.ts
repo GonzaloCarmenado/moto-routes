@@ -1,12 +1,17 @@
 /// <reference types="cypress" />
 
 /**
- * E2E del catálogo de tipos de parada (grupo 8.2): modal de "marcar parada"
+ * E2E del catálogo de tipos de parada (grupo 8.2): modal de tipo de parada
  * durante una grabación real y su reflejo en el timeline de la ruta guardada.
  * A diferencia de `cockpit.cy.ts` (que no depende de `apps/api`), este flujo
  * sí necesita el backend real levantado (`docker compose up` en
  * `infra/docker/`) — el catálogo se sirve por `GET /api/stop-types`, nunca
  * mockeado, para verificar la integración real mobile→backend.
+ *
+ * El modal se dispara desde el botón "Pausar" (no un botón dedicado aparte):
+ * consolidado tras verificación en dispositivo real — un botón "Marcar
+ * parada" separado generaba confusión, el usuario esperaba que "el botón de
+ * parada" fuera el mismo que ya pausa la grabación (ver cockpit.element.ts::handlePauseResume).
  */
 
 const STOP_LAT = 41.3874;
@@ -45,7 +50,7 @@ function stubGeolocation(win: Cypress.AUTWindow): void {
   cy.stub(win.navigator.geolocation, 'clearWatch');
 }
 
-describe('Catálogo de tipos de parada - marcar parada y verla en el timeline', () => {
+describe('Catálogo de tipos de parada - marcar parada al pausar y verla en el timeline', () => {
   it('marks a manual stop with a chosen type during recording and shows it in the timeline after saving', () => {
     cy.intercept('GET', '**/api/stop-types').as('getStopTypes');
 
@@ -61,11 +66,14 @@ describe('Catálogo de tipos de parada - marcar parada y verla en el timeline', 
     cy.wait(300);
 
     cy.get('[data-cy="cockpit-master-btn"]').click();
-    cy.get('[data-cy="cockpit-mark-stop"]').click();
+    cy.get('[data-cy="cockpit-pause-btn"]').click();
 
     cy.get('[data-cy="stop-type-dialog-option-mirador"]').should('be.visible').click();
     cy.get('[data-cy="photo-toast"]').should('contain', 'Parada marcada');
     cy.get('[data-cy="photo-toast"]').should('contain', 'Mirador');
+
+    // Reanudar antes de guardar — pausar no debe dejar la ruta bloqueada en pausa.
+    cy.get('[data-cy="cockpit-pause-btn"]').click();
 
     cy.get('[data-cy="cockpit-master-btn"]').trigger('pointerdown');
     cy.wait(1700); // LONG_PRESS_MS = 1500 (cockpit.element.ts), tiempo real, sin timers falseables — igual que cockpit.cy.ts.
@@ -84,17 +92,20 @@ describe('Catálogo de tipos de parada - marcar parada y verla en el timeline', 
     stopRow.should('contain', 'Mirador');
   });
 
-  it('never shows a manual-stop button reaction when the stop dialog is cancelled — no stop persists (AC-4.5 regression, real backend)', () => {
+  it('cancelling the stop-type dialog still pauses the recording but persists no stop (AC-4.5 regression, real backend)', () => {
     cy.intercept('GET', '**/api/stop-types').as('getStopTypes');
 
     cy.visit('/', { onBeforeLoad: stubGeolocation });
     cy.wait('@getStopTypes');
 
     cy.get('[data-cy="cockpit-master-btn"]').click();
-    cy.get('[data-cy="cockpit-mark-stop"]').click();
+    cy.get('[data-cy="cockpit-pause-btn"]').click();
+    cy.get('[data-cy="cockpit-pause-btn"]').should('have.attr', 'aria-label', 'Reanudar ruta');
     cy.get('[data-cy="stop-type-dialog-cancel"]').click();
     cy.get('[data-cy="stop-type-dialog-cancel"]').should('not.exist');
     cy.get('[data-cy="photo-toast"]').should('not.exist');
+
+    cy.get('[data-cy="cockpit-pause-btn"]').click(); // Reanudar
 
     cy.get('[data-cy="cockpit-master-btn"]').trigger('pointerdown');
     cy.wait(1700);

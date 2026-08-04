@@ -229,19 +229,52 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # ADR-035 (catalogo-tipos-parada): el host real de apps/api (interfaz Tailscale
+      # del servidor) nunca vive en un fichero versionado -- este repo es publico.
+      # Aqui se inyecta solo en tiempo de ejecucion del runner (nunca escrito de vuelta
+      # al repo, el checkout es efimero) a partir de un GitHub Secret.
+      #
+      # Dos sitios distintos, ambos necesarios -- no es solo VITE_API_BASE_URL:
+      # 1. VITE_API_BASE_URL (leido por getApiBaseUrl(), horneado en el bundle JS por Vite).
+      # 2. El CSP `connect-src` de apps/mobile/index.html: Tauri NO reescribe la etiqueta
+      #    <meta> de CSP del index.html empaquetado en Android a partir de
+      #    tauri.conf.json/--config (confirmado durante la verificacion en dispositivo
+      #    real de catalogo-tipos-parada, grupo 8.3 -- ver ADR-035 punto 7) -- sin este
+      #    parche, el WebView bloquea el fetch aunque la URL este bien horneada.
+      # Falla explicitamente si el secret no esta configurado, en vez de publicar en
+      # silencio una release que solo sabe hablar con localhost (inutil en un movil real).
+      - name: Configure production apps/api host (release only, never committed)
+        env:
+          PROD_API_BASE_URL: ${{ secrets.MOBILE_PROD_API_BASE_URL }}
+        run: |
+          if [ -z "$PROD_API_BASE_URL" ]; then
+            echo "El secret MOBILE_PROD_API_BASE_URL no esta configurado -- sin el, la release apuntaria a localhost (inutil en un movil real). Configuralo en Settings > Secrets and variables > Actions." >&2
+            exit 1
+          fi
+          echo "VITE_API_BASE_URL=$PROD_API_BASE_URL" >> "$GITHUB_ENV"
+          sed -i "s|http://localhost:8080|http://localhost:8080 ${PROD_API_BASE_URL}|" apps/mobile/index.html
+          sed -i "s|http://localhost:8080|http://localhost:8080 ${PROD_API_BASE_URL}|" apps/mobile/src-tauri/tauri.conf.json
+
       - name: Build APK (Tauri CLI — never a manual cargo build, see memory/context.md)
         working-directory: apps/mobile
         run: pnpm tauri android build --target aarch64 --debug
 
-      - name: Verify the APK bundles the freshly built frontend
+      - name: Verify the APK bundles the freshly built frontend and the real apps/api host
         run: |
           APK=apps/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
           EXPECTED=$(grep -o 'index-[A-Za-z0-9_]*\.js' apps/mobile/dist/index.html)
-          ACTUAL=$(unzip -p "$APK" assets/index.html | grep -o 'index-[A-Za-z0-9_]*\.js')
+          PACKAGED_HTML=$(unzip -p "$APK" assets/index.html)
+          ACTUAL=$(echo "$PACKAGED_HTML" | grep -o 'index-[A-Za-z0-9_]*\.js')
           if [ "$EXPECTED" != "$ACTUAL" ]; then
             echo "El APK empaqueta un frontend desactualizado (tiene $ACTUAL, se esperaba $EXPECTED)"
             exit 1
           fi
+          if ! echo "$PACKAGED_HTML" | grep -qF "$PROD_API_BASE_URL"; then
+            echo "El CSP del APK empaquetado no incluye el host real de apps/api ($PROD_API_BASE_URL) -- la app no podra alcanzarlo en un movil real"
+            exit 1
+          fi
+        env:
+          PROD_API_BASE_URL: ${{ secrets.MOBILE_PROD_API_BASE_URL }}
 
       - name: Rename APK with the release tag
         run: |

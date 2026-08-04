@@ -339,28 +339,17 @@ describe('CockpitView - foto durante grabación', () => {
   });
 });
 
-describe('CockpitView - marcar parada manual (catalogo-tipos-parada)', () => {
+describe('CockpitView - marcar parada manual vía Pausar (catalogo-tipos-parada)', () => {
   const categories = [
     { id: 1, key: 'bar-restaurante', label: 'Bar / restaurante', icon: '🍽️' },
     { id: 2, key: 'mirador', label: 'Mirador', icon: '🏔️' },
   ];
 
-  it('does not show the control while idle', async () => {
-    const { shadowRoot } = await mountCockpit();
+  // Consolidado sobre Pausar tras probar en dispositivo real: un botón "Marcar
+  // parada" aparte del de Pausar generaba confusión — el usuario esperaba que
+  // "el botón de parada" fuera el mismo que ya pausa la grabación.
 
-    expect(shadowRoot.querySelector('[data-cy="cockpit-mark-stop"]')).toBeNull();
-  });
-
-  it('shows the control once recording starts', async () => {
-    const { shadowRoot } = await mountCockpit();
-    const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
-    masterBtn.click();
-    await waitRender();
-
-    expect(shadowRoot.querySelector('[data-cy="cockpit-mark-stop"]')).not.toBeNull();
-  });
-
-  it('opens the stop-type modal with the cached catalog when pressed', async () => {
+  it('pausing opens the stop-type modal with the cached catalog', async () => {
     const cache = new MemoryStopTypesCacheRepository();
     await cache.replaceAll(categories);
     const { shadowRoot } = await mountCockpitWithStopTypesCache(cache);
@@ -368,11 +357,25 @@ describe('CockpitView - marcar parada manual (catalogo-tipos-parada)', () => {
     masterBtn.click();
     await waitRender();
 
-    (shadowRoot.querySelector('[data-cy="cockpit-mark-stop"]') as HTMLButtonElement).click();
+    (shadowRoot.getElementById('cockpit-pause-btn') as HTMLButtonElement).click();
     await waitRender();
 
     const dialog = getStopTypeDialog();
     expect(dialog.shadowRoot!.querySelector('[data-cy="stop-type-dialog-option-mirador"]')).not.toBeNull();
+  });
+
+  it('pauses the recording regardless of what happens with the modal', async () => {
+    const cache = new MemoryStopTypesCacheRepository();
+    await cache.replaceAll(categories);
+    const { shadowRoot } = await mountCockpitWithStopTypesCache(cache);
+    const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
+    masterBtn.click();
+    await waitRender();
+
+    (shadowRoot.getElementById('cockpit-pause-btn') as HTMLButtonElement).click();
+    await waitRender();
+
+    expect(shadowRoot.querySelector('.chip')?.textContent).toContain('Pausada');
   });
 
   it('registers the manual stop and shows a confirmation toast when a category is chosen', async () => {
@@ -392,7 +395,7 @@ describe('CockpitView - marcar parada manual (catalogo-tipos-parada)', () => {
     masterBtn.click();
     await waitRender();
 
-    (shadowRoot.querySelector('[data-cy="cockpit-mark-stop"]') as HTMLButtonElement).click();
+    (shadowRoot.getElementById('cockpit-pause-btn') as HTMLButtonElement).click();
     await waitRender();
     const dialog = getStopTypeDialog();
     (dialog.shadowRoot!.querySelector('[data-cy="stop-type-dialog-option-mirador"]') as HTMLButtonElement).click();
@@ -410,13 +413,33 @@ describe('CockpitView - marcar parada manual (catalogo-tipos-parada)', () => {
     masterBtn.click();
     await waitRender();
 
-    (shadowRoot.querySelector('[data-cy="cockpit-mark-stop"]') as HTMLButtonElement).click();
+    (shadowRoot.getElementById('cockpit-pause-btn') as HTMLButtonElement).click();
     await waitRender();
     const dialog = getStopTypeDialog();
     (dialog.shadowRoot!.querySelector('[data-cy="stop-type-dialog-cancel"]') as HTMLButtonElement).click();
     await waitRender();
 
     expect(document.body.querySelector('[data-cy="photo-toast"]')).toBeNull();
+  });
+
+  it('resuming does not reopen the stop-type modal', async () => {
+    const cache = new MemoryStopTypesCacheRepository();
+    await cache.replaceAll(categories);
+    const { shadowRoot } = await mountCockpitWithStopTypesCache(cache);
+    const masterBtn = shadowRoot.getElementById('cockpit-master-btn') as HTMLButtonElement;
+    masterBtn.click();
+    await waitRender();
+
+    (shadowRoot.getElementById('cockpit-pause-btn') as HTMLButtonElement).click();
+    await waitRender();
+    const dialog = getStopTypeDialog();
+    (dialog.shadowRoot!.querySelector('[data-cy="stop-type-dialog-cancel"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    (shadowRoot.getElementById('cockpit-pause-btn') as HTMLButtonElement).click(); // Reanudar
+    await waitRender();
+
+    expect(document.body.querySelector('cockpit-stop-type-dialog')).toBeNull();
   });
 });
 

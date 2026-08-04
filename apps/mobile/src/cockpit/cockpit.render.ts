@@ -190,17 +190,6 @@ export function buildControls(options: ControlsOptions): HTMLElement {
   return wrapper;
 }
 
-/** Construye el control de marcar parada manual, visible solo durante una grabación activa. */
-export function buildMarkStopButton(onClick: () => void): HTMLButtonElement {
-  const btn = document.createElement('button');
-  btn.className = 'mark-stop-btn';
-  btn.setAttribute('data-cy', 'cockpit-mark-stop');
-  btn.setAttribute('aria-label', 'Marcar parada');
-  btn.innerHTML = '<span class="icon-stop-marker"></span>';
-  btn.addEventListener('click', onClick);
-  return btn;
-}
-
 /** Crea el elemento `<photo-gallery>` del cockpit conectando su evento de selección. */
 export function buildPhotoGalleryElement(onSelect: (index: number) => void): PhotoGalleryElement {
   const gallery = document.createElement('photo-gallery') as PhotoGalleryElement;
