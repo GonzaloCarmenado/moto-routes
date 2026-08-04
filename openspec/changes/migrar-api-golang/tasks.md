@@ -51,17 +51,17 @@
 
 ## 7. CI
 
-- [ ] 7.1 Añadir a `.github/workflows/ci.yml` los pasos equivalentes a `quality-tauri`/`quality-ts` para Go (build, test, lint, auditoría de dependencias), sin tocar los jobs existentes.
-- [ ] 7.2 Actualizar `src/shared/ci/ci-workflow.spec.ts` con las aserciones nuevas del job/pasos Go.
-- [ ] 7.3 Verificación real en un tag o rama de prueba en GitHub Actions antes de dar el pipeline por bueno (mismo patrón que `ci-cd-pipeline`).
+- [x] 7.1 Añadir a `.github/workflows/ci.yml` un job `quality-go` (gofmt, go vet, go build, go test contra un servicio `postgres:16-trixie`, govulncheck), sin tocar los jobs existentes. `build-and-release` ahora también depende de `quality-go`.
+- [x] 7.2 Actualizar `src/shared/ci/ci-workflow.spec.ts` con las aserciones nuevas del job `quality-go` (31/31 tests en verde).
+- [x] 7.3 Verificación real en GitHub Actions: PR #92 (draft) abierta para disparar el trigger `pull_request`, run [30890742046](https://github.com/crzverde/moto-routes/actions/runs/30890742046) — `quality-go`/`quality-tauri`/`quality-ts` en verde, `build-and-release` correctamente saltado (solo corre en tags).
 
 ## 8. Despliegue en el servidor Tailscale
 
-- [ ] 8.1 Actualizar `infra/docker/docker-compose.prod.yml` a la nueva imagen Go, conservando el tag de la imagen Java anterior disponible para rollback.
-- [ ] 8.2 Desplegar y verificar end-to-end real (`curl` desde la máquina de desarrollo, `ss -tlnp` confirmando que la API solo escucha en la interfaz Tailscale) — mismo patrón que [[ADR-033]]. La tabla de usuarios se crea sola al arrancar el contenedor (el runner de migraciones corre contra el PostgreSQL nativo igual que contra el local, sin paso manual por SSH); confirmar con `psql` que `schema_migrations` registra la migración aplicada.
+- [x] 8.1 `docker-compose.prod.yml` no necesitó cambios (ya era genérico: `build: context` + `env_file`). Se transformó `infra/docker/.env.prod` en el propio servidor (script remoto, sin exponer ningún valor real en la salida): `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` → `DATABASE_URL` (recompuesto), más un `AUTH_TOKEN_SECRET` nuevo generado con `/dev/urandom` (no existía antes, la versión Java no tenía auth). Backup del `.env.prod` anterior conservado (`chmod 600`). Imagen Java etiquetada `docker-api:pre-go-migration` para rollback antes del rebuild.
+- [x] 8.2 Desplegado (`git checkout feature/migrar-api-golang` + `docker compose -f docker-compose.prod.yml up -d --build`) y verificado end-to-end real: `curl` desde la máquina de desarrollo → 200; `ss -tlnp` confirma que solo escucha en `100.114.190.36:8080` (Tailscale), nunca `0.0.0.0` ni la LAN; `schema_migrations` registra `0001_create_users.sql` aplicada sola contra el PostgreSQL nativo (sin paso manual, corrección de diseño de la sección 3); registro/login/`me` reales contra producción (201/200/200, usuario de prueba limpiado después); `systemctl restart docker` → el contenedor vuelve solo (`restart: unless-stopped`) y `/api/ping` sigue respondiendo; `pg_hba.conf`/`postgresql.conf` no se tocaron en ningún paso del despliegue (el mecanismo nunca los toca, por construcción).
 
 ## 9. Cierre
 
-- [ ] 9.1 Ejecutar `openspec validate --strict` sobre el cambio y corregir cualquier aviso.
-- [ ] 9.2 Actualizar `memory/context.md` (estado actual: `apps/api` pasa de Java a Go) y confirmar que [[ADR-034]] en `memory/decisions.md` queda completa, sin pendientes de esta implementación.
-- [ ] 9.3 `/opsx:archive` y apertura de PR (`feature/migrar-api-golang` → `master`) referenciando el `review.md` archivado, según el flujo de Git del proyecto.
+- [x] 9.1 Ejecutar `openspec validate --strict` sobre el cambio y corregir cualquier aviso. `Change 'migrar-api-golang' is valid`.
+- [x] 9.2 Actualizado `memory/context.md` con el resumen completo de la sesión (stack Go, gap de seguridad real encontrado y corregido, despliegue en producción). [[ADR-034]] confirmada completa, sin pendientes.
+- [x] 9.3 `review.md` escrito (gate de revisión obligatorio del proyecto, no estaba en el plan original de tasks.md — lo exige `openspec instructions archive`): veredicto **APPROVED WITH MINOR ISSUES**. Encontrado y corregido en la propia revisión un gap de validación: `RegisterHandler` no comprobaba el formato del email — añadido `validateEmail` (`internal/auth/user.go`) + 2 tests nuevos, TDD real. `/opsx:archive` y PR #92 (`feature/migrar-api-golang` → `master`, draft) referenciando `review.md`.

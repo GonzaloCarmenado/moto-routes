@@ -103,6 +103,32 @@ func TestRegisterHandler_DuplicateEmailIsRejectedWithoutCreatingASecondAccount(t
 	}
 }
 
+func TestRegisterHandler_EmptyEmailIsRejectedWithoutCreatingAnAccount(t *testing.T) {
+	store := newFakeUserStore()
+
+	rec := doRegister(t, store, "", "correct-horse-battery")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(store.byEmail) != 0 {
+		t.Fatalf("expected no account to be created, got %d", len(store.byEmail))
+	}
+}
+
+func TestRegisterHandler_MalformedEmailIsRejectedWithoutCreatingAnAccount(t *testing.T) {
+	store := newFakeUserStore()
+
+	rec := doRegister(t, store, "not-an-email", "correct-horse-battery")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(store.byEmail) != 0 {
+		t.Fatalf("expected no account to be created, got %d", len(store.byEmail))
+	}
+}
+
 func TestRegisterHandler_WeakPasswordIsRejectedWithoutCreatingAnAccount(t *testing.T) {
 	store := newFakeUserStore()
 

@@ -5,6 +5,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"regexp"
 )
 
 // StoredUser es la representación de un usuario tal y como vive en el almacén.
@@ -19,6 +20,21 @@ var ErrEmailTaken = errors.New("email already registered")
 
 // ErrUserNotFound se devuelve cuando no existe ninguna cuenta con ese email.
 var ErrUserNotFound = errors.New("user not found")
+
+// ErrInvalidEmail se devuelve cuando el email no tiene una forma válida mínima.
+var ErrInvalidEmail = errors.New("email is empty or malformed")
+
+// emailPattern exige el formato mínimo local@dominio.tld — no valida contra
+// RFC 5322 completo, solo descarta cadenas vacías o claramente no-email.
+var emailPattern = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
+
+// validateEmail comprueba que email tiene una forma mínima válida.
+func validateEmail(email string) error {
+	if !emailPattern.MatchString(email) {
+		return ErrInvalidEmail
+	}
+	return nil
+}
 
 // UserStore persiste y consulta cuentas de usuario.
 type UserStore interface {

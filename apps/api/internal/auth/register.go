@@ -26,6 +26,11 @@ func RegisterHandler(store UserStore) http.Handler {
 			return
 		}
 
+		if err := validateEmail(req.Email); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid email")
+			return
+		}
+
 		if err := validatePassword(req.Password); err != nil {
 			writeError(w, http.StatusBadRequest, "password does not meet the minimum complexity policy")
 			return
