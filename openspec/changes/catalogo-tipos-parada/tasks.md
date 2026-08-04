@@ -69,6 +69,6 @@
 
 ## 9. Cierre
 
-- [ ] 9.1 Ejecutar `openspec validate --strict` sobre el cambio y corregir cualquier aviso.
-- [ ] 9.2 Actualizar `memory/context.md` (estado actual) y confirmar que [[ADR-035]] en `memory/decisions.md` queda completa, sin pendientes de esta implementación.
-- [ ] 9.3 Gate de revisión (`review.md`, obligatorio en este proyecto) + `/opsx:archive` + apertura de PR (`feature/catalogo-tipos-parada` → `master`), según el flujo de Git del proyecto.
+- [x] 9.1 Ejecutar `openspec validate --strict` sobre el cambio y corregir cualquier aviso. `openspec validate catalogo-tipos-parada --strict` → "Change 'catalogo-tipos-parada' is valid", sin avisos.
+- [x] 9.2 Actualizar `memory/context.md` (estado actual) y confirmar que [[ADR-035]] en `memory/decisions.md` queda completa, sin pendientes de esta implementación. ADR-035 tiene 8 puntos de decisión, todos con su corrección/verificación real documentada (CORS, consolidación Pausar, gap de CI) — sin pendientes abiertos.
+- [x] 9.3 Gate de revisión (`review.md`, obligatorio en este proyecto) + `/opsx:archive` + apertura de PR (`feature/catalogo-tipos-parada` → `master`), según el flujo de Git del proyecto. `review.md`: veredicto **APPROVED WITH MINOR ISSUES** (verificación independiente completa re-ejecutada: Go con Postgres real, TS con cobertura, Cypress 41/41 incluido backend real, dispositivo Android real).
