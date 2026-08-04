@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { detectStopsFromPoints, formatTimelineTime, formatTimelineCoords, formatTimelineSpeed } from './route-timeline.transform.js';
+import { buildStopDelimiters, buildTimelineData, formatTimelineTime, formatTimelineCoords, formatTimelineSpeed } from './route-timeline.transform.js';
 import type { RoutePoint } from '../../shared/models/route.types.js';
+import type { StopCategory } from '../../shared/stop-types/stop-types.types.js';
+import type { TimelineStopInput } from './route-timeline.types.js';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers de datos de prueba                                        */
@@ -19,134 +21,71 @@ function makePoint(overrides: Partial<RoutePoint> & { timestamp: number; speed: 
 }
 
 /* ------------------------------------------------------------------ */
-/*  Paso 2: detectStopsFromPoints — AC-004 a AC-007                   */
+/*  Paso 2: buildStopDelimiters / buildTimelineData — AC-6.1/6.3/6.4  */
 /* ------------------------------------------------------------------ */
 
-describe('detectStopsFromPoints', () => {
-  it('AC-004: detecta una parada cuando hay >=30 puntos consecutivos con velocidad <=3 km/h', () => {
-    // 35 puntos a 0 km/h (timestamps: 1000, 2000, ..., 35000)
-    const points: RoutePoint[] = Array.from({ length: 35 }, (_, i) =>
-      makePoint({ timestamp: 1000 + i * 1000, speed: 0, lat: 40.4168, lng: -3.7038 }),
-    );
-    const stops = detectStopsFromPoints(points);
-    expect(stops).toHaveLength(1);
-    const stop = stops[0]!;
-    // startTime debe ser el primer punto donde cae la velocidad (AC-006)
-    expect(stop.startTime).toBe(1000);
-    // endTime debe ser el último punto de la ruta porque nunca vuelve a moverse (AC-007)
-    expect(stop.endTime).toBe(35000);
+const MIRADOR: StopCategory = { id: 1, key: 'mirador', label: 'Mirador', icon: '🌄' };
+const BAR: StopCategory = { id: 2, key: 'bar-restaurante', label: 'Bar/Restaurante', icon: '🍺' };
+
+describe('buildStopDelimiters', () => {
+  it('AC-6.1/6.3: convierte una parada real con categoría resuelta en un delimitador "parada" instantáneo con icono/etiqueta', () => {
+    const stops: TimelineStopInput[] = [{ startTime: 5000, lat: 40.42, lng: -3.71, stopCategoryId: 1 }];
+    const delimiters = buildStopDelimiters(stops, new Map([[1, MIRADOR]]));
+    expect(delimiters).toHaveLength(1);
+    const d = delimiters[0]!;
+    expect(d.kind).toBe('parada');
+    expect(d.startTime).toBe(5000);
+    expect(d.endTime).toBe(5000); // instantánea: no hay intervalo, a diferencia de la vieja detección por GPS
+    expect(d.category).toEqual({ icon: '🌄', label: 'Mirador' });
   });
 
-  it('AC-005: una racha de <30 puntos que vuelve a moverse NO genera parada', () => {
-    // 20 puntos lentos, luego 10 rápidos
-    const points: RoutePoint[] = [
-      ...Array.from({ length: 20 }, (_, i) =>
-        makePoint({ id: `slow-${i}`, timestamp: 1000 + i * 1000, speed: 0, lat: 40.4168, lng: -3.7038 }),
-      ),
-      ...Array.from({ length: 10 }, (_, i) =>
-        makePoint({ id: `fast-${i}`, timestamp: 21000 + i * 1000, speed: 50, lat: 40.4168, lng: -3.7039 }),
-      ),
+  it('AC-6.4: descarta una parada cuyo stopCategoryId no está en el catálogo resuelto', () => {
+    const stops: TimelineStopInput[] = [{ startTime: 5000, lat: 40.42, lng: -3.71, stopCategoryId: 99 }];
+    const delimiters = buildStopDelimiters(stops, new Map([[1, MIRADOR]]));
+    expect(delimiters).toEqual([]);
+  });
+
+  it('AC-6.4: descarta una parada sin categoría asignada (stopCategoryId null)', () => {
+    const stops: TimelineStopInput[] = [{ startTime: 5000, lat: 40.42, lng: -3.71, stopCategoryId: null }];
+    const delimiters = buildStopDelimiters(stops, new Map([[1, MIRADOR]]));
+    expect(delimiters).toEqual([]);
+  });
+
+  it('ordena las paradas por startTime', () => {
+    const stops: TimelineStopInput[] = [
+      { startTime: 9000, lat: 40.43, lng: -3.72, stopCategoryId: 2 },
+      { startTime: 3000, lat: 40.42, lng: -3.71, stopCategoryId: 1 },
     ];
-    const stops = detectStopsFromPoints(points);
-    expect(stops).toHaveLength(0);
+    const delimiters = buildStopDelimiters(stops, new Map([[1, MIRADOR], [2, BAR]]));
+    expect(delimiters.map((d) => d.startTime)).toEqual([3000, 9000]);
   });
 
-  it('AC-006: startTime es el punto donde cae la velocidad por primera vez, no el de confirmación 30 puntos después', () => {
-    // 10 puntos rápidos, luego 35 lentos
+  it('devuelve array vacío sin paradas', () => {
+    expect(buildStopDelimiters([], new Map())).toEqual([]);
+  });
+});
+
+describe('buildTimelineData - paradas reales (AC-6.1/6.4)', () => {
+  it('AC-6.1: una parada real con categoría resuelta aparece como fila "parada" entre Salida y Llegada', () => {
     const points: RoutePoint[] = [
-      ...Array.from({ length: 10 }, (_, i) =>
-        makePoint({ id: `fast-${i}`, timestamp: 1000 + i * 1000, speed: 50, lat: 40.4168, lng: -3.7038 }),
-      ),
-      ...Array.from({ length: 35 }, (_, i) =>
-        makePoint({ id: `slow-${i}`, timestamp: 11000 + i * 1000, speed: 0, lat: 40.4168, lng: -3.7038 }),
-      ),
+      makePoint({ timestamp: 1000, speed: 50 }),
+      makePoint({ timestamp: 5000, speed: 0 }),
+      makePoint({ timestamp: 9000, speed: 50 }),
     ];
-    const stops = detectStopsFromPoints(points);
-    expect(stops).toHaveLength(1);
-    const stop = stops[0]!;
-    // AC-006: startTime debe ser 11000 (el primer punto lento), no 40000 (el de confirmación 30 puntos después)
-    expect(stop.startTime).toBe(11000);
-    // AC-006: ubicación debe ser la del punto de inicio (lat/lng del punto en timestamp 11000)
-    expect(stop.lat).toBe(40.4168);
-    expect(stop.lng).toBe(-3.7038);
+    const stops: TimelineStopInput[] = [{ startTime: 5000, lat: 40.4168, lng: -3.7038, stopCategoryId: 1 }];
+    const data = buildTimelineData(points, [], stops, new Map([[1, MIRADOR]]));
+    const kinds = data.rows.map((r) => r.delimiter.kind);
+    expect(kinds).toEqual(['salida', 'parada', 'llegada']);
   });
 
-  it('AC-006: endTime es el primer punto que supera el umbral tras la parada', () => {
-    // 35 puntos lentos, luego 5 rápidos
+  it('AC-6.4: una ruta sin ninguna parada tipada no muestra ningún delimitador de parada', () => {
     const points: RoutePoint[] = [
-      ...Array.from({ length: 35 }, (_, i) =>
-        makePoint({ id: `slow-${i}`, timestamp: 1000 + i * 1000, speed: 0, lat: 40.4168, lng: -3.7038 }),
-      ),
-      ...Array.from({ length: 5 }, (_, i) =>
-        makePoint({ id: `fast-${i}`, timestamp: 36000 + i * 1000, speed: 50, lat: 40.4168, lng: -3.7039 }),
-      ),
+      makePoint({ timestamp: 1000, speed: 50 }),
+      makePoint({ timestamp: 9000, speed: 50 }),
     ];
-    const stops = detectStopsFromPoints(points);
-    expect(stops).toHaveLength(1);
-    const stop = stops[0]!;
-    // endTime debe ser 36000 (primer punto rápido), no 35000 (último lento)
-    expect(stop.endTime).toBe(36000);
-  });
-
-  it('AC-007: ruta que termina con vehículo detenido — endTime = último punto de la ruta', () => {
-    // 40 puntos todos lentos — nunca se mueven
-    const points: RoutePoint[] = Array.from({ length: 40 }, (_, i) =>
-      makePoint({ timestamp: 1000 + i * 1000, speed: 0 }),
-    );
-    const stops = detectStopsFromPoints(points);
-    expect(stops).toHaveLength(1);
-    expect(stops[0]!.endTime).toBe(40000);
-  });
-
-  it('detecta dos paradas independientes con un tramo de movimiento intermedio', () => {
-    // 35 lentos, 10 rápidos, 35 lentos
-    const points: RoutePoint[] = [
-      ...Array.from({ length: 35 }, (_, i) =>
-        makePoint({ id: `slow1-${i}`, timestamp: 1000 + i * 1000, speed: 0, lat: 40.4168, lng: -3.7038 }),
-      ),
-      ...Array.from({ length: 10 }, (_, i) =>
-        makePoint({ id: `fast-${i}`, timestamp: 36000 + i * 1000, speed: 50, lat: 40.4169, lng: -3.7039 }),
-      ),
-      ...Array.from({ length: 35 }, (_, i) =>
-        makePoint({ id: `slow2-${i}`, timestamp: 46000 + i * 1000, speed: 0, lat: 40.4170, lng: -3.7040 }),
-      ),
-    ];
-    const stops = detectStopsFromPoints(points);
-    expect(stops).toHaveLength(2);
-    const s0 = stops[0]!;
-    const s1 = stops[1]!;
-    expect(s0.startTime).toBe(1000);
-    expect(s0.endTime).toBe(36000); // primer punto rápido
-    expect(s1.startTime).toBe(46000);
-    expect(s1.endTime).toBe(80000); // último punto lento (nunca vuelve a moverse tras 2ª parada)
-  });
-
-  it('devuelve array vacío si la velocidad nunca baja de 3 km/h de forma sostenida', () => {
-    // 50 puntos todos rápidos
-    const points: RoutePoint[] = Array.from({ length: 50 }, (_, i) =>
-      makePoint({ timestamp: 1000 + i * 1000, speed: 50 }),
-    );
-    const stops = detectStopsFromPoints(points);
-    expect(stops).toEqual([]);
-  });
-
-  it('devuelve array vacío si no hay puntos', () => {
-    expect(detectStopsFromPoints([])).toEqual([]);
-  });
-
-  it('empieza a contar desde el punto donde la velocidad cae, ignorando puntos rápidos anteriores', () => {
-    // 10 rápidos, 30 lentos
-    const points: RoutePoint[] = [
-      ...Array.from({ length: 10 }, (_, i) =>
-        makePoint({ id: `fast-${i}`, timestamp: 1000 + i * 1000, speed: 50, lat: 40.4168, lng: -3.7038 }),
-      ),
-      ...Array.from({ length: 30 }, (_, i) =>
-        makePoint({ id: `slow-${i}`, timestamp: 11000 + i * 1000, speed: 0, lat: 40.4168, lng: -3.7038 }),
-      ),
-    ];
-    const stops = detectStopsFromPoints(points);
-    expect(stops).toHaveLength(1);
-    expect(stops[0]!.startTime).toBe(11000);
+    const data = buildTimelineData(points, [], [], new Map());
+    const kinds = data.rows.map((r) => r.delimiter.kind);
+    expect(kinds).toEqual(['salida', 'llegada']);
   });
 });
 

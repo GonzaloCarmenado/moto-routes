@@ -1,11 +1,15 @@
-/** Parada detectada dentro de la ruta para la timeline (inicio, fin, ubicación). */
-export interface TimelineStop {
-  /** epoch ms — punto donde la velocidad cae por primera vez (AC-006) */
+/**
+ * Parada real persistida (`route_stops`), reducida a lo que necesita la
+ * timeline: momento y ubicación en que se marcó, y su categoría del
+ * catálogo (null si no tiene tipo asignado — nunca ocurre hoy en la
+ * práctica porque solo se persisten paradas manuales, con modal obligatorio,
+ * pero el tipo lo modela igualmente por fidelidad con `RouteStop`).
+ */
+export interface TimelineStopInput {
   startTime: number;
-  /** epoch ms — punto donde vuelve a superar el umbral, o el último punto de la ruta (AC-007) */
-  endTime: number;
   lat: number;
   lng: number;
+  stopCategoryId: number | null;
 }
 
 /** Tramo de la ruta entre dos delimitadores de la timeline. */
@@ -21,11 +25,13 @@ export type TimelineDelimiterKind = 'salida' | 'parada' | 'llegada';
 /** Delimitador visual de la timeline (Salida, Parada o Llegada con su posición). */
 export interface TimelineDelimiter {
   kind: TimelineDelimiterKind;
+  /** Las paradas manuales son instantáneas (un único punto GPS al pulsar "marcar parada"): startTime === endTime siempre. */
   startTime: number;
-  /** == startTime para salida/llegada; distinto para parada */
   endTime: number;
   lat: number;
   lng: number;
+  /** Solo presente en kind 'parada' con categoría resuelta del catálogo (AC-6.3). */
+  category?: { icon: string; label: string };
 }
 
 /** Marcador de foto en la timeline (id y momento de captura). */

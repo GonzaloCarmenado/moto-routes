@@ -34,9 +34,11 @@ const ROUTE_MARKER_PIN_SVG =
   '</svg>';
 
 import { addPhotoMarkers, photoClusterRadiusForZoom, type MapPhoto } from './route-map-photos.js';
+import { addStopMarkers, type MapStop } from './route-map-stops.js';
 import { buildRoadContrastOverrides, buildRoadLabelContrastOverrides } from './route-map-contrast.js';
 import { createFullscreenToggle, type FullscreenToggle } from './route-map-fullscreen.js';
 import { BaseElement } from '../base-element.js';
+import type { StopCategory } from '../stop-types/stop-types.types.js';
 
 /**
  * Emitido al pulsar la miniatura del popup de un marcador de foto individual
@@ -53,8 +55,11 @@ export interface RouteMapPhotoSelectDetail {
 class RouteMap extends BaseElement {
   private _points: RouteMapPoint[] = [];
   private _photos: MapPhoto[] = [];
+  private _stops: MapStop[] = [];
+  private _categoriesById = new Map<number, StopCategory>();
   private mapInstance: maplibregl.Map | null = null;
   private photoMarkers: maplibregl.Marker[] = [];
+  private stopMarkers: maplibregl.Marker[] = [];
   private skeletonElement: HTMLElement | null = null;
   private fullscreenToggle: FullscreenToggle | null = null;
 
@@ -76,6 +81,24 @@ class RouteMap extends BaseElement {
     return this._photos;
   }
 
+  set stops(value: MapStop[]) {
+    this._stops = value;
+    if (this.mapInstance) this.renderStopMarkers();
+  }
+
+  get stops(): MapStop[] {
+    return this._stops;
+  }
+
+  set stopCategoriesById(value: Map<number, StopCategory>) {
+    this._categoriesById = value;
+    if (this.mapInstance) this.renderStopMarkers();
+  }
+
+  get stopCategoriesById(): Map<number, StopCategory> {
+    return this._categoriesById;
+  }
+
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
@@ -91,6 +114,7 @@ class RouteMap extends BaseElement {
 
   private destroyMap(): void {
     this.photoMarkers = [];
+    this.stopMarkers = [];
     this.skeletonElement = null;
     // El listener de `fullscreenchange` del botón vive en `document`, no en el
     // contenedor del mapa — hay que quitarlo explícitamente aquí (llamado
@@ -189,6 +213,7 @@ class RouteMap extends BaseElement {
       this.collapseAttribution(mapRoot);
       this.drawRoute(map, points);
       this.renderPhotoMarkers();
+      this.renderStopMarkers();
     });
     // El radio de clustering escala con el zoom (ver photoClusterRadiusForZoom), así que
     // hay que recalcularlo cuando el usuario hace zoom para que los clusters se desagrupen.
@@ -212,6 +237,14 @@ class RouteMap extends BaseElement {
   /** Callback compartido para emitir el evento de selección de foto */
   private emitPhotoSelect(photo: MapPhoto): void {
     this.emit<RouteMapPhotoSelectDetail>(ROUTE_MAP_PHOTO_SELECT_EVENT, { photo });
+  }
+
+  /** Marcadores de parada (AC-7.1 a AC-7.3) — sin clustering, a diferencia de las fotos: las paradas son mucho menos numerosas. */
+  private renderStopMarkers(): void {
+    const map = this.mapInstance;
+    if (!map) return;
+    for (const marker of this.stopMarkers) marker.remove();
+    this.stopMarkers = addStopMarkers(map, this._stops, this._categoriesById);
   }
 
   // AC-001/AC-004: aumenta el contraste de las capas de carretera del estilo

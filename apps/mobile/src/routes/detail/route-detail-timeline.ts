@@ -1,5 +1,6 @@
 import type { RoutePoint } from '../../shared/models/route.types.js';
-import type { TimelinePhotoInput, TimelineDelimiter, TimelineSegment, TimelinePhotoMarker } from './route-timeline.types.js';
+import type { StopCategory } from '../../shared/stop-types/stop-types.types.js';
+import type { TimelinePhotoInput, TimelineStopInput, TimelineDelimiter, TimelineSegment, TimelinePhotoMarker } from './route-timeline.types.js';
 import {
   buildTimelineData,
   formatTimelineTime,
@@ -7,20 +8,28 @@ import {
   formatTimelineSpeed,
 } from './route-timeline.transform.js';
 
+/** Datos de entrada para construir el panel de Timeline (agrupados por max-params). */
+export interface TimelinePanelInput {
+  points: RoutePoint[];
+  photos: TimelinePhotoInput[];
+  stops: TimelineStopInput[];
+  categoriesById: Map<number, StopCategory>;
+}
+
 /**
  * Construye el panel DOM de la Timeline (slot="timeline") para inyectar
  * en el `<tab-bar>` de `<route-detail>`.
  */
 export function buildTimelinePanel(
-  points: RoutePoint[],
-  photos: TimelinePhotoInput[],
+  input: TimelinePanelInput,
   onPhotoClick: (photoId: string) => void,
 ): HTMLElement {
+  const { points, photos, stops, categoriesById } = input;
   const section = document.createElement('section');
   section.setAttribute('slot', 'timeline');
   section.className = 'timeline-panel';
 
-  const data = buildTimelineData(points, photos);
+  const data = buildTimelineData(points, photos, stops, categoriesById);
 
   // AC-017: estado vacío total (sin GPS ni fotos)
   if (!data.hasGpsData && data.orphanPhotos.length === 0) {
@@ -100,7 +109,8 @@ function buildDelimiterRow(
 
   const label = document.createElement('span');
   label.className = 'timeline-delimiter-label';
-  label.textContent = kind;
+  // AC-6.3: parada con tipo asignado muestra el icono de su categoría.
+  label.textContent = delimiter.category ? `${delimiter.category.icon} ${kind}` : kind;
 
   const timeSpan = document.createElement('span');
   timeSpan.className = 'timeline-delimiter-time';
@@ -114,12 +124,11 @@ function buildDelimiterRow(
   coordsSpan.textContent = formatTimelineCoords(delimiter.lat, delimiter.lng);
   row.appendChild(coordsSpan);
 
-  // Para parada, mostrar también hora de fin
-  if (delimiter.kind === 'parada' && delimiter.endTime !== delimiter.startTime) {
-    const endSpan = document.createElement('span');
-    endSpan.className = 'timeline-delimiter-extra';
-    endSpan.textContent = '→ ' + formatTimelineTime(delimiter.endTime);
-    row.appendChild(endSpan);
+  if (delimiter.category) {
+    const categorySpan = document.createElement('span');
+    categorySpan.className = 'timeline-delimiter-extra';
+    categorySpan.textContent = delimiter.category.label;
+    row.appendChild(categorySpan);
   }
 
   return row;

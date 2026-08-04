@@ -74,6 +74,19 @@ class AppRoot extends BaseElement {
     window.removeEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
   }
 
+  /** Extraído de `render()` para no superar el límite de statements de la función (ESLint `max-statements`). */
+  private buildRouteDetailView(): HTMLElement {
+    const routeDetail = document.createElement('route-detail') as HTMLElement & {
+      repository: IRouteRepository;
+      routeId: string;
+      stopTypesCacheRepository: IStopTypesCacheRepository;
+    };
+    routeDetail.repository = this.repo;
+    routeDetail.stopTypesCacheRepository = this.stopTypesCacheRepo;
+    routeDetail.className = 'app-view';
+    return routeDetail;
+  }
+
   // Decide primero por isTauri() (en vez de por éxito/fracaso del intento de SQLite)
   // para que la siembra de rutas de test sea determinista y no dependa de si, por
   // casualidad, hay un plugin SQL cargable en el navegador de pruebas (AC-007/AC-010).
@@ -131,9 +144,7 @@ class AppRoot extends BaseElement {
     this.routeListEl = routeList;
     this.appendChild(routeList);
 
-    const routeDetail = document.createElement('route-detail') as HTMLElement & { repository: IRouteRepository; routeId: string };
-    routeDetail.repository = this.repo;
-    routeDetail.className = 'app-view';
+    const routeDetail = this.buildRouteDetailView();
     this.routeDetailEl = routeDetail;
     this.appendChild(routeDetail);
 

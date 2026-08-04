@@ -1,13 +1,16 @@
 import styles from './route-detail.element.css?inline';
 import type { IRouteRepository } from '../../shared/models/route.repository.js';
 import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
-import type { Route, RoutePoint } from '../../shared/models/route.types.js';
+import type { Route, RoutePoint, RouteStop } from '../../shared/models/route.types.js';
+import type { IStopTypesCacheRepository } from '../../shared/models/stop-types-cache.repository.js';
+import type { StopCategory } from '../../shared/stop-types/stop-types.types.js';
 import { formatDuration } from '../../shared/utils/format.js';
 import { formatRouteDate } from '../../shared/utils/date.js';
 import { buildRouteDisplayName } from '../../shared/utils/route-naming.js';
 import '../../shared/route-map/route-map.element.js';
 import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from '../../shared/route-map/route-map.element.js';
 import type { MapPhoto } from '../../shared/route-map/route-map-photos.js';
+import type { MapStop } from '../../shared/route-map/route-map-stops.js';
 import '../../shared/photo-capture/photo-capture.element.js';
 import type { PhotoCaptureElement } from '../../shared/photo-capture/photo-capture.element.js';
 import { PHOTO_CAPTURE_EVENT, type PhotoCaptureEventDetail } from '../../shared/photo-capture/photo-capture.types.js';
@@ -28,7 +31,7 @@ import '../../shared/tab-bar/tab-bar.element.js';
 import type { PhotoWithUrl, TabBarElement } from './route-detail.types.js';
 import { buildNotasPanel, saveRouteNote } from './route-detail-notes.js';
 import { buildTimelinePanel } from './route-detail-timeline.js';
-import type { TimelinePhotoInput } from './route-timeline.types.js';
+import type { TimelinePhotoInput, TimelineStopInput } from './route-timeline.types.js';
 
 class RouteDetail extends BaseElement {
   private _repository: IRouteRepository | null = null;
@@ -38,6 +41,9 @@ class RouteDetail extends BaseElement {
   private _photos: PhotoWithUrl[] = [];
   private _points: { lat: number; lng: number }[] = [];
   private _routePoints: RoutePoint[] = [];
+  private _routeStops: RouteStop[] = [];
+  private _stopTypesCache: IStopTypesCacheRepository | null = null;
+  private _categoriesById = new Map<number, StopCategory>();
   private _photoCaptureEl: PhotoCaptureElement | null = null;
   private _fotosPanelEl: HTMLElement | null = null;
   private _timelinePanelEl: HTMLElement | null = null;
@@ -54,6 +60,10 @@ class RouteDetail extends BaseElement {
 
   get repository(): IRouteRepository | null {
     return this._repository;
+  }
+
+  set stopTypesCacheRepository(repo: IStopTypesCacheRepository | null) {
+    this._stopTypesCache = repo;
   }
 
   set routeId(id: string | null) {
@@ -92,14 +102,18 @@ class RouteDetail extends BaseElement {
     this.render();
 
     const photoRepo = await this.getPhotoRepo();
-    const [route, points, photos] = await Promise.all([
+    const [route, points, stops, photos, categories] = await Promise.all([
       this._repository.getById(this._routeId),
       this._repository.getPointsByRouteId(this._routeId),
+      this._repository.getStopsByRouteId(this._routeId),
       photoRepo.getByRouteId(this._routeId),
+      this._stopTypesCache?.getAll() ?? Promise.resolve([]),
     ]);
     this._route = route;
     this._routePoints = points;
     this._points = points.map((p) => ({ lat: p.lat, lng: p.lng }));
+    this._routeStops = stops;
+    this._categoriesById = new Map(categories.map((c) => [c.id, c]));
     this.revokePhotoUrls();
     // Convert file paths to accessible URLs (handles Tauri convertFileSrc)
     this._photos = await Promise.all(photos.map(async (p) => ({
@@ -161,9 +175,14 @@ class RouteDetail extends BaseElement {
     const routeMap = document.createElement('route-map') as HTMLElement & {
       points: { lat: number; lng: number }[];
       photos?: MapPhoto[];
+      stops?: MapStop[];
+      stopCategoriesById?: Map<number, StopCategory>;
     };
     routeMap.points = points.map((p) => ({ lat: p.lat, lng: p.lng }));
     routeMap.photos = this._photos; // AC-016: objectUrl ya resuelto, igual que la galería
+    // AC-7.1 a AC-7.3: mismos datos ya resueltos para la timeline (Grupo 6), reutilizados aquí.
+    routeMap.stops = this._routeStops.map((s) => ({ lat: s.lat, lng: s.lng, stopCategoryId: s.stopCategoryId }));
+    routeMap.stopCategoriesById = this._categoriesById;
     // AC-015/AC-017: solo el marcador individual dispara este evento, nunca un cluster.
     routeMap.addEventListener(ROUTE_MAP_PHOTO_SELECT_EVENT, ((event: CustomEvent<RouteMapPhotoSelectDetail>) => {
       const index = this.toGalleryPhotos().findIndex((p) => p.id === event.detail.photo.id);
@@ -365,9 +384,14 @@ class RouteDetail extends BaseElement {
       id: p.id,
       capturedAt: p.capturedAt,
     }));
+    const timelineStops: TimelineStopInput[] = this._routeStops.map((s) => ({
+      startTime: s.startTime,
+      lat: s.lat,
+      lng: s.lng,
+      stopCategoryId: s.stopCategoryId,
+    }));
     const el = buildTimelinePanel(
-      this._routePoints,
-      timelinePhotos,
+      { points: this._routePoints, photos: timelinePhotos, stops: timelineStops, categoriesById: this._categoriesById },
       (photoId: string): void => {
         const idx = this.toGalleryPhotos().findIndex((gp) => gp.id === photoId);
         if (idx !== -1) this.openPhotoViewerAt(idx);

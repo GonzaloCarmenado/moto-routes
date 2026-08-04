@@ -63,7 +63,7 @@ func main() {
 	router := chi.NewRouter()
 	router.Use(httpmw.Recover)
 	router.Get("/api/ping", ping.Handler(ping.PostgresService{Pool: pool}).ServeHTTP)
-	router.Get("/api/stop-types", stoptypes.Handler(stoptypes.PostgresRepository{Pool: pool}).ServeHTTP)
+	router.With(httpmw.PublicCORS).Get("/api/stop-types", stoptypes.Handler(stoptypes.PostgresRepository{Pool: pool}).ServeHTTP)
 	loginRateLimiter := auth.NewLoginRateLimiter(loginRateLimitMaxAttempts, loginRateLimitWindow)
 
 	router.Post("/api/auth/register", auth.RegisterHandler(userStore).ServeHTTP)
