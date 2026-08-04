@@ -10,7 +10,14 @@ echo "🔒 Auditando vulnerabilidades (Rust)..."
 # vulnerable (autenticación caching_sha2_password) es inalcanzable en runtime.
 # Reevaluar si tauri-plugin-sql cambia de versión. Ver design.md de
 # openspec/changes/auditoria-seguridad/ para el detalle completo.
-(cd apps/mobile/src-tauri && cargo audit --ignore RUSTSEC-2023-0071) || exit 1
+# RUSTSEC-2026-0235 (rkyv, out-of-bounds read, fix en >=0.8.17): llega vía el
+# feature opcional "rkyv" de rust_decimal, a su vez transitivo de sqlx (mismo
+# árbol que RUSTSEC-2023-0071). Confirmado con `cargo tree -e features -i
+# rust_decimal --target all` que este proyecto solo activa "default"/"serde"/
+# "std" de rust_decimal — el feature "rkyv" nunca se activa, así que el crate
+# vulnerable ni siquiera se compila en este build. Reevaluar si rust_decimal
+# o su feature activo cambian.
+(cd apps/mobile/src-tauri && cargo audit --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0235) || exit 1
 
 echo "🔒 Auditando vulnerabilidades (Go)..."
 (cd apps/api && govulncheck ./...) || exit 1

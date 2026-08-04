@@ -41,6 +41,13 @@ infra/docker/.env
 # Credenciales del servidor de producción, ver .env.prod.example (despliegue-servidor-tailscale)
 infra/docker/.env.prod
 
+# apps/mobile: host real de apps/api en producción (ver .env.example, catalogo-tipos-parada/ADR-035)
+# — nunca en un fichero versionado, el repo es público.
+apps/mobile/.env.local
+apps/mobile/.env.*.local
+# Override local de tauri.conf.json para el build de producción (CSP con el host real).
+apps/mobile/src-tauri/tauri.conf.prod.local.json
+
 # OS
 Thumbs.db
 Desktop.ini
