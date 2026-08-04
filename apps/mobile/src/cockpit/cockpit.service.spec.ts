@@ -272,6 +272,107 @@ describe('createCockpitService - puntos GPS y distancia', () => {
   });
 });
 
+describe('createCockpitService - addManualStop (catalogo-tipos-parada)', () => {
+  let gps: GpsProvider;
+  let service: ReturnType<typeof createCockpitService>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    gps = createMockGps();
+    service = createCockpitService(gps, createMockStorage());
+  });
+
+  it('does nothing when there is no recording in progress (idle)', () => {
+    service.addManualStop(1);
+
+    expect(service.getCurrentState().manualStops).toEqual([]);
+  });
+
+  it('does nothing when recording is active but no GPS point has arrived yet', () => {
+    service.startRecording();
+
+    service.addManualStop(1);
+
+    expect(service.getCurrentState().manualStops).toEqual([]);
+  });
+
+  it('registers a manual stop at the most recent GPS point when recording', () => {
+    const fireWatch = mockWatchCallback(gps);
+    service.startRecording();
+    fireWatch({
+      coords: { latitude: 41.38, longitude: 2.18, altitude: 10, speed: 0, accuracy: 10, altitudeAccuracy: 10, heading: 0 },
+      timestamp: 5000,
+    } as GeolocationPosition);
+
+    service.addManualStop(3);
+
+    const { manualStops } = service.getCurrentState();
+    expect(manualStops).toHaveLength(1);
+    expect(manualStops[0]).toEqual({ timestamp: 5000, lat: 41.38, lng: 2.18, stopCategoryId: 3 });
+  });
+
+  it('registers a manual stop while paused too (the control is shown during pause)', () => {
+    const fireWatch = mockWatchCallback(gps);
+    service.startRecording();
+    fireWatch({
+      coords: { latitude: 41.38, longitude: 2.18, altitude: 10, speed: 0, accuracy: 10, altitudeAccuracy: 10, heading: 0 },
+      timestamp: 5000,
+    } as GeolocationPosition);
+    service.pauseRecording();
+
+    service.addManualStop(3);
+
+    expect(service.getCurrentState().manualStops).toHaveLength(1);
+  });
+
+  it('accumulates multiple manual stops across the recording', () => {
+    const fireWatch = mockWatchCallback(gps);
+    service.startRecording();
+    fireWatch({
+      coords: { latitude: 1, longitude: 1, altitude: 0, speed: 0, accuracy: 10, altitudeAccuracy: 10, heading: 0 },
+      timestamp: 1000,
+    } as GeolocationPosition);
+    service.addManualStop(1);
+    fireWatch({
+      coords: { latitude: 2, longitude: 2, altitude: 0, speed: 0, accuracy: 10, altitudeAccuracy: 10, heading: 0 },
+      timestamp: 2000,
+    } as GeolocationPosition);
+    service.addManualStop(2);
+
+    expect(service.getCurrentState().manualStops).toHaveLength(2);
+  });
+
+  it('notifies listeners when a manual stop is registered', () => {
+    const fireWatch = mockWatchCallback(gps);
+    service.startRecording();
+    fireWatch({
+      coords: { latitude: 1, longitude: 1, altitude: 0, speed: 0, accuracy: 10, altitudeAccuracy: 10, heading: 0 },
+      timestamp: 1000,
+    } as GeolocationPosition);
+    const listener = vi.fn();
+    service.subscribe(listener);
+
+    service.addManualStop(1);
+
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ manualStops: expect.arrayContaining([expect.objectContaining({ stopCategoryId: 1 })]) as unknown }));
+  });
+
+  it('resets manualStops when a new recording starts', () => {
+    const fireWatch = mockWatchCallback(gps);
+    service.startRecording();
+    fireWatch({
+      coords: { latitude: 1, longitude: 1, altitude: 0, speed: 0, accuracy: 10, altitudeAccuracy: 10, heading: 0 },
+      timestamp: 1000,
+    } as GeolocationPosition);
+    service.addManualStop(1);
+    service.discardStop();
+
+    service.startRecording();
+
+    expect(service.getCurrentState().manualStops).toEqual([]);
+  });
+});
+
 describe('createCockpitService - temporizador', () => {
   let gps: GpsProvider;
   let service: ReturnType<typeof createCockpitService>;
@@ -360,6 +461,39 @@ describe('createCockpitService with repository', () => {
     const all = await repo.getAll();
     expect(all).toHaveLength(1);
     expect(all[0]!.duration).toBeGreaterThanOrEqual(0);
+  });
+
+  it('persists a manual stop with its category on confirmSaveRecording (catalogo-tipos-parada)', async () => {
+    const service = createCockpitService(gps, createMockStorage(), repo);
+    const fireWatch = mockWatchCallback(gps);
+    service.startRecording();
+    fireWatch({
+      coords: { latitude: 41.38, longitude: 2.18, altitude: 10, speed: 0, accuracy: 10, altitudeAccuracy: 10, heading: 0 },
+      timestamp: 5000,
+    } as GeolocationPosition);
+    service.addManualStop(3);
+    const routeId = service.getCurrentState().routeId;
+
+    service.prepareStop();
+    service.confirmSaveRecording('Ruta de prueba');
+
+    const stops = await repo.getStopsByRouteId(routeId);
+    expect(stops).toHaveLength(1);
+    expect(stops[0]!.type).toBe('manual');
+    expect(stops[0]!.stopCategoryId).toBe(3);
+    expect(stops[0]!.lat).toBe(41.38);
+    expect(stops[0]!.lng).toBe(2.18);
+  });
+
+  it('does not persist any stop when no manual stop was marked (auto-detected stops are never persisted)', async () => {
+    const service = createCockpitService(gps, createMockStorage(), repo);
+    service.startRecording();
+    const routeId = service.getCurrentState().routeId;
+    service.prepareStop();
+    service.confirmSaveRecording('Ruta de prueba');
+
+    const stops = await repo.getStopsByRouteId(routeId);
+    expect(stops).toEqual([]);
   });
 
   it('should NOT persist a completed row when the recording is discarded instead of confirmed', async () => {

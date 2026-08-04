@@ -27,15 +27,17 @@
 
 ## 4. Móvil: marcar parada manual (`cockpit`)
 
-- [ ] 4.1 Test en rojo + implementación: nuevo control de "marcar parada" visible durante una grabación activa (`data-cy` propio, hitbox 56×56px, tokens de `tokens.css`).
-- [ ] 4.2 Test en rojo + implementación: pulsar el control abre el modal de selección de tipo (nuevo componente, `data-cy` propio).
-- [ ] 4.3 Test en rojo + implementación: elegir un tipo en el modal persiste la parada asociada a la ruta con ese tipo (`buildStops()` deja de ser un stub).
-- [ ] 4.4 Test en rojo + implementación: cerrar el modal sin elegir tipo no crea ninguna parada.
-- [ ] 4.5 Test en rojo + implementación (regresión): una parada detectada automáticamente por GPS (velocidad baja) sin que el usuario pulse el control no abre el modal ni persiste nada.
+- [x] 4.1 Control de "marcar parada" (`cockpit.render.ts::buildMarkStopButton`, `data-cy="cockpit-mark-stop"`, hitbox `var(--hitbox-min)`, tokens), visible solo con grabación activa. Test en `cockpit.element.spec.ts`.
+- [x] 4.2 Pulsar el control abre `<cockpit-stop-type-dialog>` (nuevo componente, cerrable — a diferencia de `cockpit-save-route-dialog`, elegir tipo es opcional) con el catálogo cacheado. 7 tests propios del componente + test de integración en `cockpit.element.spec.ts`.
+- [x] 4.3 Elegir un tipo llama a `service.addManualStop(id)` (nuevo método de `CockpitService`, guarda en `state.manualStops` con el último punto GPS) y `buildStops()`/`buildMetadata()` dejan de ser stubs — persisten de verdad en `route_stops` con `stopCategoryId`. Verificado end-to-end (marcar → `confirmSaveRecording` → `getStopsByRouteId`) en `cockpit.service.spec.ts`.
+- [x] 4.4 Cerrar el modal (cancelar, click fuera, ESC) resuelve `null` y no llama a `addManualStop` — 3 tests en el propio componente del modal.
+- [x] 4.5 Regresión: la detección automática GPS (`detectStop()`/`stopState`) no cambia — nunca llama a `addManualStop` ni abre el modal; `addManualStop` es la única vía de escritura de `manualStops`, y solo la dispara el control manual. Test explícito: "does not persist any stop when no manual stop was marked".
+
+**Gap real encontrado y corregido durante este grupo**: al completar la UI, `cockpit.element.ts` y `cockpit.service.ts` superaron el límite de 300 líneas del proyecto (ESLint `max-lines`, ya bloqueaba el pre-commit). Corregido con extracciones que ya seguían el patrón existente del dominio (no ad-hoc): `gps/cockpit-browser-gps.service.ts` (createBrowserGpsProvider, ya vivía inline en cockpit.service.ts), `mark-stop/cockpit-mark-stop.service.ts` (orquestación del flujo, mismo patrón que `stop/cockpit-stop.service.ts`), `cockpit.transform.ts::buildPhotoCaptureContext` (lógica pura, extraída de `handlePhotoCapture`), y `shared/repositories/sqlite-stop-types-cache.factory.ts` (fallback SQLite→memoria, reutilizado también en `app.element.ts`, eliminando una duplicación real entre ambos ficheros). 804/804 tests, 96% cobertura global.
 
 ## 5. Móvil: esquema de persistencia de paradas
 
-- [ ] 5.1 Test en rojo + implementación: columna `stop_type_id` nueva en `route_stops` (patrón `ensureColumn` ya existente), `RouteStop`/`CreateRouteStop` (`shared/models/route.types.ts`) actualizados.
+- [x] 5.1 Test en rojo + implementación: columna `stop_type_id` nueva en `route_stops` (patrón `ensurePreviewPolylineColumn` ya existente — `ensureColumn` genérico está hardcodeado a `routes`, así que se replicó como método dedicado). `RouteStop`/`CreateRouteStop` ganan `stopCategoryId: number | null` (no `stopType`, para no colisionar con el `StopType`='manual'|'auto' ya existente en `route.types.ts` — mismo motivo por el que el catálogo se llama `StopCategory`, no `StopType`, en `shared/stop-types/`). Adelantada desde el grupo 4: 4.3 la necesitaba para poder persistir de verdad. Actualizados `MemoryRouteRepository`, el mock de test compartido y las 4 aserciones de recuento de `ALTER TABLE` ya existentes que se habrían roto sin el nuevo `hasStopTypeIdColumn` en el mock.
 
 ## 6. Móvil: timeline (`routes/detail`)
 

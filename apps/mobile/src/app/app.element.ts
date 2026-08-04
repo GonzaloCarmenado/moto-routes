@@ -5,12 +5,18 @@ import '../routes/detail/route-detail.element.js';
 import '../profile/profile.element.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { IProfileRepository } from '../shared/models/profile.repository.js';
+import type { IStopTypesCacheRepository } from '../shared/models/stop-types-cache.repository.js';
 import { SqliteRouteRepository } from '../shared/repositories/sqlite-route.repository.js';
 import { createSqliteDb } from '../shared/repositories/sqlite-route.factory.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
 import { SqliteProfileRepository } from '../shared/repositories/sqlite-profile.repository.js';
 import { createSqliteProfileDb } from '../shared/repositories/sqlite-profile.factory.js';
 import { MemoryProfileRepository } from '../shared/repositories/memory-profile.repository.js';
+import { MemoryStopTypesCacheRepository } from '../shared/repositories/memory-stop-types-cache.repository.js';
+import { createStopTypesCacheRepository } from '../shared/repositories/sqlite-stop-types-cache.factory.js';
+import { refreshStopTypesCache } from '../shared/stop-types/stop-types.service.js';
+import { fetchStopTypesFromApi } from '../shared/stop-types/stop-types-api.service.js';
+import { getApiBaseUrl } from '../shared/http/api-config.js';
 import { BaseElement } from '../shared/base-element.js';
 import { APP_EVENTS, type AppEventDetailMap } from '../shared/app-events.js';
 import { isTauri } from '../shared/services/photo-capture-adapter.service.js';
@@ -32,6 +38,7 @@ function navViewFor(view: AppView): NavBarActiveView {
 class AppRoot extends BaseElement {
   private repo: IRouteRepository = new MemoryRouteRepository();
   private profileRepo: IProfileRepository = new MemoryProfileRepository();
+  private stopTypesCacheRepo: IStopTypesCacheRepository = new MemoryStopTypesCacheRepository();
   private cockpitEl: HTMLElement | null = null;
   private routeListEl: HTMLElement | null = null;
   private routeDetailEl: HTMLElement | null = null;
@@ -84,6 +91,7 @@ class AppRoot extends BaseElement {
       } catch {
         this.profileRepo = new MemoryProfileRepository();
       }
+      this.stopTypesCacheRepo = await createStopTypesCacheRepository();
     } else {
       const memRepo = new MemoryRouteRepository();
       const memProfileRepo = new MemoryProfileRepository();
@@ -92,14 +100,27 @@ class AppRoot extends BaseElement {
       this.profileRepo = memProfileRepo;
     }
     this.render();
+
+    // Best-effort, en segundo plano: no bloquea el arranque ni el primer render.
+    // Si falla (sin red, apps/api no disponible), la caché existente se queda tal
+    // cual — ver refreshStopTypesCache.
+    void refreshStopTypesCache({
+      cache: this.stopTypesCacheRepo,
+      fetchFromApi: fetchStopTypesFromApi,
+      apiBaseUrl: getApiBaseUrl(),
+    });
   }
 
   // app-root monta las vistas en su DOM ligero (no usa Shadow DOM). El layout
   // (posición y visibilidad de las vistas) vive en index.css: `app-root`,
   // `app-root > .app-view` y `app-root > nav-bar`.
   protected render(): void {
-    const cockpit = document.createElement('cockpit-view') as HTMLElement & { repository: IRouteRepository };
+    const cockpit = document.createElement('cockpit-view') as HTMLElement & {
+      repository: IRouteRepository;
+      stopTypesCacheRepository: IStopTypesCacheRepository;
+    };
     cockpit.repository = this.repo;
+    cockpit.stopTypesCacheRepository = this.stopTypesCacheRepo;
     cockpit.className = 'app-view';
     this.cockpitEl = cockpit;
     this.appendChild(cockpit);

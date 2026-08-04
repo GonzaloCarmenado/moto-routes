@@ -48,6 +48,7 @@ const SCHEMA = `
     lat REAL NOT NULL,
     lng REAL NOT NULL,
     type TEXT NOT NULL DEFAULT 'auto',
+    stop_type_id INTEGER,
     FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE
   );
 `;
@@ -89,6 +90,19 @@ export class SqliteRouteRepository implements IRouteRepository {
     await this.ensurePreviewPolylineColumn();
     await this.ensureColumn('name', 'TEXT');
     await this.ensureColumn('notes', 'TEXT');
+    await this.ensureStopTypeIdColumn();
+  }
+
+  /**
+   * Mismo gap que `ensurePreviewPolylineColumn`: `CREATE TABLE IF NOT EXISTS`
+   * no migra una tabla `route_stops` que ya existía antes de esta columna.
+   */
+  private async ensureStopTypeIdColumn(): Promise<void> {
+    const columns = await this.db.select('PRAGMA table_info(route_stops);');
+    const hasColumn = columns.some((c) => c['name'] === 'stop_type_id');
+    if (!hasColumn) {
+      await this.db.execute('ALTER TABLE route_stops ADD COLUMN stop_type_id INTEGER;');
+    }
   }
 
   /**
@@ -158,13 +172,13 @@ export class SqliteRouteRepository implements IRouteRepository {
     }
 
     if (stops.length > 0) {
-      const placeholders = stops.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
+      const placeholders = stops.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
       const values: unknown[] = [];
       for (const s of stops) {
-        values.push(crypto.randomUUID(), id, s.startTime, s.endTime, s.lat, s.lng, s.type);
+        values.push(crypto.randomUUID(), id, s.startTime, s.endTime, s.lat, s.lng, s.type, s.stopCategoryId);
       }
       await this.db.execute(
-        `INSERT INTO route_stops (id, route_id, start_time, end_time, lat, lng, type) VALUES ${placeholders}`,
+        `INSERT INTO route_stops (id, route_id, start_time, end_time, lat, lng, type, stop_type_id) VALUES ${placeholders}`,
         values,
       );
     }
@@ -262,6 +276,7 @@ interface RouteStopRow {
   lat: number;
   lng: number;
   type: string;
+  stop_type_id: number | null;
 }
 
 function rowToRoute(r: RouteRow): Route {
@@ -301,5 +316,6 @@ function rowToStop(r: RouteStopRow): RouteStop {
     lat: r.lat,
     lng: r.lng,
     type: r.type as RouteStop['type'],
+    stopCategoryId: r.stop_type_id ?? null,
   };
 }

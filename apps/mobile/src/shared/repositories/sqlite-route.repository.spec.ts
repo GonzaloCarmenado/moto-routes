@@ -33,13 +33,22 @@ function insertPoints(rows: DbRow[], params: unknown[]): { rowsAffected: number 
 }
 
 function insertStops(rows: DbRow[], params: unknown[]): { rowsAffected: number } {
-  for (let i = 0; i < params.length; i += 7) {
+  for (let i = 0; i < params.length; i += 8) {
     rows.push({
       table: 'route_stops',
-      data: { id: params[i]!, route_id: params[i + 1]!, start_time: params[i + 2]!, end_time: params[i + 3]!, lat: params[i + 4]!, lng: params[i + 5]!, type: params[i + 6]! },
+      data: {
+        id: params[i]!,
+        route_id: params[i + 1]!,
+        start_time: params[i + 2]!,
+        end_time: params[i + 3]!,
+        lat: params[i + 4]!,
+        lng: params[i + 5]!,
+        type: params[i + 6]!,
+        stop_type_id: params[i + 7] ?? null,
+      },
     });
   }
-  return { rowsAffected: params.length / 7 };
+  return { rowsAffected: params.length / 8 };
 }
 
 function updateRoute(rows: DbRow[], params: unknown[]): { rowsAffected: number } {
@@ -153,13 +162,19 @@ interface MigrationMockOptions {
   hasPreviewPolylineColumn?: boolean;
   hasNameColumn?: boolean;
   hasNotesColumn?: boolean;
+  /** Por defecto `true`: estas suites cubren las columnas de `routes`, no la
+   * migración de `route_stops` (ver describe dedicado más abajo) — sin esto,
+   * cada test contaría también el ALTER TABLE de `stop_type_id`. */
+  hasStopTypeIdColumn?: boolean;
 }
 
 function createMigrationMockDb(options: MigrationMockOptions = {}): {
   db: SqlDb;
   alterTableCalls: string[];
 } {
-  const { hasPreviewPolylineColumn = false, hasNameColumn = false, hasNotesColumn = false } = options;
+  const {
+    hasPreviewPolylineColumn = false, hasNameColumn = false, hasNotesColumn = false, hasStopTypeIdColumn = true,
+  } = options;
   const alterTableCalls: string[] = [];
   const preexistingRow = {
     id: 'legacy-route-1',
@@ -184,6 +199,16 @@ function createMigrationMockDb(options: MigrationMockOptions = {}): {
     ...(hasNameColumn ? [{ name: 'name' }] : []),
     ...(hasNotesColumn ? [{ name: 'notes' }] : []),
   ];
+  const stopColumnInfo = [
+    { name: 'id' },
+    { name: 'route_id' },
+    { name: 'start_time' },
+    { name: 'end_time' },
+    { name: 'lat' },
+    { name: 'lng' },
+    { name: 'type' },
+    ...(hasStopTypeIdColumn ? [{ name: 'stop_type_id' }] : []),
+  ];
 
   const db: SqlDb = {
     execute: vi.fn((sql: string) => {
@@ -193,6 +218,7 @@ function createMigrationMockDb(options: MigrationMockOptions = {}): {
     }),
     select: vi.fn((sql: string) => {
       const upper = sql.trim().toUpperCase();
+      if (upper.startsWith('PRAGMA TABLE_INFO(ROUTE_STOPS')) return Promise.resolve(stopColumnInfo);
       if (upper.startsWith('PRAGMA TABLE_INFO')) return Promise.resolve(columnInfo);
       if (upper.startsWith('SELECT * FROM ROUTES')) return Promise.resolve([{ ...preexistingRow }]);
       return Promise.resolve([]);
@@ -264,6 +290,31 @@ describe('name/notes columns migration (AC-004, AC-007, AC-015)', () => {
   it('does not run ALTER TABLE for name/notes when both already exist', async () => {
     const { db, alterTableCalls } = createMigrationMockDb({
       hasPreviewPolylineColumn: true, hasNameColumn: true, hasNotesColumn: true,
+    });
+    const repo = new SqliteRouteRepository(db);
+
+    await repo.getAll();
+
+    expect(alterTableCalls).toHaveLength(0);
+  });
+});
+
+describe('stop_type_id column migration (catalogo-tipos-parada)', () => {
+  it('runs ALTER TABLE exactly once when stop_type_id is missing from a preexisting route_stops table', async () => {
+    const { db, alterTableCalls } = createMigrationMockDb({
+      hasPreviewPolylineColumn: true, hasNameColumn: true, hasNotesColumn: true, hasStopTypeIdColumn: false,
+    });
+    const repo = new SqliteRouteRepository(db);
+
+    await repo.getAll();
+
+    expect(alterTableCalls).toContain('ALTER TABLE route_stops ADD COLUMN stop_type_id INTEGER;');
+    expect(alterTableCalls).toHaveLength(1);
+  });
+
+  it('does not run ALTER TABLE when stop_type_id already exists', async () => {
+    const { db, alterTableCalls } = createMigrationMockDb({
+      hasPreviewPolylineColumn: true, hasNameColumn: true, hasNotesColumn: true, hasStopTypeIdColumn: true,
     });
     const repo = new SqliteRouteRepository(db);
 

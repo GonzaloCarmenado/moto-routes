@@ -33,6 +33,7 @@ const sampleStop = (routeId: string): CreateRouteStop => ({
   lat: 40.42,
   lng: -3.7,
   type: 'auto',
+  stopCategoryId: null,
 });
 
 function registerPersistenceTests(getRepo: () => IRouteRepository): void {

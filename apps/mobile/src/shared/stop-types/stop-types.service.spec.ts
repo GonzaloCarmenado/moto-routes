@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { refreshStopTypesCache } from './stop-types.service.js';
 import { MemoryStopTypesCacheRepository } from '../repositories/memory-stop-types-cache.repository.js';
-import type { StopType } from './stop-types.types.js';
+import type { StopCategory } from './stop-types.types.js';
 
-const freshCatalog: StopType[] = [
+const freshCatalog: StopCategory[] = [
   { id: 1, key: 'bar-restaurante', label: 'Bar / restaurante', icon: '🍽️' },
 ];
 

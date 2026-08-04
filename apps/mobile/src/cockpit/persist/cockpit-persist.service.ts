@@ -47,9 +47,18 @@ function buildCreatePoints(s: CockpitState): CreateRoutePoint[] {
   }));
 }
 
-function buildStops(_s: CockpitState): CreateRouteStop[] {
-  // Por ahora sin detección de paradas implementada
-  return [];
+/** Paradas manuales marcadas en vivo (ver cockpit.service.ts addManualStop) — las
+ * únicas que se persisten; las detectadas automáticamente nunca llegan aquí. */
+function buildStops(s: CockpitState): CreateRouteStop[] {
+  return s.manualStops.map((m) => ({
+    routeId: s.routeId,
+    startTime: m.timestamp,
+    endTime: null,
+    lat: m.lat,
+    lng: m.lng,
+    type: 'manual',
+    stopCategoryId: m.stopCategoryId,
+  }));
 }
 
 function persistFallback(data: string): void {

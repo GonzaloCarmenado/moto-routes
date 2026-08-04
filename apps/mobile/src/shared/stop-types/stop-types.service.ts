@@ -1,10 +1,10 @@
 import type { IStopTypesCacheRepository } from '../models/stop-types-cache.repository.js';
-import type { StopType } from './stop-types.types.js';
+import type { StopCategory } from './stop-types.types.js';
 
 /** Dependencias de refreshStopTypesCache — inyectadas para poder testear sin red ni Tauri. */
 export interface RefreshStopTypesCacheDeps {
   cache: IStopTypesCacheRepository;
-  fetchFromApi: (apiBaseUrl: string) => Promise<StopType[]>;
+  fetchFromApi: (apiBaseUrl: string) => Promise<StopCategory[]>;
   apiBaseUrl: string;
 }
 

@@ -216,6 +216,37 @@
 }
 .control-btn .icon-stop { width: 26px; height: 26px; border-radius: 6px; background: var(--bezel); }
 
+/* Marcar parada manual (catalogo-tipos-parada) */
+.mark-stop-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hitbox-min);
+  height: var(--hitbox-min);
+  min-width: var(--hitbox-min);
+  min-height: var(--hitbox-min);
+  margin: var(--space-4) auto 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--panel);
+  color: var(--amber);
+  cursor: pointer;
+  transition: transform var(--transition-fast), background var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.mark-stop-btn:active { transform: scale(0.94); }
+.mark-stop-btn:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+.icon-stop-marker {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 3px solid var(--amber);
+}
+
 /* Arco de progreso (mantener pulsado para finalizar) */
 .control-btn__arc {
   position: absolute;

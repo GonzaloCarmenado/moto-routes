@@ -1,4 +1,4 @@
-import type { StopType } from '../stop-types/stop-types.types.js';
+import type { StopCategory } from '../stop-types/stop-types.types.js';
 
 /**
  * Caché local del catálogo de tipos de parada, para que el modal de
@@ -8,8 +8,8 @@ import type { StopType } from '../stop-types/stop-types.types.js';
  */
 export interface IStopTypesCacheRepository {
   /** Sustituye el catálogo cacheado por uno nuevo (reemplazo completo, no incremental). */
-  replaceAll(types: StopType[]): Promise<void>;
+  replaceAll(types: StopCategory[]): Promise<void>;
 
   /** Lee el catálogo cacheado — lista vacía si no hay caché todavía. */
-  getAll(): Promise<StopType[]>;
+  getAll(): Promise<StopCategory[]>;
 }

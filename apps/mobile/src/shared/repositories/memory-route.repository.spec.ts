@@ -27,9 +27,9 @@ describe('MemoryRouteRepository.seed()', () => {
     const routeA = buildRoute('route-a', '2026-01-01T00:00:00.000Z');
     const routeB = buildRoute('route-b', '2026-01-02T00:00:00.000Z');
     const pointsA: RoutePoint[] = [{ id: 'p1', routeId: 'route-a', timestamp: 1, lat: 1, lng: 2, alt: 0, speed: 0 }];
-    const stopsA: RouteStop[] = [{ id: 's1', routeId: 'route-a', startTime: 1, endTime: 2, lat: 1, lng: 2, type: 'auto' }];
+    const stopsA: RouteStop[] = [{ id: 's1', routeId: 'route-a', startTime: 1, endTime: 2, lat: 1, lng: 2, type: 'auto', stopCategoryId: null }];
     const pointsB: RoutePoint[] = [{ id: 'p2', routeId: 'route-b', timestamp: 5, lat: 3, lng: 4, alt: 0, speed: 0 }];
-    const stopsB: RouteStop[] = [{ id: 's2', routeId: 'route-b', startTime: 5, endTime: 6, lat: 3, lng: 4, type: 'manual' }];
+    const stopsB: RouteStop[] = [{ id: 's2', routeId: 'route-b', startTime: 5, endTime: 6, lat: 3, lng: 4, type: 'manual', stopCategoryId: 2 }];
 
     repo.seed(
       [routeA, routeB],
