@@ -13,7 +13,7 @@ import { resolve } from 'node:path';
 const preCommitPath = resolve(process.cwd(), '../../.husky/pre-commit');
 const preCommit = readFileSync(preCommitPath, 'utf8');
 
-describe('.husky/pre-commit — gate de auditoría de dependencias (frontend y Rust)', () => {
+describe('.husky/pre-commit — gate de auditoría de dependencias (frontend, Rust y Go)', () => {
   it('runs pnpm audit at high severity and exits on failure', () => {
     expect(preCommit).toMatch(/pnpm audit --audit-level=high\s*\|\|\s*exit 1/);
   });
@@ -22,16 +22,23 @@ describe('.husky/pre-commit — gate de auditoría de dependencias (frontend y R
     expect(preCommit).toMatch(/cargo audit[^|]*\|\|\s*exit 1/);
   });
 
-  it('runs both audits before ESLint (fail fast, before spending time on tests/build)', () => {
+  it('runs govulncheck for apps/api and exits on failure', () => {
+    expect(preCommit).toMatch(/cd apps\/api && govulncheck \.\/\.\.\.\s*\)\s*\|\|\s*exit 1/);
+  });
+
+  it('runs all three audits before ESLint (fail fast, before spending time on tests/build)', () => {
     const pnpmAuditIndex = preCommit.indexOf('pnpm audit --audit-level=high');
     const cargoAuditIndex = preCommit.indexOf('cargo audit');
+    const govulncheckIndex = preCommit.indexOf('govulncheck');
     const eslintIndex = preCommit.indexOf('eslint');
 
     expect(pnpmAuditIndex).toBeGreaterThan(-1);
     expect(cargoAuditIndex).toBeGreaterThan(-1);
+    expect(govulncheckIndex).toBeGreaterThan(-1);
     expect(eslintIndex).toBeGreaterThan(-1);
     expect(pnpmAuditIndex).toBeLessThan(eslintIndex);
     expect(cargoAuditIndex).toBeLessThan(eslintIndex);
+    expect(govulncheckIndex).toBeLessThan(eslintIndex);
   });
 });
 

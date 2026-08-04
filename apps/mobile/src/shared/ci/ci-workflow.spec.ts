@@ -43,10 +43,11 @@ describe('.github/workflows/ci.yml — existe y dispara en los eventos correctos
     expect(workflow).toMatch(/tags:.*v\*/);
   });
 
-  it('declares the three expected jobs', () => {
+  it('declares the four expected jobs', () => {
     const workflow = readWorkflow();
     expect(workflow).toMatch(/^ {2}quality-ts:\s*$/m);
     expect(workflow).toMatch(/^ {2}quality-tauri:\s*$/m);
+    expect(workflow).toMatch(/^ {2}quality-go:\s*$/m);
     expect(workflow).toMatch(/^ {2}build-and-release:\s*$/m);
   });
 });
@@ -115,11 +116,46 @@ describe('job quality-tauri', () => {
   });
 });
 
+describe('job quality-go', () => {
+  const job = (): string => extractJob(readWorkflow(), 'quality-go');
+
+  it('runs a postgres service container for the Go integration tests', () => {
+    expect(job()).toMatch(/services:[\s\S]*?postgres:[\s\S]*?image:\s*postgres:16-trixie/);
+    expect(job()).toMatch(/--health-cmd "pg_isready/);
+  });
+
+  it('sets up Go via actions/setup-go, caching apps/api/go.sum', () => {
+    expect(job()).toMatch(/actions\/setup-go@v\d[\s\S]*?cache-dependency-path:\s*apps\/api\/go\.sum/);
+  });
+
+  it('checks gofmt formatting inside apps/api', () => {
+    expect(job()).toMatch(/name: gofmt --check[\s\S]*?working-directory: apps\/api[\s\S]*?gofmt -l \./);
+  });
+
+  it('runs go vet inside apps/api', () => {
+    expect(job()).toMatch(/name: go vet[\s\S]*?working-directory: apps\/api[\s\S]*?run: go vet \.\/\.\.\./);
+  });
+
+  it('runs go build inside apps/api', () => {
+    expect(job()).toMatch(/name: go build[\s\S]*?working-directory: apps\/api[\s\S]*?run: go build \.\/\.\.\./);
+  });
+
+  it('runs go test against the postgres service, inside apps/api', () => {
+    expect(job()).toMatch(
+      /name: go test[\s\S]*?working-directory: apps\/api[\s\S]*?DATABASE_URL:[\s\S]*?run: go test \.\/\.\.\./,
+    );
+  });
+
+  it('runs govulncheck inside apps/api', () => {
+    expect(job()).toMatch(/name: govulncheck[\s\S]*?working-directory: apps\/api[\s\S]*?govulncheck \.\/\.\.\./);
+  });
+});
+
 describe('job build-and-release', () => {
   const job = (): string => extractJob(readWorkflow(), 'build-and-release');
 
-  it('depends on both quality gates passing first', () => {
-    expect(job()).toMatch(/needs:\s*\[?\s*quality-ts,\s*quality-tauri/);
+  it('depends on all three quality gates passing first', () => {
+    expect(job()).toMatch(/needs:\s*\[?\s*quality-ts,\s*quality-tauri,\s*quality-go/);
   });
 
   it('only runs on version tags, never on a normal push to master', () => {
