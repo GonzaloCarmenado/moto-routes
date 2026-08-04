@@ -50,9 +50,35 @@ jobs:
         working-directory: apps/mobile
         run: pnpm exec vitest run --coverage
 
+      # catalogo-tipos-parada (grupo 8.2): cockpit-mark-stop.cy.ts ejercita la
+      # integración real apps/mobile -> apps/api (catálogo de tipos de parada),
+      # sin mocks -- necesita el backend real arriba, igual que en local. Valores
+      # de .env.example (triviales, solo desarrollo) válidos también aquí: el
+      # runner es efímero y no expone el puerto a nada externo.
+      - name: Start apps/api (real backend for Cypress E2E)
+        working-directory: infra/docker
+        run: |
+          cp .env.example .env
+          docker compose up -d --build
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/api/stop-types > /dev/null; then
+              echo "apps/api listo"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "apps/api no respondió a tiempo" >&2
+          docker compose logs
+          exit 1
+
       - name: E2E tests (Cypress)
         working-directory: apps/mobile
         run: pnpm run test:e2e
+
+      - name: Stop apps/api
+        if: always()
+        working-directory: infra/docker
+        run: docker compose down -v
 
   quality-tauri:
     name: Quality gates — Tauri (Rust)
@@ -89,9 +115,16 @@ jobs:
         working-directory: apps/mobile/src-tauri
         run: cargo test
 
+      # Mismas excepciones documentadas que .husky/pre-commit — deben mantenerse
+      # en sincronía. RUSTSEC-2023-0071 (rsa/Marvin Attack, sin fix disponible, vía
+      # sqlx-mysql transitivo de tauri-plugin-sql — MySQL nunca se usa en runtime).
+      # RUSTSEC-2026-0235 (rkyv, out-of-bounds read, vía el feature opcional "rkyv"
+      # de rust_decimal, mismo árbol que RUSTSEC-2023-0071 — este proyecto solo
+      # activa "default"/"serde"/"std" de rust_decimal, el feature vulnerable nunca
+      # se compila; confirmado con `cargo tree -e features -i rust_decimal --target all`).
       - name: cargo audit
         working-directory: apps/mobile/src-tauri
-        run: cargo audit --ignore RUSTSEC-2023-0071
+        run: cargo audit --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0235
 
   quality-go:
     name: Quality gates — Go (apps/api)
