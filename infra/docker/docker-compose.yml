@@ -20,9 +20,8 @@ services:
     build:
       context: ../../apps/api
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
-      DB_USERNAME: ${POSTGRES_USER}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      AUTH_TOKEN_SECRET: ${AUTH_TOKEN_SECRET}
     depends_on:
       postgres:
         condition: service_healthy

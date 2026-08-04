@@ -22,7 +22,7 @@ Para mantener paridad con el servidor de producción real, las imágenes base de
 
 #### Scenario: La imagen de la API se basa en Debian 13
 - **WHEN** se inspecciona `apps/api/Dockerfile`
-- **THEN** la imagen base es `debian:trixie-slim` (o un tag explícito equivalente de Debian 13) con el JDK instalado vía `apt`, y no una imagen de otra distribución (Ubuntu, Alpine, etc.)
+- **THEN** la imagen base es `debian:trixie-slim` (o un tag explícito equivalente de Debian 13) con el toolchain/binario de Go, y no una imagen de otra distribución (Ubuntu, Alpine, etc.) ni el JDK que usaba la implementación anterior
 
 ### Requirement: Los datos de PostgreSQL persisten entre reinicios del entorno local
 El servicio `postgres` SHALL usar un volumen de Docker para persistir sus datos, de modo que la información no se pierda al detener y volver a levantar el stack.

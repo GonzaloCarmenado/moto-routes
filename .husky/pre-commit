@@ -12,6 +12,9 @@ echo "🔒 Auditando vulnerabilidades (Rust)..."
 # openspec/changes/auditoria-seguridad/ para el detalle completo.
 (cd apps/mobile/src-tauri && cargo audit --ignore RUSTSEC-2023-0071) || exit 1
 
+echo "🔒 Auditando vulnerabilidades (Go)..."
+(cd apps/api && govulncheck ./...) || exit 1
+
 echo "🔍 Ejecutando ESLint (frontend)..."
 (cd apps/mobile && npx eslint src/ --max-warnings 0) || exit 1
 

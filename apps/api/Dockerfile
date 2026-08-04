@@ -1,24 +1,23 @@
 # syntax=docker/dockerfile:1
 
-# Ambas etapas parten de Debian 13 (trixie) para tener paridad real con el
-# servidor de producción — eclipse-temurin (la imagen oficial de OpenJDK) no
-# publica todavía ninguna variante trixie, así que el JDK/JRE se instala vía
-# apt en vez de partir de una imagen Java ya construida (ver ADR-032).
+# La etapa de build parte de la imagen oficial golang:1.25-trixie (Debian 13,
+# igual que el resto del monorepo) en vez del paquete `apt` de Go de trixie:
+# ese paquete solo llega a Go 1.24, insuficiente para las versiones de pgx/
+# x/text que corrigen GO-2026-5004 y GO-2026-5970 (ver design.md, Open
+# Questions). El binario resultante es estático: la etapa de runtime no
+# necesita el toolchain de Go, solo el binario — se mantiene debian:trixie-slim
+# para paridad operativa con el resto del monorepo (ver ADR-034).
 
-FROM debian:trixie AS build
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends openjdk-21-jdk-headless maven \
-    && rm -rf /var/lib/apt/lists/*
+FROM golang:1.25-trixie AS build
 WORKDIR /app
-COPY pom.xml .
-COPY src ./src
-RUN mvn -B package -DskipTests
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd ./cmd
+COPY internal ./internal
+RUN CGO_ENABLED=0 go build -o /app/bin/api ./cmd/api
 
 FROM debian:trixie-slim AS runtime
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends openjdk-21-jre-headless \
-    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=build /app/target/api-*.jar app.jar
+COPY --from=build /app/bin/api ./api
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["./api"]
