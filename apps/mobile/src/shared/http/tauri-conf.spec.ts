@@ -41,6 +41,14 @@ describe('src-tauri/tauri.conf.json — CSP connect-src (AC-018, AC-019 habilita
     expect(sources).not.toContain('*');
     expect(connectSrc).not.toMatch(/https:\/\/\*\.nhtsa\.dot\.gov/);
   });
+
+  it('includes only the local dev host of apps/api, never a real production host (catalogo-tipos-parada / ADR-035: el host real nunca va en un fichero versionado)', () => {
+    const connectSrc = extractConnectSrc(csp);
+
+    expect(connectSrc).toContain('http://localhost:8080');
+    // Ningún host de producción (IP privada de Tailscale, típicamente 100.x.x.x) versionado aquí.
+    expect(connectSrc).not.toMatch(/100\.\d{1,3}\.\d{1,3}\.\d{1,3}/);
+  });
 });
 
 // index.html tiene su propia copia de la CSP en un meta tag, porque Tauri no la

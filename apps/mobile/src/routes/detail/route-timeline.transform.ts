@@ -1,67 +1,39 @@
 import type { RoutePoint } from '../../shared/models/route.types.js';
-import type { TimelineStop, TimelinePhotoInput, TimelineData, TimelineDelimiter, TimelineRow, TimelineSegment } from './route-timeline.types.js';
-// Excepción admitida por AC-001 (`specs/features/deuda-tecnica-auditoria.md`):
-// `detectStop` sigue viviendo en `cockpit.transform.ts` porque depende de
-// `StopDetectionState`, un tipo específico del dominio cockpit. No usar este
-// import como precedente para otros imports cruzados `routes` → `cockpit`.
-import { detectStop } from '../../cockpit/cockpit.transform.js';
+import type { StopCategory } from '../../shared/stop-types/stop-types.types.js';
+import type { TimelineStopInput, TimelinePhotoInput, TimelineData, TimelineDelimiter, TimelineRow, TimelineSegment } from './route-timeline.types.js';
 import { calculateDistance } from '../../shared/utils/geo.js';
 import { calculateAvgSpeed as cockpitAvgSpeed } from '../../shared/utils/format.js';
 
 /* ------------------------------------------------------------------ */
-/*  Paso 2: detectStopsFromPoints — AC-004 a AC-007                   */
+/*  Paso 2: buildStopDelimiters — paradas reales con categoría (6.1/6.3/6.4) */
 /* ------------------------------------------------------------------ */
 
 /**
- * Detecta paradas a partir de los puntos de ruta persistidos, reutilizando
- * el mismo criterio conservador que la detección en vivo (velocidad ≤3 km/h,
- * 30 puntos de confirmación).
+ * Convierte paradas reales (`route_stops`) en delimitadores de timeline.
+ * Una parada sin categoría resuelta en el catálogo se descarta por completo
+ * (AC-6.4: nunca aparece un delimitador de parada sin tipo) — hoy no ocurre
+ * en la práctica porque solo se persisten paradas manuales con tipo
+ * obligatorio, pero se mantiene la comprobación por si el catálogo local
+ * está desactualizado respecto al id guardado.
  */
-export function detectStopsFromPoints(points: RoutePoint[]): TimelineStop[] {
-  if (points.length === 0) return [];
-
-  const stops: TimelineStop[] = [];
-  let stopStartTime: number | null = null;
-  let stopStartLat = 0;
-  let stopStartLng = 0;
-  let timer = 0;
-  let state: 'moving' | 'possible-stop' | 'confirmed-stop' = 'moving';
-
-  for (const pt of points) {
-    const prevState = state;
-    const result = detectStop(pt.speed, timer, state);
-    state = result.state;
-    timer = result.timer;
-
-    if (state === 'possible-stop' && prevState !== 'possible-stop' && prevState !== 'confirmed-stop') {
-      stopStartTime = pt.timestamp;
-      stopStartLat = pt.lat;
-      stopStartLng = pt.lng;
-    }
-
-    if (state === 'moving' && prevState === 'confirmed-stop') {
-      stops.push({
-        startTime: stopStartTime!,
-        endTime: pt.timestamp,
-        lat: stopStartLat,
-        lng: stopStartLng,
-      });
-      stopStartTime = null;
-    }
-  }
-
-  // AC-007: ruta termina con vehículo detenido
-  if (state === 'confirmed-stop' && stopStartTime !== null && points.length > 0) {
-    const lastPt = points[points.length - 1]!;
-    stops.push({
-      startTime: stopStartTime,
-      endTime: lastPt.timestamp,
-      lat: stopStartLat,
-      lng: stopStartLng,
-    });
-  }
-
-  return stops;
+export function buildStopDelimiters(
+  stops: TimelineStopInput[],
+  categoriesById: Map<number, StopCategory>,
+): TimelineDelimiter[] {
+  return stops
+    .filter((s): s is TimelineStopInput & { stopCategoryId: number } => s.stopCategoryId !== null && categoriesById.has(s.stopCategoryId))
+    .map((s) => {
+      const category = categoriesById.get(s.stopCategoryId)!;
+      return {
+        kind: 'parada' as const,
+        startTime: s.startTime,
+        endTime: s.startTime,
+        lat: s.lat,
+        lng: s.lng,
+        category: { icon: category.icon, label: category.label },
+      };
+    })
+    .sort((a, b) => a.startTime - b.startTime);
 }
 
 /* ------------------------------------------------------------------ */
@@ -196,6 +168,8 @@ function buildRows(
 export function buildTimelineData(
   points: RoutePoint[],
   photos: TimelinePhotoInput[],
+  stops: TimelineStopInput[],
+  categoriesById: Map<number, StopCategory>,
 ): TimelineData {
   const sortedPoints = sortPointsByTimestamp(points);
   const sortedPhotos = sortPhotosByTime(photos);
@@ -218,16 +192,8 @@ export function buildTimelineData(
   const salida = buildDelimiterFromPoint('salida', firstPt);
   const llegada = buildDelimiterFromPoint('llegada', lastPt);
 
-  // Paradas detectadas
-  const stops = detectStopsFromPoints(sortedPoints);
-
-  const stopDelimiters: TimelineDelimiter[] = stops.map((s) => ({
-    kind: 'parada' as const,
-    startTime: s.startTime,
-    endTime: s.endTime,
-    lat: s.lat,
-    lng: s.lng,
-  }));
+  // Paradas reales con categoría (AC-6.1/6.3/6.4)
+  const stopDelimiters = buildStopDelimiters(stops, categoriesById);
 
   const allDelimiters: TimelineDelimiter[] = [salida, ...stopDelimiters, llegada];
 

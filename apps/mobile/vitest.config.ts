@@ -17,7 +17,11 @@ export default defineConfig({
     css: true,
     setupFiles: [resolve(__dirname, 'tests/setup.ts')],
     include: ['src/**/*.spec.ts'],
-    exclude: ['src/shared/models/route.repository.spec.ts', 'src/shared/models/profile.repository.spec.ts'],
+    exclude: [
+      'src/shared/models/route.repository.spec.ts',
+      'src/shared/models/profile.repository.spec.ts',
+      'src/shared/models/stop-types-cache.repository.spec.ts',
+    ],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
@@ -29,6 +33,7 @@ export default defineConfig({
         'src/shared/tauri/commands.ts',
         'src/shared/models/route.repository.spec.ts',
         'src/shared/models/profile.repository.spec.ts',
+        'src/shared/models/stop-types-cache.repository.spec.ts',
         // Contratos puros (interfaces/tipos) — sin código ejecutable que cubrir,
         // igual que cockpit.types.ts arriba.
         'src/shared/models/index.ts',
@@ -38,6 +43,8 @@ export default defineConfig({
         'src/shared/models/photo.repository.ts',
         'src/shared/models/profile.types.ts',
         'src/shared/models/profile.repository.ts',
+        'src/shared/models/stop-types-cache.repository.ts',
+        'src/shared/stop-types/stop-types.types.ts',
         'src/routes/route-detail.types.ts',
         'src/routes/route-timeline.types.ts',
         'src/app/app-seed.types.ts',

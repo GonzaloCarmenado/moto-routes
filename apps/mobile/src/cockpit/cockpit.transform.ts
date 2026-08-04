@@ -3,7 +3,7 @@
  * Son funciones puras, sin efectos secundarios, fácilmente testeables.
  */
 
-import type { StopDetectionState, CockpitState } from './cockpit.types.js';
+import type { StopDetectionState, CockpitState, RoutePoint } from './cockpit.types.js';
 import { formatDuration } from '../shared/utils/format.js';
 import { sanitizeText } from '../shared/utils/text.js';
 
@@ -112,4 +112,24 @@ export function detectStop(
   }
 
   return { state: 'possible-stop', timer: newTimer };
+}
+
+/** Contexto derivado del estado para asociar una foto capturada en pleno directo a su ruta y ubicación. */
+export interface PhotoCaptureContext {
+  routeId: string;
+  lastPoint: RoutePoint | null;
+  routePoints: { lat: number; lng: number }[];
+}
+
+/**
+ * Deriva de qué ruta y ubicación depende una foto capturada durante la
+ * grabación: el `routeId` pre-generado al empezar (ver `CockpitState.routeId`)
+ * y el último punto GPS conocido, para no asociar la foto a una posición vieja.
+ */
+export function buildPhotoCaptureContext(state: CockpitState): PhotoCaptureContext {
+  return {
+    routeId: state.routeId,
+    lastPoint: state.points.length > 0 ? state.points[state.points.length - 1]! : null,
+    routePoints: state.points.map((p) => ({ lat: p.lat, lng: p.lng })),
+  };
 }

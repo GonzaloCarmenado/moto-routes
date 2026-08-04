@@ -2,7 +2,7 @@ import { BaseElement } from '../shared/base-element.js';
 import { createCockpitService, createBrowserGpsProvider, type CockpitService, type StorageProvider } from './cockpit.service.js';
 import { createTauriForegroundServiceProvider } from './gps/cockpit-foreground.service.js';
 import { createNativeGpsProvider, isAndroidTauri, selectGpsProvider } from './gps/cockpit-native-gps.service.js';
-import { getCockpitDisplayValues, getStatusChipClass, getStatusChipLabel } from './cockpit.transform.js';
+import { getCockpitDisplayValues, getStatusChipClass, getStatusChipLabel, buildPhotoCaptureContext } from './cockpit.transform.js';
 import type { CockpitState } from './cockpit.types.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { IPhotoRepository } from '../shared/models/photo.repository.js';
@@ -21,6 +21,10 @@ import { createLongPressController, type LongPressController } from './long-pres
 import { SqliteRouteRepository } from '../shared/repositories/sqlite-route.repository.js';
 import { createSqliteDb } from '../shared/repositories/sqlite-route.factory.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
+import { MemoryStopTypesCacheRepository } from '../shared/repositories/memory-stop-types-cache.repository.js';
+import { createStopTypesCacheRepository } from '../shared/repositories/sqlite-stop-types-cache.factory.js';
+import type { IStopTypesCacheRepository } from '../shared/models/stop-types-cache.repository.js';
+import { markStopFlow } from './mark-stop/cockpit-mark-stop.service.js';
 import {
   buildHeader,
   buildSpeedDisplay,
@@ -87,12 +91,12 @@ class CockpitView extends BaseElement {
 
   private repo: IRouteRepository = new MemoryRouteRepository();
   private repoInjected = false;
+  private stopTypesCache: IStopTypesCacheRepository = new MemoryStopTypesCacheRepository();
+  private stopTypesCacheInjected = false;
 
-  // Permite que app-root inyecte el repositorio compartido
-  set repository(repo: IRouteRepository) {
-    this.repo = repo;
-    this.repoInjected = true;
-  }
+  // Permite que app-root inyecte el repositorio y la caché compartidos
+  set repository(repo: IRouteRepository) { this.repo = repo; this.repoInjected = true; }
+  set stopTypesCacheRepository(repo: IStopTypesCacheRepository) { this.stopTypesCache = repo; this.stopTypesCacheInjected = true; }
 
   private async initService(): Promise<void> {
     // El foreground service Android (RecordingService.kt) es la única fuente de
@@ -115,6 +119,9 @@ class CockpitView extends BaseElement {
       } catch {
         this.repo = new MemoryRouteRepository();
       }
+    }
+    if (!this.stopTypesCacheInjected) {
+      this.stopTypesCache = await createStopTypesCacheRepository();
     }
     this.service = createCockpitService(gps, storage, this.repo, createTauriForegroundServiceProvider());
     this.service.subscribe((state) => {
@@ -176,11 +183,20 @@ class CockpitView extends BaseElement {
     this.longPress.release();
   }
 
+  /**
+   * Pausar la grabación es también el gesto de marcar una parada manual
+   * (petición real de usuario tras probar en dispositivo: un botón dedicado
+   * aparte de Pausar generaba confusión — "el botón de parada" se esperaba
+   * que fuera este). La pausa ocurre siempre; el modal de tipo es opcional
+   * (cancelarlo no revierte la pausa, ver `markStopFlow`). Reanudar nunca
+   * abre el modal — solo pausar.
+   */
   private handlePauseResume(): void {
     if (!this.service) return;
     const state = this.service.getCurrentState();
     if (state.status === 'recording') {
       this.service.pauseRecording();
+      void markStopFlow(this.service, this.stopTypesCache);
     } else if (state.status === 'paused') {
       this.service.resumeRecording();
     }
@@ -313,16 +329,9 @@ class CockpitView extends BaseElement {
       : await pickFromGallery();
     if (files.length === 0) return;
 
-    // 2. routeId pre-generado al iniciar la grabación (ver CockpitState.routeId):
-    // es el mismo id con el que la ruta se persistirá al llamar a stopRecording(),
-    // así las fotos capturadas en pleno directo quedan correctamente asociadas.
-    const routeId = state.routeId;
-
-    // 3. Obtener el último punto GPS
-    const lastPoint = state.points.length > 0
-      ? state.points[state.points.length - 1]!
-      : null;
-    const routePoints = state.points.map((p) => ({ lat: p.lat, lng: p.lng }));
+    // 2-3. routeId pre-generado al iniciar la grabación + último punto GPS conocido,
+    // para que la foto capturada en pleno directo quede correctamente asociada.
+    const { routeId, lastPoint, routePoints } = buildPhotoCaptureContext(state);
 
     // 4. Procesar cada foto (con feedback de carga: guardar en appDataDir puede tardar
     // un momento y sin indicador parece que la subida no ha hecho nada)

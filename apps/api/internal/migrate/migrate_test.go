@@ -2,38 +2,21 @@ package migrate
 
 import (
 	"context"
-	"os"
+	"io/fs"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/crzverde/moto-routes/apps/api/internal/dbtest"
 )
 
-// testPool conecta contra un PostgreSQL real vía DATABASE_URL. Es un test de
-// integración deliberado (no un mock): el runner de migraciones solo tiene
-// sentido verificado contra una base de datos real.
+// testPool conecta contra un PostgreSQL real vía DATABASE_URL, aislado en su
+// propio schema. Es un test de integración deliberado (no un mock): el
+// runner de migraciones solo tiene sentido verificado contra una base de
+// datos real.
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL no está definida; test de integración omitido")
-	}
-
-	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("failed to connect to test database: %v", err)
-	}
-	t.Cleanup(pool.Close)
-
-	if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS users, schema_migrations"); err != nil {
-		t.Fatalf("failed to reset test database: %v", err)
-	}
-	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), "DROP TABLE IF EXISTS users, schema_migrations")
-	})
-
-	return pool
+	return dbtest.Connect(t, "test_migrate")
 }
 
 func TestRun_AppliesPendingMigrations(t *testing.T) {
@@ -44,13 +27,22 @@ func TestRun_AppliesPendingMigrations(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var version string
-	err := pool.QueryRow(ctx, "SELECT version FROM schema_migrations").Scan(&version)
+	rows, err := pool.Query(ctx, "SELECT version FROM schema_migrations ORDER BY version")
 	if err != nil {
-		t.Fatalf("expected schema_migrations to have a row: %v", err)
+		t.Fatalf("failed to query schema_migrations: %v", err)
 	}
-	if version != "0001_create_users.sql" {
-		t.Fatalf("expected version 0001_create_users.sql, got %q", version)
+	var versions []string
+	for rows.Next() {
+		var version string
+		if err := rows.Scan(&version); err != nil {
+			t.Fatalf("failed to scan version: %v", err)
+		}
+		versions = append(versions, version)
+	}
+	rows.Close()
+
+	if len(versions) == 0 || versions[0] != "0001_create_users.sql" {
+		t.Fatalf("expected 0001_create_users.sql to be applied, got %v", versions)
 	}
 
 	_, err = pool.Exec(ctx, "INSERT INTO users (email, password_hash) VALUES ($1, $2)", "rider@example.com", "hash")
@@ -63,6 +55,12 @@ func TestRun_IsIdempotent(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
 
+	entries, err := fs.ReadDir(Migrations, ".")
+	if err != nil {
+		t.Fatalf("failed to list embedded migrations: %v", err)
+	}
+	wantCount := len(entries)
+
 	if err := Run(ctx, pool, Migrations); err != nil {
 		t.Fatalf("unexpected error on first run: %v", err)
 	}
@@ -74,7 +72,7 @@ func TestRun_IsIdempotent(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("failed to count schema_migrations rows: %v", err)
 	}
-	if count != 1 {
-		t.Fatalf("expected exactly 1 applied migration after running twice, got %d", count)
+	if count != wantCount {
+		t.Fatalf("expected exactly %d applied migrations after running twice, got %d", wantCount, count)
 	}
 }

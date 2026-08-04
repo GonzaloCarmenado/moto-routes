@@ -27,7 +27,7 @@ describe('parseCypressSeed', () => {
       'route-a': [{ id: 'p1', routeId: 'route-a', timestamp: 1, lat: 1, lng: 2, alt: 0, speed: 0 }],
     };
     const stops: Record<string, RouteStop[]> = {
-      'route-a': [{ id: 's1', routeId: 'route-a', startTime: 1, endTime: 2, lat: 1, lng: 2, type: 'auto' }],
+      'route-a': [{ id: 's1', routeId: 'route-a', startTime: 1, endTime: 2, lat: 1, lng: 2, type: 'auto', stopCategoryId: null }],
     };
     const raw = JSON.stringify({ routes: [routeA, routeB], points, stops });
 

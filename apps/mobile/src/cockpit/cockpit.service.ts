@@ -11,58 +11,14 @@ import { calculateAvgSpeed } from '../shared/utils/format.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import { triggerForegroundService, triggerLocationPause, type ForegroundServiceProvider } from './gps/cockpit-foreground.service.js';
 import { persistRouteOnStart, persistRouteOnStop } from './persist/cockpit-persist.service.js';
+import type { GpsProvider } from './gps/cockpit-browser-gps.service.js';
 
 export type { ForegroundServiceProvider } from './gps/cockpit-foreground.service.js';
-
-/** Proveedor de ubicación (navegador o nativo Android) con permisos. */
-export interface GpsProvider {
-  getCurrentPosition(): Promise<GeolocationPosition>;
-  watchPosition(callback: (pos: GeolocationPosition) => void): () => void;
-  checkPermissions(): Promise<boolean>;
-  requestPermissions(): Promise<boolean>;
-}
+export { createBrowserGpsProvider, type GpsProvider } from './gps/cockpit-browser-gps.service.js';
 
 /** Almacenamiento genérico (guardado de archivos, p. ej. fotos). */
 export interface StorageProvider {
   save(path: string, data: string): Promise<void>;
-}
-
-/** GpsProvider basado en la Geolocation API del navegador (usable tanto en web como en el WebView de Tauri). */
-export function createBrowserGpsProvider(): GpsProvider {
-  return {
-    getCurrentPosition: () =>
-      new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject);
-      }),
-    watchPosition: (callback) => {
-      const id = navigator.geolocation.watchPosition(callback, () => { /* GPS error silently ignored */ });
-      return (): void => { navigator.geolocation.clearWatch(id); };
-    },
-    // Comprobar solo que `navigator.geolocation` existe (casi siempre true) dejaba
-    // `hasGpsPermission` en true de mentira tras revocarse el permiso a nivel de
-    // SO (p. ej. reinstalar el APK) — RecordingService.kt crasheaba la app entera
-    // al llamar startForeground sin permiso real. La Permissions API sí refleja
-    // el estado real; sin ella (WebView antiguo, jsdom) se mantiene el fallback previo.
-    checkPermissions: async (): Promise<boolean> => {
-      if (!navigator.geolocation) return false;
-      const permissions = (navigator as Navigator & { permissions?: Permissions }).permissions;
-      if (!permissions?.query) return true;
-      try {
-        return (await permissions.query({ name: 'geolocation' })).state === 'granted';
-      } catch {
-        return true;
-      }
-    },
-    requestPermissions: (): Promise<boolean> => {
-      if (!navigator.geolocation) return Promise.resolve(false);
-      return new Promise((resolve) => {
-        navigator.geolocation.getCurrentPosition(
-          () => { resolve(true); },
-          () => { resolve(false); },
-        );
-      });
-    },
-  };
 }
 
 /** Listener de cambios de estado del cockpit. */
@@ -88,6 +44,8 @@ export interface CockpitService {
   resumeRecording(): void;
   checkGpsPermission(): Promise<boolean>;
   requestGpsPermission(): Promise<boolean>;
+  /** Registra una parada manual en el punto GPS más reciente. No hace nada sin grabación activa o sin ningún punto GPS todavía. */
+  addManualStop(stopCategoryId: number): void;
 }
 
 function createInitialState(): CockpitState {
@@ -102,6 +60,7 @@ function createInitialState(): CockpitState {
     points: [],
     stopState: 'moving',
     stopTimer: 0,
+    manualStops: [],
     hasGpsPermission: false,
     gpsSignalLost: false,
     gpsLostTimer: 0,
@@ -114,7 +73,13 @@ function buildMetadata(s: CockpitState): RouteMetadata {
     duration: s.elapsedTime,
     totalDistance: s.totalDistance,
     avgSpeed: s.avgSpeed,
-    stops: [],
+    stops: s.manualStops.map((m) => ({
+      startTime: m.timestamp,
+      lat: m.lat,
+      lng: m.lng,
+      type: 'manual',
+      stopCategoryId: m.stopCategoryId,
+    })),
   };
 }
 
@@ -256,7 +221,7 @@ function startRecordingAction(
   store.state = {
     ...store.state, status: 'recording', points: [], currentSpeed: 0, avgSpeed: 0,
     totalDistance: 0, elapsedTime: 0, altitude: 0, stopState: 'moving', stopTimer: 0,
-    gpsSignalLost: false, gpsLostTimer: 0,
+    manualStops: [], gpsSignalLost: false, gpsLostTimer: 0,
   };
   store.lastPoint = null;
   store.recordingStartedAt = Date.now();
@@ -299,6 +264,27 @@ function discardStopAction(store: ServiceStore): void {
   store.recordingStartedAt = null;
   store.pausedMs = 0;
   store.pausedSince = null;
+  notify(store);
+}
+
+/**
+ * Registra una parada manual en el punto GPS más reciente. No hace nada si
+ * no hay grabación activa ni todavía ningún punto GPS (no hay ubicación a la
+ * que asociarla) — el control que la dispara solo se muestra durante una
+ * grabación activa, así que este último caso es un margen de seguridad, no
+ * el camino esperado.
+ */
+function addManualStopAction(store: ServiceStore, stopCategoryId: number): void {
+  if (store.state.status !== 'recording' && store.state.status !== 'paused') return;
+  if (!store.lastPoint) return;
+
+  const entry = {
+    timestamp: store.lastPoint.timestamp,
+    lat: store.lastPoint.lat,
+    lng: store.lastPoint.lng,
+    stopCategoryId,
+  };
+  store.state = { ...store.state, manualStops: [...store.state.manualStops, entry] };
   notify(store);
 }
 
@@ -366,5 +352,6 @@ export function createCockpitService(
     resumeRecording: (): void => { resumeRecordingAction(store, loop, foregroundService); },
     checkGpsPermission: (): Promise<boolean> => checkGpsPermissionAction(store, gps),
     requestGpsPermission: (): Promise<boolean> => requestGpsPermissionAction(store, gps),
+    addManualStop: (stopCategoryId: number): void => { addManualStopAction(store, stopCategoryId); },
   };
 }

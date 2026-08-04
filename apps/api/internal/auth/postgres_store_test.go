@@ -3,40 +3,22 @@ package auth
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
+	"github.com/crzverde/moto-routes/apps/api/internal/dbtest"
 	"github.com/crzverde/moto-routes/apps/api/internal/migrate"
 )
 
 // testStore prepara un PostgresUserStore contra un PostgreSQL real (vía
-// DATABASE_URL), aplicando el esquema y dejando la tabla users vacía.
+// DATABASE_URL), aislado en su propio schema, aplicando el esquema y dejando
+// la tabla users vacía.
 func testStore(t *testing.T) PostgresUserStore {
 	t.Helper()
 
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL no está definida; test de integración omitido")
-	}
-
-	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("failed to connect to test database: %v", err)
-	}
-	t.Cleanup(pool.Close)
-
-	if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS users, schema_migrations"); err != nil {
-		t.Fatalf("failed to reset test database: %v", err)
-	}
-	if err := migrate.Run(ctx, pool, migrate.Migrations); err != nil {
+	pool := dbtest.Connect(t, "test_auth")
+	if err := migrate.Run(context.Background(), pool, migrate.Migrations); err != nil {
 		t.Fatalf("failed to apply migrations: %v", err)
 	}
-	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), "DROP TABLE IF EXISTS users, schema_migrations")
-	})
 
 	return PostgresUserStore{Pool: pool}
 }

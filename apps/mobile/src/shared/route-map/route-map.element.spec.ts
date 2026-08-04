@@ -110,10 +110,17 @@ vi.mock('maplibre-gl', () => ({
 import './route-map.element.js';
 import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from './route-map.element.js';
 import type { MapPhoto } from './route-map-photos.js';
+import type { MapStop } from './route-map-stops.js';
+import type { StopCategory } from '../stop-types/stop-types.types.js';
 import { ROAD_LAYER_IDS, ROAD_LABEL_LAYER_IDS } from './route-map-contrast.js';
 import { FULLSCREEN_ENTER_LABEL, FULLSCREEN_EXIT_LABEL } from './route-map-fullscreen.js';
 
-type RouteMapEl = HTMLElement & { points: { lat: number; lng: number }[]; photos: MapPhoto[] };
+type RouteMapEl = HTMLElement & {
+  points: { lat: number; lng: number }[];
+  photos: MapPhoto[];
+  stops: MapStop[];
+  stopCategoriesById: Map<number, StopCategory>;
+};
 
 async function waitRender(): Promise<void> {
   await new Promise<void>((resolve) => requestAnimationFrame(() => { resolve(); }));
@@ -373,6 +380,68 @@ describe('route-map', () => {
       expect(markerRemove.mock.calls.length).toBeGreaterThan(previousMarkerRemovals);
       expect(findMarkerElements('photo-cluster')).toHaveLength(0);
       expect(findMarkerElements('photo-marker')).toHaveLength(2);
+
+      document.body.removeChild(el);
+    });
+  });
+
+  describe('marcadores de parada (AC-7.1 a AC-7.3)', () => {
+    const MIRADOR: StopCategory = { id: 1, key: 'mirador', label: 'Mirador', icon: '🌄' };
+    const BAR: StopCategory = { id: 2, key: 'bar-restaurante', label: 'Bar/Restaurante', icon: '🍺' };
+
+    it('AC-7.1: renders a stop marker with its category icon once the map has loaded', async () => {
+      const el = document.createElement('route-map') as RouteMapEl;
+      el.points = MADRID_POINTS;
+      el.stops = [{ lat: 40.4168, lng: -3.7038, stopCategoryId: 1 }];
+      el.stopCategoriesById = new Map([[1, MIRADOR]]);
+      document.body.appendChild(el);
+      await waitRender();
+      triggerLoad();
+
+      const [marker] = findMarkerElements('route-map-stop-marker');
+      expect(marker).toBeDefined();
+      expect(marker!.querySelector('.route-map-marker--stop')!.textContent).toBe('🌄');
+
+      document.body.removeChild(el);
+    });
+
+    it('AC-7.2: two stops of different types show distinct icons', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+      el.stops = [
+        { lat: 40.4168, lng: -3.7038, stopCategoryId: 1 },
+        { lat: 40.4170, lng: -3.7035, stopCategoryId: 2 },
+      ];
+      el.stopCategoriesById = new Map([[1, MIRADOR], [2, BAR]]);
+      await waitRender();
+
+      const icons = findMarkerElements('route-map-stop-marker')
+        .map((el2) => el2.querySelector('.route-map-marker--stop')!.textContent);
+      expect(icons.sort()).toEqual(['🌄', '🍺'].sort());
+
+      document.body.removeChild(el);
+    });
+
+    it('AC-7.3: a route with no typed stops shows no stop marker', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+      el.stops = [{ lat: 40.4168, lng: -3.7038, stopCategoryId: null }];
+      el.stopCategoriesById = new Map([[1, MIRADOR]]);
+      await waitRender();
+
+      expect(findMarkerElements('route-map-stop-marker')).toHaveLength(0);
+
+      document.body.removeChild(el);
+    });
+
+    it('recreates stop markers when stops are reassigned after the map has already loaded', async () => {
+      const el = await mountRouteMap(MADRID_POINTS);
+      el.stops = [{ lat: 40.4168, lng: -3.7038, stopCategoryId: 1 }];
+      el.stopCategoriesById = new Map([[1, MIRADOR]]);
+      await waitRender();
+      expect(findMarkerElements('route-map-stop-marker')).toHaveLength(1);
+
+      el.stops = [];
+      await waitRender();
+      expect(findMarkerElements('route-map-stop-marker')).toHaveLength(0);
 
       document.body.removeChild(el);
     });

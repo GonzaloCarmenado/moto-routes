@@ -219,3 +219,16 @@
   font-size: 12px;
   font-weight: 700;
 }
+
+/* Marcador de parada (AC-7.1/7.2): muestra el icono (emoji) de su categoría
+   del catálogo — distinto por tipo sin lógica adicional, ver route-map-stops.ts. */
+.route-map-marker--stop {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel);
+  border-color: var(--ink);
+  font-size: 15px;
+}

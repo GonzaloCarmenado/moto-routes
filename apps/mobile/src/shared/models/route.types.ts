@@ -59,6 +59,10 @@ export interface RouteStop {
   lat: number;
   lng: number;
   type: StopType;
+  /** Id del catálogo de tipos de parada (bar/mirador/…) — null si la parada
+   * no tiene categoría asignada (nunca ocurre en una parada manual, ver
+   * cockpit-manual-stops: el modal es obligatorio para persistirla). */
+  stopCategoryId: number | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -100,4 +104,6 @@ export interface CreateRouteStop {
   lat: number;
   lng: number;
   type: StopType;
+  /** Id del catálogo de tipos de parada — null para una parada sin categoría. */
+  stopCategoryId: number | null;
 }

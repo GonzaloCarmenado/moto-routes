@@ -15,6 +15,7 @@ import (
 	"github.com/crzverde/moto-routes/apps/api/internal/httpmw"
 	"github.com/crzverde/moto-routes/apps/api/internal/migrate"
 	"github.com/crzverde/moto-routes/apps/api/internal/ping"
+	"github.com/crzverde/moto-routes/apps/api/internal/stoptypes"
 )
 
 // tokenTTL es la duración de validez de un token de sesión emitido en login.
@@ -62,6 +63,7 @@ func main() {
 	router := chi.NewRouter()
 	router.Use(httpmw.Recover)
 	router.Get("/api/ping", ping.Handler(ping.PostgresService{Pool: pool}).ServeHTTP)
+	router.With(httpmw.PublicCORS).Get("/api/stop-types", stoptypes.Handler(stoptypes.PostgresRepository{Pool: pool}).ServeHTTP)
 	loginRateLimiter := auth.NewLoginRateLimiter(loginRateLimitMaxAttempts, loginRateLimitWindow)
 
 	router.Post("/api/auth/register", auth.RegisterHandler(userStore).ServeHTTP)

@@ -24,6 +24,16 @@ export interface Stop {
   lat: number;
   lng: number;
   type: 'manual' | 'auto';
+  /** Id del catálogo de tipos de parada — siempre presente en una parada manual (el modal es obligatorio para marcarla). */
+  stopCategoryId: number;
+}
+
+/** Parada manual marcada en vivo durante la grabación, pendiente de persistir al guardar la ruta. */
+export interface ManualStopEntry {
+  timestamp: number;
+  lat: number;
+  lng: number;
+  stopCategoryId: number;
 }
 
 /** Metadatos de una ruta al detener la grabación (para el diálogo guardar/descartar). */
@@ -50,6 +60,8 @@ export interface CockpitState {
   points: RoutePoint[];
   stopState: StopDetectionState;
   stopTimer: number;
+  /** Paradas manuales marcadas en esta grabación, pendientes de persistir al guardar. */
+  manualStops: ManualStopEntry[];
   hasGpsPermission: boolean;
   gpsSignalLost: boolean;
   gpsLostTimer: number;

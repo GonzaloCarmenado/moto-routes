@@ -70,6 +70,7 @@ export class MemoryRouteRepository implements IRouteRepository {
         lat: s.lat,
         lng: s.lng,
         type: s.type,
+        stopCategoryId: s.stopCategoryId,
       }));
       this.stops.set(id, [...(this.stops.get(id) ?? []), ...savedStops]);
     }
