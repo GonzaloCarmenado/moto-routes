@@ -292,6 +292,28 @@ jobs:
         working-directory: apps/mobile
         run: pnpm tauri android build --target aarch64 --debug
 
+      # Gotcha documentado en memory/context.md (2026-08-02): `pnpm tauri android build`
+      # a veces no vuelve a copiar el `dist/` recien generado dentro de
+      # gen/android/app/src/main/assets -- el APK resultante empaqueta el bundle JS
+      # de una build anterior sin ningun error ni warning. El paso de verificacion
+      # siguiente lo detecta pero no lo arregla, asi que aqui forzamos la sincronizacion
+      # de los assets y reempaquetamos SOLO con Gradle (las librerias Rust ya estan
+      # compiladas por el paso anterior, no hace falta recompilarlas).
+      - name: Force-sync fresh frontend assets into the Android project
+        working-directory: apps/mobile
+        run: |
+          ASSETS_DIR=src-tauri/gen/android/app/src/main/assets
+          rm -rf "$ASSETS_DIR/assets"
+          cp -r dist/assets "$ASSETS_DIR/assets"
+          cp dist/index.html "$ASSETS_DIR/index.html"
+          cd src-tauri/gen/android
+          ./gradlew assembleUniversalDebug \
+            -x :app:rustBuildUniversalDebug \
+            -x :app:rustBuildArm64Debug \
+            -x :app:rustBuildArmDebug \
+            -x :app:rustBuildX86Debug \
+            -x :app:rustBuildX86_64Debug
+
       - name: Verify the APK bundles the freshly built frontend and the real apps/api host
         run: |
           APK=apps/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
