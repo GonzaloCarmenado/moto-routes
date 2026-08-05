@@ -74,6 +74,13 @@ class CockpitView extends BaseElement {
     await this.initService();
     this.render();
     this.syncRenderSignature();
+    // Sin esperar: probeGeolocationPermission() (cockpit-browser-gps.service.ts)
+    // pide una localización real y puede tardar varios segundos — bloquear el
+    // primer render con eso dejaría el cockpit en blanco al abrir la app. Se
+    // dispara en segundo plano solo para tener `hasGpsPermission` ya resuelto
+    // como camino rápido si el usuario tarda en pulsar "Iniciar"; si no le da
+    // tiempo a resolver, handleStartStop() repite la comprobación fresca en
+    // el momento de pulsar en vez de fiarse de este valor todavía sin fijar.
     void this.service?.checkGpsPermission();
   }
 
@@ -147,15 +154,29 @@ class CockpitView extends BaseElement {
   }
 
   private handleStartStop(): void {
+    void this.startIfPermitted();
+  }
+
+  /**
+   * `hasGpsPermission` en caché (poblado en segundo plano por
+   * `checkGpsPermission()` desde `initAndRender()`) es solo el camino rápido:
+   * si el usuario pulsa "Iniciar" antes de que esa comprobación de fondo
+   * resuelva, no se fía de un `false` que solo significa "todavía no lo sé"
+   * — repite el sondeo real aquí mismo antes de decidir. Evita tanto el falso
+   * positivo (overlay con el permiso ya concedido de verdad) como arrancar
+   * `startRecording()` sin saber de verdad si hay permiso (crash nativo real,
+   * ver cockpit-browser-gps.service.ts::probeGeolocationPermission).
+   */
+  private async startIfPermitted(): Promise<void> {
     if (!this.service) return;
     const state = this.service.getCurrentState();
-    if (state.status === 'idle') {
-      if (!state.hasGpsPermission) {
-        this.showGpsOverlay();
-        return;
-      }
-      this.service.startRecording();
+    if (state.status !== 'idle') return;
+    const granted = state.hasGpsPermission || (await this.service.checkGpsPermission());
+    if (!granted) {
+      this.showGpsOverlay();
+      return;
     }
+    this.service.startRecording();
   }
 
   private handleStopPress(): void {

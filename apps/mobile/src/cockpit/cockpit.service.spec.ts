@@ -798,17 +798,8 @@ describe('createCockpitService - pausa sin duplicar el watch de GPS (Fase 2: AC-
   });
 });
 
-describe('createBrowserGpsProvider - checkPermissions()', () => {
+describe('createBrowserGpsProvider - checkPermissions()/requestPermissions()', () => {
   const originalGeolocation = globalThis.navigator.geolocation as Geolocation | undefined;
-  const originalPermissions = globalThis.navigator.permissions as Permissions | undefined;
-
-  beforeEach(() => {
-    Object.defineProperty(globalThis.navigator, 'geolocation', {
-      value: {},
-      writable: true,
-      configurable: true,
-    });
-  });
 
   afterEach(() => {
     Object.defineProperty(globalThis.navigator, 'geolocation', {
@@ -816,61 +807,70 @@ describe('createBrowserGpsProvider - checkPermissions()', () => {
       writable: true,
       configurable: true,
     });
-    Object.defineProperty(globalThis.navigator, 'permissions', {
-      value: originalPermissions,
+  });
+
+  function mockGeolocation(getCurrentPosition: Geolocation['getCurrentPosition']): void {
+    Object.defineProperty(globalThis.navigator, 'geolocation', {
+      value: { getCurrentPosition },
       writable: true,
       configurable: true,
     });
-  });
+  }
 
   // Regresión del crash real: Android revocaba el permiso de ubicación en el
-  // SO (p. ej. tras reinstalar el APK) pero checkPermissions() solo comprobaba
-  // que `navigator.geolocation` existiera (casi siempre true), así que
-  // `hasGpsPermission` quedaba `true` de mentira y `handleStartStop()` dejaba
-  // pasar a `startRecording()` sin mostrar el overlay de permiso — el
-  // foreground service nativo (`RecordingService.kt`) crasheaba la app entera
-  // al llamar `startForeground(type=location)` sin el permiso real concedido.
-  it('resolves false when the Permissions API reports the geolocation permission as denied', async () => {
-    Object.defineProperty(globalThis.navigator, 'permissions', {
-      value: { query: vi.fn().mockResolvedValue({ state: 'denied' }) },
-      writable: true,
-      configurable: true,
+  // SO (p. ej. tras reinstalar el APK) pero la comprobación de entonces no lo
+  // detectaba, así que `hasGpsPermission` quedaba `true` de mentira y
+  // `handleStartStop()` dejaba pasar a `startRecording()` sin mostrar el
+  // overlay de permiso — el foreground service nativo (`RecordingService.kt`)
+  // crasheaba la app entera al llamar `startForeground(type=location)` sin el
+  // permiso real concedido. Este describe cubrió antes `navigator.permissions
+  // .query()`, sustituido (2026-08-05) por un sondeo real vía
+  // `getCurrentPosition()`: en el WebView real de Android la Permissions API
+  // se quedaba encallada en 'prompt' con el permiso del SO ya concedido de
+  // verdad (confirmado en dispositivo), mostrando el overlay en cada apertura.
+  it('resolves false when the browser reports the geolocation permission as denied', async () => {
+    mockGeolocation((_success, error) => {
+      error?.({ code: 1, message: 'denied', PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 });
     });
 
     const provider = createBrowserGpsProvider();
     await expect(provider.checkPermissions()).resolves.toBe(false);
+    await expect(provider.requestPermissions()).resolves.toBe(false);
   });
 
-  it('resolves false when the Permissions API reports the geolocation permission as not yet decided (prompt)', async () => {
-    Object.defineProperty(globalThis.navigator, 'permissions', {
-      value: { query: vi.fn().mockResolvedValue({ state: 'prompt' }) },
-      writable: true,
-      configurable: true,
+  it('resolves true when a position is obtained (permission granted)', async () => {
+    mockGeolocation((success) => {
+      success({
+        coords: { latitude: 0, longitude: 0, altitude: 0, speed: 0, accuracy: 0, altitudeAccuracy: 0, heading: 0 },
+        timestamp: Date.now(),
+      } as GeolocationPosition);
     });
 
     const provider = createBrowserGpsProvider();
-    await expect(provider.checkPermissions()).resolves.toBe(false);
+    await expect(provider.checkPermissions()).resolves.toBe(true);
+    await expect(provider.requestPermissions()).resolves.toBe(true);
   });
 
-  it('resolves true when the Permissions API reports the geolocation permission as granted', async () => {
-    Object.defineProperty(globalThis.navigator, 'permissions', {
-      value: { query: vi.fn().mockResolvedValue({ state: 'granted' }) },
-      writable: true,
-      configurable: true,
+  // Sin señal todavía (frío, sin red/GPS) no es lo mismo que sin permiso: no
+  // debe mostrar el overlay de "debes dar permiso" solo porque tarde en fijar
+  // una posición.
+  it('resolves true (not denied) on TIMEOUT/POSITION_UNAVAILABLE — lack of signal is not lack of permission', async () => {
+    mockGeolocation((_success, error) => {
+      error?.({ code: 3, message: 'timeout', PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 });
     });
 
     const provider = createBrowserGpsProvider();
     await expect(provider.checkPermissions()).resolves.toBe(true);
   });
 
-  it('falls back to the previous best-effort check when the Permissions API is not available (older WebView/jsdom)', async () => {
-    Object.defineProperty(globalThis.navigator, 'permissions', {
+  it('resolves false when navigator.geolocation is unavailable', async () => {
+    Object.defineProperty(globalThis.navigator, 'geolocation', {
       value: undefined,
       writable: true,
       configurable: true,
     });
 
     const provider = createBrowserGpsProvider();
-    await expect(provider.checkPermissions()).resolves.toBe(true);
+    await expect(provider.checkPermissions()).resolves.toBe(false);
   });
 });

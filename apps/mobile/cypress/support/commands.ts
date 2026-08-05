@@ -54,6 +54,37 @@ Cypress.Commands.add('visitWithSeed', (options: VisitWithSeedOptions = {}) => {
   });
 });
 
+/**
+ * Responde de inmediato con una posición fija a `navigator.geolocation
+ * .getCurrentPosition()`. Sin esto, `probeGeolocationPermission()`
+ * (`src/cockpit/gps/cockpit-browser-gps.service.ts` — gatea "Iniciar ruta"
+ * con una localización real, no ya con la Permissions API, ver ADR
+ * `fix-gps-overlay-permiso`) hace una petición de geolocalización real que
+ * ni Electron (`cypress run`) ni un runner de CI pueden resolver, dejando
+ * bloqueados hasta el timeout de 8s los tests que pulsan el botón de
+ * inicio. Debe pasarse como `onBeforeLoad` de `cy.visit()` — igual que
+ * `stubGeolocation` en `cockpit-mark-stop.cy.ts`, que cubre el mismo motivo
+ * pero para `watchPosition`.
+ */
+export function stubGpsPermissionGranted(win: Cypress.AUTWindow): void {
+  cy.stub(win.navigator.geolocation, 'getCurrentPosition').callsFake(
+    (success: PositionCallback) => {
+      success({
+        coords: {
+          latitude: 40.4168,
+          longitude: -3.7038,
+          altitude: 650,
+          accuracy: 10,
+          altitudeAccuracy: 10,
+          heading: 0,
+          speed: 0,
+        },
+        timestamp: Date.now(),
+      } as GeolocationPosition);
+    },
+  );
+}
+
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace -- namespace requerido por la API pública de Cypress para extender Chainable
   namespace Cypress {
