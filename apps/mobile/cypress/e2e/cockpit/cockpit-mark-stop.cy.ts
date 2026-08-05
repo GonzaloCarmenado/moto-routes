@@ -1,5 +1,7 @@
 /// <reference types="cypress" />
 
+import { stubGpsPermissionGranted } from '../../support/commands.js';
+
 /**
  * E2E del catálogo de tipos de parada (grupo 8.2): modal de tipo de parada
  * durante una grabación real y su reflejo en el timeline de la ruta guardada.
@@ -26,8 +28,12 @@ const STOP_LNG = 2.1686;
  * `buildTimelineData` (route-timeline.transform.ts) exige `points.length >= 2`
  * para calcular Salida/Llegada — con solo 1 punto, la timeline cae en el
  * estado "sin datos GPS suficientes" y nunca llega a pintar la parada.
+ * También cubre `getCurrentPosition` (vía `stubGpsPermissionGranted`) —
+ * necesario para que "Iniciar ruta" no se quede esperando una localización
+ * real que Electron no puede dar (ver `probeGeolocationPermission`).
  */
 function stubGeolocation(win: Cypress.AUTWindow): void {
+  stubGpsPermissionGranted(win);
   const makePosition = (offsetMs: number, latOffset: number): { coords: GeolocationCoordinates; timestamp: number } => ({
     coords: {
       latitude: STOP_LAT + latOffset,

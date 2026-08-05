@@ -1,8 +1,10 @@
 /// <reference types="cypress" />
 
+import { stubGpsPermissionGranted } from '../../support/commands.js';
+
 describe('Cockpit - Grabación de Rutas', () => {
   beforeEach(() => {
-    cy.visit('/');
+    cy.visit('/', { onBeforeLoad: stubGpsPermissionGranted });
   });
 
   it('should show speed at 0 and the master button ready to start on load', () => {
