@@ -21,7 +21,7 @@ func ConfirmVerificationHandler(userStore UserStore, tokenStore VerificationToke
 			return
 		}
 
-		stored, err := tokenStore.FindByHash(r.Context(), hashVerificationToken(token))
+		stored, err := tokenStore.FindByHash(r.Context(), hashOneTimeToken(token))
 		if err != nil || stored.UsedAt != nil || time.Now().After(stored.ExpiresAt) {
 			writeVerificationHTML(w, http.StatusBadRequest, verificationFailureHTML)
 			return

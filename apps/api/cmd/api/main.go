@@ -41,6 +41,12 @@ const (
 	registerRateLimitWindow      = 15 * time.Minute
 )
 
+// Límite de solicitudes de reset de contraseña por email: 3 cada 15 minutos.
+const (
+	passwordResetRateLimitMaxAttempts = 3
+	passwordResetRateLimitWindow      = 15 * time.Minute
+)
+
 // dbConnectTimeout acota cuánto espera cada intento de conexión a PostgreSQL
 // (incluida la resolución DNS) antes de fallar. Sin este límite, un Postgres
 // caído puede tardar varios segundos en devolver el 503 de /api/ping en vez
@@ -73,6 +79,7 @@ func main() {
 
 	userStore := auth.PostgresUserStore{Pool: pool}
 	verificationTokenStore := auth.PostgresVerificationTokenStore{Pool: pool}
+	passwordResetTokenStore := auth.PostgresPasswordResetTokenStore{Pool: pool}
 	tokenIssuer := auth.TokenIssuer{Secret: cfg.TokenSigningKey, TTL: tokenTTL}
 	resendSender := email.ResendSender{APIKey: cfg.ResendAPIKey, From: cfg.ResendFromAddress}
 
@@ -91,6 +98,13 @@ func main() {
 	router.Post("/api/auth/verify-email/request",
 		auth.RateLimitedRequestVerificationHandler(userStore, verificationTokenStore, resendSender, cfg.PublicAPIBaseURL, verificationRequestRateLimiter).ServeHTTP)
 	router.Get("/api/auth/verify-email/confirm", auth.ConfirmVerificationHandler(userStore, verificationTokenStore).ServeHTTP)
+
+	passwordResetRateLimiter := auth.NewLoginRateLimiter(passwordResetRateLimitMaxAttempts, passwordResetRateLimitWindow)
+	router.Post("/api/auth/reset-password/request",
+		auth.RateLimitedRequestPasswordResetHandler(userStore, passwordResetTokenStore, resendSender, cfg.PublicAPIBaseURL, passwordResetRateLimiter).ServeHTTP)
+	resetPasswordConfirmHandler := auth.ResetPasswordConfirmHandler(userStore, passwordResetTokenStore).ServeHTTP
+	router.Get("/api/auth/reset-password/confirm", resetPasswordConfirmHandler)
+	router.Post("/api/auth/reset-password/confirm", resetPasswordConfirmHandler)
 
 	log.Printf("listening on %s", cfg.ServerAddress)
 	if err := http.ListenAndServe(cfg.ServerAddress, router); err != nil {
