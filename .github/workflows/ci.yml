@@ -16,6 +16,14 @@ on:
   pull_request:
     branches: [master]
 
+# Cancela runs en curso solo en PRs (nunca en push a master ni en tags de
+# release) -- push a varios commits seguidos a la misma PR (como ha pasado
+# hoy con los reintentos manuales) dejaba corriendo hasta el final runs ya
+# obsoletos en vez de cancelarlos.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   quality-ts:
     name: Quality gates — TypeScript
@@ -31,6 +39,17 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+
+      # El binario de Cypress (~100+MB) se descarga en un postinstall script,
+      # fuera del store de pnpm que ya cachea `actions/setup-node` -- sin esto
+      # se re-descarga entero en cada run aunque la versión no cambie.
+      - name: Cache Cypress binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          key: cypress-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            cypress-${{ runner.os }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -174,11 +193,23 @@ jobs:
           DATABASE_URL: postgres://motoroutes:motoroutes@localhost:5432/motoroutes
         run: go test ./...
 
+      # go install ...@latest se reinstalaba desde cero en cada run -- el caché
+      # de setup-go cubre GOMODCACHE/GOCACHE pero no GOBIN. Cachear el binario
+      # es seguro: la base de datos de vulnerabilidades la descarga govulncheck
+      # en tiempo de ejecución, no viaja embebida en el binario instalado.
+      - name: Cache govulncheck binary
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/govulncheck
+          key: govulncheck-${{ runner.os }}
+
       - name: govulncheck
         working-directory: apps/api
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+          if [ ! -x ~/go/bin/govulncheck ]; then
+            go install golang.org/x/vuln/cmd/govulncheck@latest
+          fi
+          ~/go/bin/govulncheck ./...
 
   build-and-release:
     name: Build & release Android APK
