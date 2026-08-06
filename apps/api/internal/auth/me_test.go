@@ -33,6 +33,9 @@ func TestMeHandler_ReturnsAuthenticatedUser(t *testing.T) {
 	if body.Email != "rider@example.com" {
 		t.Fatalf("expected email rider@example.com, got %q", body.Email)
 	}
+	if body.EmailVerified {
+		t.Fatal("expected EmailVerified false for a freshly registered account")
+	}
 }
 
 func TestMeHandler_WithoutContextUserIsDenied(t *testing.T) {

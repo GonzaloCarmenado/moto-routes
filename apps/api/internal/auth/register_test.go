@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/crzverde/moto-routes/apps/api/internal/email"
 )
 
 // fakeUserStore es un UserStore en memoria para no depender de PostgreSQL en
@@ -48,16 +50,36 @@ func (s *fakeUserStore) FindUserByID(_ context.Context, id int64) (StoredUser, e
 	return StoredUser{}, ErrUserNotFound
 }
 
-func doRegister(t *testing.T, store UserStore, email, password string) *httptest.ResponseRecorder {
+func (s *fakeUserStore) MarkEmailVerified(_ context.Context, id int64) error {
+	for email, user := range s.byEmail {
+		if user.ID == id {
+			user.EmailVerified = true
+			s.byEmail[email] = user
+			return nil
+		}
+	}
+	return ErrUserNotFound
+}
+
+func doRegisterVia(t *testing.T, handler http.Handler, emailAddr, password string) *httptest.ResponseRecorder {
 	t.Helper()
-	body, err := json.Marshal(map[string]string{"email": email, "password": password})
+	body, err := json.Marshal(map[string]string{"email": emailAddr, "password": password})
 	if err != nil {
 		t.Fatalf("failed to marshal request body: %v", err)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
-	RegisterHandler(store).ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, req)
 	return rec
+}
+
+// doRegister registra con un VerificationTokenStore/Sender desechables — los
+// tests que no les prestan atención (la mayoría, centrados en el propio
+// registro) no necesitan construirlos a mano.
+func doRegister(t *testing.T, store UserStore, emailAddr, password string) *httptest.ResponseRecorder {
+	t.Helper()
+	handler := RegisterHandler(store, newFakeVerificationTokenStore(), &email.FakeSender{}, "https://api.example.com")
+	return doRegisterVia(t, handler, emailAddr, password)
 }
 
 func TestRegisterHandler_ValidDataCreatesAccountWithoutPasswordInResponse(t *testing.T) {
@@ -139,5 +161,50 @@ func TestRegisterHandler_WeakPasswordIsRejectedWithoutCreatingAnAccount(t *testi
 	}
 	if len(store.byEmail) != 0 {
 		t.Fatalf("expected no account to be created, got %d", len(store.byEmail))
+	}
+}
+
+func TestRegisterHandler_ValidDataStartsWithEmailUnverifiedAndSendsVerificationEmail(t *testing.T) {
+	store := newFakeUserStore()
+	tokenStore := newFakeVerificationTokenStore()
+	sender := &email.FakeSender{}
+	handler := RegisterHandler(store, tokenStore, sender, "https://api.example.com")
+
+	rec := doRegisterVia(t, handler, "rider@example.com", "correct-horse-battery")
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	stored, err := store.FindUserByEmail(context.Background(), "rider@example.com")
+	if err != nil {
+		t.Fatalf("unexpected error finding user: %v", err)
+	}
+	if stored.EmailVerified {
+		t.Fatal("expected a freshly registered account to start unverified")
+	}
+	if len(sender.Sent) != 1 {
+		t.Fatalf("expected exactly 1 verification email sent, got %d", len(sender.Sent))
+	}
+	if sender.Sent[0].To != "rider@example.com" {
+		t.Fatalf("expected the verification email sent to rider@example.com, got %s", sender.Sent[0].To)
+	}
+	if len(tokenStore.byHash) != 1 {
+		t.Fatalf("expected exactly 1 verification token stored, got %d", len(tokenStore.byHash))
+	}
+}
+
+func TestRegisterHandler_EmailSendFailureDoesNotBlockAccountCreation(t *testing.T) {
+	store := newFakeUserStore()
+	tokenStore := newFakeVerificationTokenStore()
+	sender := &email.FakeSender{FailWith: email.ErrFakeSendFailure}
+	handler := RegisterHandler(store, tokenStore, sender, "https://api.example.com")
+
+	rec := doRegisterVia(t, handler, "rider@example.com", "correct-horse-battery")
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected status 201 even when the verification email fails to send, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if _, err := store.FindUserByEmail(context.Background(), "rider@example.com"); err != nil {
+		t.Fatalf("expected the account to be created despite the email send failure: %v", err)
 	}
 }

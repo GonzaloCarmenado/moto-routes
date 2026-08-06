@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"net/http"
 	"testing"
 	"time"
@@ -35,6 +36,15 @@ func TestRateLimitedLoginHandler_BlocksAfterTooManyFailedAttempts(t *testing.T) 
 func TestRateLimitedLoginHandler_SuccessfulLoginIsNotRateLimited(t *testing.T) {
 	store := newFakeUserStore()
 	doRegister(t, store, "rider@example.com", "correct-horse-battery")
+	// El login ahora exige email verificado (ver spec delta de user-auth);
+	// este test cubre el rate limiting, no el flujo de verificación.
+	user, err := store.FindUserByEmail(context.Background(), "rider@example.com")
+	if err != nil {
+		t.Fatalf("unexpected error looking up seeded user: %v", err)
+	}
+	if err := store.MarkEmailVerified(context.Background(), user.ID); err != nil {
+		t.Fatalf("unexpected error marking email verified: %v", err)
+	}
 	issuer := TokenIssuer{Secret: []byte("test-secret"), TTL: time.Hour}
 	limiter := NewLoginRateLimiter(3, time.Minute)
 

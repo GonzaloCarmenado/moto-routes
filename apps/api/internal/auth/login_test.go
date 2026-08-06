@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -29,6 +30,16 @@ func doLoginVia(t *testing.T, handler http.Handler, email, password string) *htt
 func TestLoginHandler_ValidCredentialsReturnAToken(t *testing.T) {
 	store := newFakeUserStore()
 	doRegister(t, store, "rider@example.com", "correct-horse-battery")
+	// El login ahora exige email verificado (ver spec delta de user-auth); se
+	// marca aquí a mano porque este test cubre el camino feliz de login, no
+	// el flujo de verificación en sí.
+	user, err := store.FindUserByEmail(context.Background(), "rider@example.com")
+	if err != nil {
+		t.Fatalf("unexpected error looking up seeded user: %v", err)
+	}
+	if err := store.MarkEmailVerified(context.Background(), user.ID); err != nil {
+		t.Fatalf("unexpected error marking email verified: %v", err)
+	}
 	issuer := TokenIssuer{Secret: []byte("test-secret"), TTL: time.Hour}
 
 	rec := doLogin(t, store, issuer, "rider@example.com", "correct-horse-battery")
@@ -65,5 +76,22 @@ func TestLoginHandler_UnknownEmailAndWrongPasswordReturnTheSameGenericError(t *t
 	if unknownEmailRec.Body.String() != wrongPasswordRec.Body.String() {
 		t.Fatalf("expected identical generic error bodies, got %q vs %q",
 			unknownEmailRec.Body.String(), wrongPasswordRec.Body.String())
+	}
+}
+
+func TestLoginHandler_CorrectCredentialsButUnverifiedEmailIsRejected(t *testing.T) {
+	store := newFakeUserStore()
+	doRegister(t, store, "rider@example.com", "correct-horse-battery")
+	issuer := TokenIssuer{Secret: []byte("test-secret"), TTL: time.Hour}
+
+	rec := doLogin(t, store, issuer, "rider@example.com", "correct-horse-battery")
+
+	if rec.Code == http.StatusOK {
+		t.Fatalf("expected login to be rejected for an unverified account, got 200: %s", rec.Body.String())
+	}
+
+	wrongPasswordRec := doLogin(t, store, issuer, "rider@example.com", "wrong-password")
+	if rec.Body.String() == wrongPasswordRec.Body.String() {
+		t.Fatal("expected the unverified-email error to be distinguishable from the wrong-credentials error")
 	}
 }

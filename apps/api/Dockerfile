@@ -17,6 +17,14 @@ COPY internal ./internal
 RUN CGO_ENABLED=0 go build -o /app/bin/api ./cmd/api
 
 FROM debian:trixie-slim AS runtime
+# ca-certificates: sin esto, cualquier llamada HTTPS saliente (Resend, desde
+# confirmacion-email-usuarios) falla con "certificate signed by unknown
+# authority" — debian:trixie-slim no la trae por defecto. No hacía falta
+# hasta ahora porque la única dependencia externa era Postgres (sin TLS en
+# este despliegue). Detectado verificando de verdad el envío de email, no en
+# revisión de código.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/bin/api ./api
 EXPOSE 8080

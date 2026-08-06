@@ -6,8 +6,9 @@ import (
 )
 
 type meResponse struct {
-	ID    int64  `json:"id"`
-	Email string `json:"email"`
+	ID            int64  `json:"id"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
 }
 
 // MeHandler devuelve la cuenta del usuario autenticado por RequireAuth. Sirve
@@ -28,6 +29,6 @@ func MeHandler(store UserStore) http.Handler {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(meResponse{ID: user.ID, Email: user.Email})
+		_ = json.NewEncoder(w).Encode(meResponse{ID: user.ID, Email: user.Email, EmailVerified: user.EmailVerified})
 	})
 }

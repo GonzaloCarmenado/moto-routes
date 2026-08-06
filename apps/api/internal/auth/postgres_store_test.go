@@ -67,3 +67,54 @@ func TestPostgresUserStore_FindUnknownEmailReturnsErrUserNotFound(t *testing.T) 
 		t.Fatalf("expected ErrUserNotFound, got %v", err)
 	}
 }
+
+func TestPostgresUserStore_NewAccountStartsWithEmailUnverified(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	created, err := store.CreateUser(ctx, "rider@example.com", "hashed-value")
+	if err != nil {
+		t.Fatalf("unexpected error creating user: %v", err)
+	}
+	if created.EmailVerified {
+		t.Fatal("expected a new account to start with EmailVerified false")
+	}
+
+	found, err := store.FindUserByEmail(ctx, "rider@example.com")
+	if err != nil {
+		t.Fatalf("unexpected error finding user: %v", err)
+	}
+	if found.EmailVerified {
+		t.Fatal("expected FindUserByEmail to report EmailVerified false")
+	}
+}
+
+func TestPostgresUserStore_MarkEmailVerifiedPersists(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	created, err := store.CreateUser(ctx, "rider@example.com", "hashed-value")
+	if err != nil {
+		t.Fatalf("unexpected error creating user: %v", err)
+	}
+
+	if err := store.MarkEmailVerified(ctx, created.ID); err != nil {
+		t.Fatalf("unexpected error marking email verified: %v", err)
+	}
+
+	byEmail, err := store.FindUserByEmail(ctx, "rider@example.com")
+	if err != nil {
+		t.Fatalf("unexpected error finding user by email: %v", err)
+	}
+	if !byEmail.EmailVerified {
+		t.Fatal("expected FindUserByEmail to report EmailVerified true after marking it")
+	}
+
+	byID, err := store.FindUserByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("unexpected error finding user by id: %v", err)
+	}
+	if !byID.EmailVerified {
+		t.Fatal("expected FindUserByID to report EmailVerified true after marking it")
+	}
+}
