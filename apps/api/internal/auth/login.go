@@ -16,10 +16,14 @@ type loginResponse struct {
 }
 
 const invalidCredentialsMessage = "invalid email or password"
+const emailNotVerifiedMessage = "email not verified, check your inbox for the verification link"
 
 // LoginHandler verifica email y contraseña y, si coinciden, emite un token de
 // sesión. Un email inexistente y una contraseña incorrecta responden con el
-// mismo error genérico, para no revelar si el email existe.
+// mismo error genérico, para no revelar si el email existe. Una cuenta sin
+// verificar se rechaza con un error distinto — quien llega hasta aquí ya
+// demostró conocer la contraseña, así que distinguirlo no habilita
+// enumeración (ver spec delta de user-auth).
 func LoginHandler(store UserStore, issuer TokenIssuer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req loginRequest
@@ -40,6 +44,11 @@ func LoginHandler(store UserStore, issuer TokenIssuer) http.Handler {
 
 		if !verifyPassword(user.PasswordHash, req.Password) {
 			writeError(w, http.StatusUnauthorized, invalidCredentialsMessage)
+			return
+		}
+
+		if !user.EmailVerified {
+			writeError(w, http.StatusForbidden, emailNotVerifiedMessage)
 			return
 		}
 

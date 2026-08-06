@@ -12,6 +12,7 @@ import (
 
 	"github.com/crzverde/moto-routes/apps/api/internal/auth"
 	"github.com/crzverde/moto-routes/apps/api/internal/config"
+	"github.com/crzverde/moto-routes/apps/api/internal/email"
 	"github.com/crzverde/moto-routes/apps/api/internal/httpmw"
 	"github.com/crzverde/moto-routes/apps/api/internal/migrate"
 	"github.com/crzverde/moto-routes/apps/api/internal/ping"
@@ -25,6 +26,19 @@ const tokenTTL = 24 * time.Hour
 const (
 	loginRateLimitMaxAttempts = 5
 	loginRateLimitWindow      = 15 * time.Minute
+)
+
+// Límite de solicitudes de verificación de email por dirección: 3 cada 15 minutos.
+const (
+	verificationRequestRateLimitMaxAttempts = 3
+	verificationRequestRateLimitWindow      = 15 * time.Minute
+)
+
+// Límite de intentos de registro por email: 5 cada 15 minutos (register ahora
+// también llama a un proveedor de email externo con cuota limitada).
+const (
+	registerRateLimitMaxAttempts = 5
+	registerRateLimitWindow      = 15 * time.Minute
 )
 
 // dbConnectTimeout acota cuánto espera cada intento de conexión a PostgreSQL
@@ -58,17 +72,25 @@ func main() {
 	}
 
 	userStore := auth.PostgresUserStore{Pool: pool}
+	verificationTokenStore := auth.PostgresVerificationTokenStore{Pool: pool}
 	tokenIssuer := auth.TokenIssuer{Secret: cfg.TokenSigningKey, TTL: tokenTTL}
+	resendSender := email.ResendSender{APIKey: cfg.ResendAPIKey, From: cfg.ResendFromAddress}
 
 	router := chi.NewRouter()
 	router.Use(httpmw.Recover)
 	router.Get("/api/ping", ping.Handler(ping.PostgresService{Pool: pool}).ServeHTTP)
 	router.With(httpmw.PublicCORS).Get("/api/stop-types", stoptypes.Handler(stoptypes.PostgresRepository{Pool: pool}).ServeHTTP)
 	loginRateLimiter := auth.NewLoginRateLimiter(loginRateLimitMaxAttempts, loginRateLimitWindow)
+	verificationRequestRateLimiter := auth.NewLoginRateLimiter(verificationRequestRateLimitMaxAttempts, verificationRequestRateLimitWindow)
+	registerRateLimiter := auth.NewLoginRateLimiter(registerRateLimitMaxAttempts, registerRateLimitWindow)
 
-	router.Post("/api/auth/register", auth.RegisterHandler(userStore).ServeHTTP)
+	router.Post("/api/auth/register",
+		auth.RateLimitedRegisterHandler(userStore, verificationTokenStore, resendSender, cfg.PublicAPIBaseURL, registerRateLimiter).ServeHTTP)
 	router.Post("/api/auth/login", auth.RateLimitedLoginHandler(userStore, tokenIssuer, loginRateLimiter).ServeHTTP)
 	router.With(auth.RequireAuth(tokenIssuer)).Get("/api/auth/me", auth.MeHandler(userStore).ServeHTTP)
+	router.Post("/api/auth/verify-email/request",
+		auth.RateLimitedRequestVerificationHandler(userStore, verificationTokenStore, resendSender, cfg.PublicAPIBaseURL, verificationRequestRateLimiter).ServeHTTP)
+	router.Get("/api/auth/verify-email/confirm", auth.ConfirmVerificationHandler(userStore, verificationTokenStore).ServeHTTP)
 
 	log.Printf("listening on %s", cfg.ServerAddress)
 	if err := http.ListenAndServe(cfg.ServerAddress, router); err != nil {

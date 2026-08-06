@@ -5,6 +5,7 @@ package config
 import (
 	"errors"
 	"os"
+	"strings"
 )
 
 // Config es la configuración de arranque del servicio.
@@ -15,12 +16,22 @@ type Config struct {
 	ServerAddress string
 	// TokenSigningKey firma los tokens de sesión (JWT). Es un secreto: sin valor por defecto.
 	TokenSigningKey []byte
+	// ResendAPIKey autentica las llamadas a la API de Resend. Es un secreto: sin valor por defecto.
+	ResendAPIKey string
+	// ResendFromAddress es el remitente ("Nombre <direccion@dominio>") de los emails enviados vía Resend.
+	ResendFromAddress string
+	// PublicAPIBaseURL es la URL pública y absoluta (https://) desde la que
+	// se construyen los enlaces de verificación de email. Debe empezar por
+	// https:// — una URL relativa o sin esquema causó el incidente de
+	// ADR-036 con MOBILE_PROD_API_BASE_URL; aquí se rechaza en el arranque.
+	PublicAPIBaseURL string
 }
 
-// Load lee la configuración desde variables de entorno. DATABASE_URL y
-// AUTH_TOKEN_SECRET son obligatorias y sin valor por defecto (contienen
-// secretos). SERVER_ADDRESS por defecto es 0.0.0.0 para no romper el entorno
-// local; en producción se fija a la interfaz de Tailscale del servidor.
+// Load lee la configuración desde variables de entorno. DATABASE_URL,
+// AUTH_TOKEN_SECRET, RESEND_API_KEY, RESEND_FROM_ADDRESS y
+// PUBLIC_API_BASE_URL son obligatorias y sin valor por defecto. SERVER_ADDRESS
+// por defecto es 0.0.0.0 para no romper el entorno local; en producción se
+// fija a la interfaz de Tailscale del servidor.
 func Load() (Config, error) {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -32,14 +43,35 @@ func Load() (Config, error) {
 		return Config{}, errors.New("AUTH_TOKEN_SECRET environment variable is required")
 	}
 
+	resendAPIKey := os.Getenv("RESEND_API_KEY")
+	if resendAPIKey == "" {
+		return Config{}, errors.New("RESEND_API_KEY environment variable is required")
+	}
+
+	resendFromAddress := os.Getenv("RESEND_FROM_ADDRESS")
+	if resendFromAddress == "" {
+		return Config{}, errors.New("RESEND_FROM_ADDRESS environment variable is required")
+	}
+
+	publicAPIBaseURL := os.Getenv("PUBLIC_API_BASE_URL")
+	if publicAPIBaseURL == "" {
+		return Config{}, errors.New("PUBLIC_API_BASE_URL environment variable is required")
+	}
+	if !strings.HasPrefix(publicAPIBaseURL, "https://") {
+		return Config{}, errors.New("PUBLIC_API_BASE_URL must start with https://")
+	}
+
 	host := os.Getenv("SERVER_ADDRESS")
 	if host == "" {
 		host = "0.0.0.0"
 	}
 
 	return Config{
-		DatabaseURL:     dbURL,
-		ServerAddress:   host + ":8080",
-		TokenSigningKey: []byte(tokenSecret),
+		DatabaseURL:       dbURL,
+		ServerAddress:     host + ":8080",
+		TokenSigningKey:   []byte(tokenSecret),
+		ResendAPIKey:      resendAPIKey,
+		ResendFromAddress: resendFromAddress,
+		PublicAPIBaseURL:  publicAPIBaseURL,
 	}, nil
 }
