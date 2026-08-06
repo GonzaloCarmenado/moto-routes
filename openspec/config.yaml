@@ -49,6 +49,29 @@ context: |
   reset de contraseña) responde con el mismo mensaje/código tanto si existe como si no, para
   no habilitar enumeración de cuentas.
 
+  Cuándo un cambio de apps/api toca seguridad (más allá de lo anterior): crea o
+  modifica autenticación, autorización, manejo de contraseñas o tokens, envío de
+  datos personales (email incluido), o cualquier secreto/credencial nuevo — no hace
+  falta que el cambio se llame "seguridad" para que esto aplique. Nunca criptografía
+  o parseo de tokens hecho a mano: hashing de contraseñas, firma/verificación de JWT
+  (u otro esquema de sesión) y generación de tokens aleatorios de un solo uso
+  (verificación de email, reset de contraseña) usan siempre una librería madura y
+  auditada del ecosistema del lenguaje — citar la librería elegida y por qué en
+  design.md, mismo criterio que cualquier dependencia nueva. Todo secreto nuevo (API
+  key, credencial, clave de firma) se nombra en design.md por su nombre de variable
+  de entorno y dónde vive (GitHub Secret, .env*.prod no versionado) — nunca su valor
+  real, ni en el propio artefacto ni en ningún commit; antes de abrir el PR, revisar
+  el diff completo buscando el string exacto de cualquier secreto usado durante la
+  implementación. Endpoints que puedan revelar la existencia de una cuenta (registro
+  con email duplicado, login, reset de contraseña) responden igual exista o no la
+  cuenta — el escenario de "email ya registrado" en la spec debe decir explícitamente
+  qué SÍ y qué NO puede distinguir un atacante a partir de la respuesta. Rate limiting
+  explícito en cualquier endpoint de autenticación nuevo (login, registro, solicitud
+  de token de un solo uso) — no asumir que el límite ya existente en otro endpoint
+  cubre uno nuevo. El gate de archive.guidance (ver operations.archive) trata
+  cualquier problema de seguridad como BLOCKED sin excepción; este párrafo da el
+  criterio concreto de qué revisar para decidirlo, no lo reemplaza.
+
   Idioma: documentación, specs y artefactos de OpenSpec en español. Código en inglés
   (identificadores y comentarios). Las palabras estructurales del formato de spec
   (Requirement, Scenario, WHEN/THEN, ADDED/MODIFIED/REMOVED) se mantienen en inglés
@@ -114,38 +137,6 @@ rules:
     - >-
       Si el cambio toca src/shared/, declararlo en Risks con el radio de impacto sobre los
       dominios que consumen ese componente.
-
-  security:
-    - >-
-      Un cambio "toca seguridad" si crea/modifica autenticación, autorización, manejo de
-      contraseñas o tokens, envío de datos personales (email incluido), o cualquier
-      secreto/credencial nuevo — no hace falta que el cambio se llame "seguridad" para que
-      esta sección aplique.
-    - >-
-      Nunca criptografía o parseo de tokens hecho a mano: hashing de contraseñas, firma/
-      verificación de JWT (u otro esquema de sesión) y generación de tokens aleatorios de un
-      solo uso (verificación de email, reset de contraseña) usan siempre una librería madura
-      y auditada del ecosistema del lenguaje, nunca una implementación propia — citar la
-      librería elegida y por qué en design.md, mismo criterio que cualquier dependencia nueva.
-    - >-
-      Todo secreto nuevo (API key, credencial, clave de firma) se nombra en design.md por su
-      nombre de variable de entorno y dónde vive (GitHub Secret, .env*.prod no versionado) —
-      nunca su valor real, ni en el propio artefacto ni en ningún commit. Antes de abrir el
-      PR, revisar el diff completo buscando el string exacto de cualquier secreto usado
-      durante la implementación.
-    - >-
-      Endpoints que puedan revelar la existencia de una cuenta (registro con email duplicado,
-      login, reset de contraseña) responden igual exista o no la cuenta — el escenario de
-      "email ya registrado" en la spec debe decir explícitamente qué SÍ y qué NO puede
-      distinguir un atacante a partir de la respuesta.
-    - >-
-      Rate limiting explícito en cualquier endpoint de autenticación nuevo (login, registro,
-      solicitud de token de un solo uso) — no asumir que el límite ya existente en otro
-      endpoint cubre uno nuevo.
-    - >-
-      El gate de archive.guidance trata cualquier problema de seguridad como BLOCKED sin
-      excepción (ya establecido, ver operations.archive) — esta sección da el criterio
-      concreto de qué revisar para decidirlo, no lo reemplaza.
 
   tasks:
     - >-
@@ -234,7 +225,8 @@ operations:
         seguridad (secretos, CSP, inputs sin validar), cambios en src/shared/ y su radio
         de impacto, actualizaciones de dependencias core, y reglas del proyecto que se
         hayan tenido que saltar. Si el cambio toca autenticación/autorización/secretos
-        (ver rules.security), la sección CRÍTICO confirma explícitamente: ninguna
+        (ver el criterio de seguridad en apps/api del contexto del proyecto), la
+        sección CRÍTICO confirma explícitamente: ninguna
         criptografía hecha a mano, ningún secreto real en el diff, rate limiting presente
         en cada endpoint de auth nuevo, y que las respuestas de registro/login/reset no
         permiten enumerar cuentas.
