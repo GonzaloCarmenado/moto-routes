@@ -34,6 +34,13 @@ const (
 	verificationRequestRateLimitWindow      = 15 * time.Minute
 )
 
+// Límite de intentos de registro por email: 5 cada 15 minutos (register ahora
+// también llama a un proveedor de email externo con cuota limitada).
+const (
+	registerRateLimitMaxAttempts = 5
+	registerRateLimitWindow      = 15 * time.Minute
+)
+
 // dbConnectTimeout acota cuánto espera cada intento de conexión a PostgreSQL
 // (incluida la resolución DNS) antes de fallar. Sin este límite, un Postgres
 // caído puede tardar varios segundos en devolver el 503 de /api/ping en vez
@@ -75,8 +82,10 @@ func main() {
 	router.With(httpmw.PublicCORS).Get("/api/stop-types", stoptypes.Handler(stoptypes.PostgresRepository{Pool: pool}).ServeHTTP)
 	loginRateLimiter := auth.NewLoginRateLimiter(loginRateLimitMaxAttempts, loginRateLimitWindow)
 	verificationRequestRateLimiter := auth.NewLoginRateLimiter(verificationRequestRateLimitMaxAttempts, verificationRequestRateLimitWindow)
+	registerRateLimiter := auth.NewLoginRateLimiter(registerRateLimitMaxAttempts, registerRateLimitWindow)
 
-	router.Post("/api/auth/register", auth.RegisterHandler(userStore, verificationTokenStore, resendSender, cfg.PublicAPIBaseURL).ServeHTTP)
+	router.Post("/api/auth/register",
+		auth.RateLimitedRegisterHandler(userStore, verificationTokenStore, resendSender, cfg.PublicAPIBaseURL, registerRateLimiter).ServeHTTP)
 	router.Post("/api/auth/login", auth.RateLimitedLoginHandler(userStore, tokenIssuer, loginRateLimiter).ServeHTTP)
 	router.With(auth.RequireAuth(tokenIssuer)).Get("/api/auth/me", auth.MeHandler(userStore).ServeHTTP)
 	router.Post("/api/auth/verify-email/request",
