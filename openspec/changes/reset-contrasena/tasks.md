@@ -44,9 +44,9 @@
 ## 7. Verificación real
 
 - [x] 7.1 `docker compose up --build` local: solicitud real de reset, email recibido (**gap real encontrado**: `infra/docker/.env` seguía con el remitente sandbox `onboarding@resend.dev`, ya agotado desde la sesión de `confirmacion-email-usuarios` — corregido a `no-reply@motor-routes.com`, mismo dominio ya verificado en producción), enlace abierto en un navegador real (confirmado visualmente por el usuario: fondo oscuro, panel, botón ámbar), formulario enviado con contraseña nueva, login con la contraseña anterior rechazado (401) y con la nueva aceptado (200 con token).
-- [ ] 7.2 Verificar en producción real (mismo patrón que ADR-038: desplegar desde la rama sin fusionar, imagen anterior etiquetada para rollback) que el flujo funciona desde fuera del tailnet. Cuenta de prueba limpiada de la base de datos de producción después.
+- [x] 7.2 Desplegado desde `feature/reset-contrasena` sin fusionar (imagen anterior etiquetada `docker-api:pre-reset-contrasena`), migración `0004` aplicada sola. Registro real → solicitud de reset → email recibido → formulario real completado por el usuario (con verificación cruzada: primer intento con una contraseña de 6 caracteres fue rechazado de verdad server-side, confirmando la política mínima) → login con la contraseña nueva (`200`, token válido) desde fuera del tailnet. Cuenta de prueba borrada de producción, `count(*) = 0` en `users` y `password_reset_tokens`.
 
 ## 8. Cierre
 
-- [ ] 8.1 Actualizar `memory/context.md` con el estado del cambio.
-- [ ] 8.2 Nueva entrada en `memory/decisions.md` si el cambio confirma o ajusta alguna decisión de ADR-038 (p. ej. el rename de las funciones de token) — enlazar, no duplicar.
+- [x] 8.1 Actualizado `memory/context.md` con el resumen completo de la sesión.
+- [x] 8.2 Nueva `memory/decisions.md::ADR-039` (enlaza ADR-038, no lo duplica) con las decisiones técnicas, el gap real encontrado y la verificación end-to-end en local y producción.
