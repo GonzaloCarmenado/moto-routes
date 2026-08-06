@@ -8,20 +8,17 @@ export interface AuthSectionCallbacks {
 }
 
 /**
- * Construye la sección "Cuenta" de Perfil (render puro, sin efectos) —
- * mismo patrón que `buildProfileHeader`: la resolución del estado
- * (`loadAuthSectionState`, con su llamada a `/api/auth/me`) vive aparte, en
- * `auth-section.service.ts`.
+ * Construye el bloque de estado de cuenta dentro de la tarjeta de identidad
+ * de Perfil (render puro, sin efectos) — mismo patrón que
+ * `buildProfileHeader`: la resolución del estado (`loadAuthSectionState`,
+ * con su llamada a `/api/auth/me`) vive aparte, en `auth-section.service.ts`.
+ * Sin título propio ("Cuenta"): se integra visualmente bajo el avatar/nombre
+ * en `profile.element.ts::buildIdentityCard`, no como sección aparte.
  */
 export function buildAuthSection(state: AuthSectionState, callbacks: AuthSectionCallbacks): HTMLElement {
   const section = document.createElement('div');
   section.className = 'auth-section';
   section.setAttribute('data-cy', 'auth-section-cuenta');
-
-  const title = document.createElement('h2');
-  title.className = 'section-title';
-  title.textContent = 'Cuenta';
-  section.appendChild(title);
 
   section.appendChild(state.status === 'logged-in' ? buildLoggedIn(state.email, callbacks) : buildLoggedOut(callbacks));
 
@@ -30,6 +27,11 @@ export function buildAuthSection(state: AuthSectionState, callbacks: AuthSection
 
 function buildLoggedIn(email: string, callbacks: AuthSectionCallbacks): HTMLElement {
   const wrapper = document.createElement('div');
+  wrapper.className = 'auth-loggedin-row';
+
+  const dot = document.createElement('span');
+  dot.className = 'auth-status-dot';
+  wrapper.appendChild(dot);
 
   const emailEl = document.createElement('p');
   emailEl.className = 'auth-email';
@@ -38,9 +40,9 @@ function buildLoggedIn(email: string, callbacks: AuthSectionCallbacks): HTMLElem
 
   const logoutBtn = document.createElement('button');
   logoutBtn.type = 'button';
-  logoutBtn.className = 'edit-btn';
+  logoutBtn.className = 'auth-link-btn';
   logoutBtn.setAttribute('data-cy', 'auth-btn-cerrar-sesion');
-  logoutBtn.textContent = 'Cerrar sesión';
+  logoutBtn.textContent = 'Salir';
   logoutBtn.addEventListener('click', callbacks.onLogout);
   wrapper.appendChild(logoutBtn);
 
@@ -60,7 +62,7 @@ function buildLoggedOutActions(callbacks: AuthSectionCallbacks): HTMLElement {
 
   const loginBtn = document.createElement('button');
   loginBtn.type = 'button';
-  loginBtn.className = 'edit-btn';
+  loginBtn.className = 'account-btn account-btn--primary';
   loginBtn.setAttribute('data-cy', 'auth-btn-abrir-login');
   loginBtn.textContent = 'Iniciar sesión';
   loginBtn.addEventListener('click', callbacks.onOpenLogin);
@@ -68,7 +70,7 @@ function buildLoggedOutActions(callbacks: AuthSectionCallbacks): HTMLElement {
 
   const registerBtn = document.createElement('button');
   registerBtn.type = 'button';
-  registerBtn.className = 'edit-btn';
+  registerBtn.className = 'account-btn account-btn--ghost';
   registerBtn.setAttribute('data-cy', 'auth-btn-abrir-registro');
   registerBtn.textContent = 'Crear cuenta';
   registerBtn.addEventListener('click', callbacks.onOpenRegister);

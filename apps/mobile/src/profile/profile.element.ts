@@ -174,26 +174,43 @@ class ProfileView extends BaseElement {
     if (this._loading) {
       screen.appendChild(this.buildLoadingState());
     } else {
-      screen.appendChild(this.buildHeaderSection());
+      screen.appendChild(this.buildIdentityCard());
       screen.appendChild(this.buildVehicleSection());
       screen.appendChild(this.buildStatsSection());
-      screen.appendChild(this.buildAccountSection());
     }
     this.renderShadow(styles, screen);
   }
 
-  private buildHeaderSection(): HTMLElement {
-    const section = document.createElement('div');
-    section.className = 'header-section';
-    section.appendChild(
+  /**
+   * Tarjeta única de identidad: avatar+nombre local (siempre editable,
+   * independiente de la sesión) y, justo debajo, el estado de cuenta —
+   * antes eran dos bloques sin relación visual (avatar arriba, "Cuenta" al
+   * final de la pantalla); ahora comparten una sola tarjeta ("Identidad
+   * unificada", propuesta elegida sobre las otras dos exploradas en el
+   * pitch de diseño).
+   */
+  private buildIdentityCard(): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'identity-card';
+
+    const profile = document.createElement('div');
+    profile.className = 'identity-card__profile';
+    profile.appendChild(
       buildProfileHeader({
         avatarUrl: this.viewModel.avatarUrl,
         name: this.viewModel.name,
         onAvatarClick: () => { void this.handleEditProfile(); },
       }),
     );
-    section.appendChild(this.buildEditProfileButton());
-    return section;
+    profile.appendChild(this.buildEditProfileButton());
+    card.appendChild(profile);
+
+    const divider = document.createElement('div');
+    divider.className = 'identity-card__divider';
+    card.appendChild(divider);
+
+    card.appendChild(this.buildAccountSection());
+    return card;
   }
 
   private buildEditProfileButton(): HTMLButtonElement {
