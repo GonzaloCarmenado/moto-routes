@@ -162,4 +162,3 @@ func TestRequestVerificationHandler_MalformedBodyIsRejected(t *testing.T) {
 		t.Fatalf("expected status 400, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
-
