@@ -177,11 +177,11 @@ func TestResetPasswordConfirmHandler_PostWithExtraAccountFieldIsIgnored(t *testi
 	handler := ResetPasswordConfirmHandler(userStore, tokenStore)
 
 	form := url.Values{
-		"token":                  {attackerToken},
-		"password":               {"new-password-123"},
-		"password_confirmation":  {"new-password-123"},
-		"email":                  {"victim@example.com"},
-		"user_id":                {"1"},
+		"token":                 {attackerToken},
+		"password":              {"new-password-123"},
+		"password_confirmation": {"new-password-123"},
+		"email":                 {"victim@example.com"},
+		"user_id":               {"1"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password/confirm", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
