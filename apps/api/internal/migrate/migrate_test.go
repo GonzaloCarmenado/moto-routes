@@ -85,6 +85,32 @@ func TestRun_AppliesEmailVerificationMigration(t *testing.T) {
 	}
 }
 
+func TestRun_AppliesPasswordResetMigration(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+
+	if err := Run(ctx, pool, Migrations); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx, "INSERT INTO users (email, password_hash) VALUES ($1, $2)", "rider@example.com", "hash"); err != nil {
+		t.Fatalf("expected users table to accept a row: %v", err)
+	}
+
+	var userID int64
+	if err := pool.QueryRow(ctx, "SELECT id FROM users WHERE email = $1", "rider@example.com").Scan(&userID); err != nil {
+		t.Fatalf("failed to read back user id: %v", err)
+	}
+
+	_, err := pool.Exec(ctx,
+		"INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, now() + interval '1 hour')",
+		userID, "some-hash",
+	)
+	if err != nil {
+		t.Fatalf("expected password_reset_tokens table to accept a row: %v", err)
+	}
+}
+
 func TestRun_IsIdempotent(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()

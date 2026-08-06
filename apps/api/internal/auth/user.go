@@ -45,4 +45,6 @@ type UserStore interface {
 	// MarkEmailVerified marca la cuenta indicada como verificada. No hace
 	// nada si ya lo estaba.
 	MarkEmailVerified(ctx context.Context, id int64) error
+	// UpdatePasswordHash sustituye el hash de contraseña de la cuenta.
+	UpdatePasswordHash(ctx context.Context, id int64, passwordHash string) error
 }

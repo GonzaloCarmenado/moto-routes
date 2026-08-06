@@ -54,13 +54,13 @@ func RequestVerificationHandler(userStore UserStore, tokenStore VerificationToke
 // design.md), pero sí queda registrado en el log del servidor para poder
 // diagnosticarlo (nunca el token en claro, solo el id de usuario y el error).
 func issueAndSendVerificationToken(r *http.Request, tokenStore VerificationTokenStore, sender email.Sender, publicBaseURL string, user StoredUser) {
-	token, err := generateVerificationToken()
+	token, err := generateOneTimeToken()
 	if err != nil {
 		log.Printf("email verification: failed to generate token for user %d: %v", user.ID, err)
 		return
 	}
 
-	if err := tokenStore.CreateToken(r.Context(), user.ID, hashVerificationToken(token), time.Now().Add(verificationTokenTTL)); err != nil {
+	if err := tokenStore.CreateToken(r.Context(), user.ID, hashOneTimeToken(token), time.Now().Add(verificationTokenTTL)); err != nil {
 		log.Printf("email verification: failed to store token for user %d: %v", user.ID, err)
 		return
 	}

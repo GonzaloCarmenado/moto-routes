@@ -25,7 +25,7 @@ func TestConfirmVerificationHandler_ValidTokenVerifiesTheAccount(t *testing.T) {
 	}
 	tokenStore := newFakeVerificationTokenStore()
 	rawToken := "valid-token"
-	if err := tokenStore.CreateToken(context.Background(), user.ID, hashVerificationToken(rawToken), time.Now().Add(time.Hour)); err != nil {
+	if err := tokenStore.CreateToken(context.Background(), user.ID, hashOneTimeToken(rawToken), time.Now().Add(time.Hour)); err != nil {
 		t.Fatalf("unexpected error seeding token: %v", err)
 	}
 	handler := ConfirmVerificationHandler(userStore, tokenStore)
@@ -51,10 +51,10 @@ func TestConfirmVerificationHandler_AlreadyUsedTokenIsRejectedWithoutChangingSta
 	user, _ := userStore.FindUserByEmail(context.Background(), "rider@example.com")
 	tokenStore := newFakeVerificationTokenStore()
 	rawToken := "already-used-token"
-	if err := tokenStore.CreateToken(context.Background(), user.ID, hashVerificationToken(rawToken), time.Now().Add(time.Hour)); err != nil {
+	if err := tokenStore.CreateToken(context.Background(), user.ID, hashOneTimeToken(rawToken), time.Now().Add(time.Hour)); err != nil {
 		t.Fatalf("unexpected error seeding token: %v", err)
 	}
-	stored, _ := tokenStore.FindByHash(context.Background(), hashVerificationToken(rawToken))
+	stored, _ := tokenStore.FindByHash(context.Background(), hashOneTimeToken(rawToken))
 	if err := tokenStore.MarkUsed(context.Background(), stored.ID); err != nil {
 		t.Fatalf("unexpected error pre-marking token used: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestConfirmVerificationHandler_ExpiredTokenIsRejectedWithoutVerifying(t *te
 	user, _ := userStore.FindUserByEmail(context.Background(), "rider@example.com")
 	tokenStore := newFakeVerificationTokenStore()
 	rawToken := "expired-token"
-	if err := tokenStore.CreateToken(context.Background(), user.ID, hashVerificationToken(rawToken), time.Now().Add(-time.Hour)); err != nil {
+	if err := tokenStore.CreateToken(context.Background(), user.ID, hashOneTimeToken(rawToken), time.Now().Add(-time.Hour)); err != nil {
 		t.Fatalf("unexpected error seeding token: %v", err)
 	}
 	handler := ConfirmVerificationHandler(userStore, tokenStore)
@@ -98,7 +98,7 @@ func TestConfirmVerificationHandler_UnknownTokenGetsTheSameErrorAsExpired(t *tes
 	doRegister(t, userStore, "rider@example.com", "correct-horse-battery")
 	user, _ := userStore.FindUserByEmail(context.Background(), "rider@example.com")
 	tokenStore := newFakeVerificationTokenStore()
-	if err := tokenStore.CreateToken(context.Background(), user.ID, hashVerificationToken("expired-token"), time.Now().Add(-time.Hour)); err != nil {
+	if err := tokenStore.CreateToken(context.Background(), user.ID, hashOneTimeToken("expired-token"), time.Now().Add(-time.Hour)); err != nil {
 		t.Fatalf("unexpected error seeding token: %v", err)
 	}
 	handler := ConfirmVerificationHandler(userStore, tokenStore)

@@ -74,3 +74,9 @@ func (s PostgresUserStore) MarkEmailVerified(ctx context.Context, id int64) erro
 	_, err := s.Pool.Exec(ctx, "UPDATE users SET email_verified = true, updated_at = now() WHERE id = $1", id)
 	return err
 }
+
+// UpdatePasswordHash sustituye el hash de contraseña de la cuenta.
+func (s PostgresUserStore) UpdatePasswordHash(ctx context.Context, id int64, passwordHash string) error {
+	_, err := s.Pool.Exec(ctx, "UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2", passwordHash, id)
+	return err
+}

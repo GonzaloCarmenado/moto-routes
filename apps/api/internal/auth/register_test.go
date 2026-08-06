@@ -61,6 +61,17 @@ func (s *fakeUserStore) MarkEmailVerified(_ context.Context, id int64) error {
 	return ErrUserNotFound
 }
 
+func (s *fakeUserStore) UpdatePasswordHash(_ context.Context, id int64, passwordHash string) error {
+	for email, user := range s.byEmail {
+		if user.ID == id {
+			user.PasswordHash = passwordHash
+			s.byEmail[email] = user
+			return nil
+		}
+	}
+	return ErrUserNotFound
+}
+
 func doRegisterVia(t *testing.T, handler http.Handler, emailAddr, password string) *httptest.ResponseRecorder {
 	t.Helper()
 	body, err := json.Marshal(map[string]string{"email": emailAddr, "password": password})

@@ -7,7 +7,7 @@ func TestGenerateVerificationToken_ProducesNonEmptyUniqueValues(t *testing.T) {
 	seen := make(map[string]bool, attempts)
 
 	for i := 0; i < attempts; i++ {
-		token, err := generateVerificationToken()
+		token, err := generateOneTimeToken()
 		if err != nil {
 			t.Fatalf("unexpected error generating token: %v", err)
 		}
@@ -22,13 +22,13 @@ func TestGenerateVerificationToken_ProducesNonEmptyUniqueValues(t *testing.T) {
 }
 
 func TestHashVerificationToken_IsDeterministicAndOneWay(t *testing.T) {
-	token, err := generateVerificationToken()
+	token, err := generateOneTimeToken()
 	if err != nil {
 		t.Fatalf("unexpected error generating token: %v", err)
 	}
 
-	first := hashVerificationToken(token)
-	second := hashVerificationToken(token)
+	first := hashOneTimeToken(token)
+	second := hashOneTimeToken(token)
 
 	if first != second {
 		t.Fatalf("expected hashing the same token twice to produce the same hash, got %q vs %q", first, second)
@@ -37,11 +37,11 @@ func TestHashVerificationToken_IsDeterministicAndOneWay(t *testing.T) {
 		t.Fatal("expected the hash to differ from the raw token")
 	}
 
-	otherToken, err := generateVerificationToken()
+	otherToken, err := generateOneTimeToken()
 	if err != nil {
 		t.Fatalf("unexpected error generating second token: %v", err)
 	}
-	if hashVerificationToken(otherToken) == first {
+	if hashOneTimeToken(otherToken) == first {
 		t.Fatal("expected different tokens to hash differently")
 	}
 }
