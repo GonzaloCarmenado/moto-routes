@@ -22,11 +22,28 @@
   padding: var(--space-7) var(--space-4);
 }
 
-.header-section {
+/* Tarjeta única de identidad: avatar+nombre local arriba, estado de cuenta
+   debajo — ver `profile.element.ts::buildIdentityCard`. */
+.identity-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--space-5) var(--space-4);
+}
+
+.identity-card__profile {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-3);
+}
+
+.identity-card__divider {
+  height: 1px;
+  background: var(--line);
+  margin: var(--space-4) 0;
 }
 
 .section-title {
@@ -37,9 +54,97 @@
 }
 
 .vehicle-section,
-.stats-section {
+.stats-section,
+.auth-section {
   display: flex;
   flex-direction: column;
+}
+
+.auth-loggedin-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.auth-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--success);
+  box-shadow: 0 0 0 3px oklch(28% 0.05 140 / 0.6);
+  flex-shrink: 0;
+}
+
+.auth-email {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+  flex: 1;
+  margin: 0;
+}
+
+.auth-link-btn {
+  min-height: var(--hitbox-min);
+  padding: 0 var(--space-2);
+  border: none;
+  background: transparent;
+  color: var(--amber);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.auth-actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.account-btn {
+  flex: 1;
+  min-height: var(--hitbox-min);
+  padding: 0 var(--space-4);
+  border-radius: var(--r-pill);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.account-btn--primary {
+  border: none;
+  background: var(--amber);
+  color: var(--bg-bottom);
+}
+
+.account-btn--primary:hover {
+  background: var(--amber-strong);
+}
+
+.account-btn--ghost {
+  border: 1px solid var(--amber-border);
+  background: transparent;
+  color: var(--amber);
+}
+
+.account-btn--ghost:hover {
+  background: var(--amber-soft);
+}
+
+.auth-forgot-link {
+  align-self: center;
+  margin-top: var(--space-3);
+  min-height: var(--hitbox-min);
+  border: none;
+  background: transparent;
+  color: var(--amber);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
 }
 
 .vehicle-empty,

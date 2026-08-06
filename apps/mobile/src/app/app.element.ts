@@ -6,12 +6,16 @@ import '../profile/profile.element.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { IProfileRepository } from '../shared/models/profile.repository.js';
 import type { IStopTypesCacheRepository } from '../shared/models/stop-types-cache.repository.js';
+import type { ISessionRepository } from '../shared/models/session.repository.js';
 import { SqliteRouteRepository } from '../shared/repositories/sqlite-route.repository.js';
 import { createSqliteDb } from '../shared/repositories/sqlite-route.factory.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
 import { SqliteProfileRepository } from '../shared/repositories/sqlite-profile.repository.js';
 import { createSqliteProfileDb } from '../shared/repositories/sqlite-profile.factory.js';
 import { MemoryProfileRepository } from '../shared/repositories/memory-profile.repository.js';
+import { SqliteSessionRepository } from '../shared/repositories/sqlite-session.repository.js';
+import { createSqliteSessionDb } from '../shared/repositories/sqlite-session.factory.js';
+import { MemorySessionRepository } from '../shared/repositories/memory-session.repository.js';
 import { MemoryStopTypesCacheRepository } from '../shared/repositories/memory-stop-types-cache.repository.js';
 import { createStopTypesCacheRepository } from '../shared/repositories/sqlite-stop-types-cache.factory.js';
 import { refreshStopTypesCache } from '../shared/stop-types/stop-types.service.js';
@@ -38,6 +42,7 @@ function navViewFor(view: AppView): NavBarActiveView {
 class AppRoot extends BaseElement {
   private repo: IRouteRepository = new MemoryRouteRepository();
   private profileRepo: IProfileRepository = new MemoryProfileRepository();
+  private sessionRepo: ISessionRepository = new MemorySessionRepository();
   private stopTypesCacheRepo: IStopTypesCacheRepository = new MemoryStopTypesCacheRepository();
   private cockpitEl: HTMLElement | null = null;
   private routeListEl: HTMLElement | null = null;
@@ -104,6 +109,12 @@ class AppRoot extends BaseElement {
       } catch {
         this.profileRepo = new MemoryProfileRepository();
       }
+      try {
+        const sqliteSessionDb = await createSqliteSessionDb();
+        this.sessionRepo = new SqliteSessionRepository(sqliteSessionDb);
+      } catch {
+        this.sessionRepo = new MemorySessionRepository();
+      }
       this.stopTypesCacheRepo = await createStopTypesCacheRepository();
     } else {
       const memRepo = new MemoryRouteRepository();
@@ -151,9 +162,11 @@ class AppRoot extends BaseElement {
     const profile = document.createElement('profile-view') as HTMLElement & {
       repository: IRouteRepository;
       profileRepository: IProfileRepository;
+      sessionRepository: ISessionRepository;
     };
     profile.repository = this.repo;
     profile.profileRepository = this.profileRepo;
+    profile.sessionRepository = this.sessionRepo;
     profile.className = 'app-view';
     this.profileEl = profile;
     this.appendChild(profile);

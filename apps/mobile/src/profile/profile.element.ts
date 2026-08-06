@@ -16,6 +16,7 @@
 import { BaseElement } from '../shared/base-element.js';
 import type { IProfileRepository } from '../shared/models/profile.repository.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
+import type { ISessionRepository } from '../shared/models/session.repository.js';
 import type { VehicleType } from '../shared/models/profile.types.js';
 import { loadProfile, loadRouteStats, applyProfileEditResult, saveVehicle, type ProfileViewModel } from './profile.service.js';
 import type { ProfileStats } from './profile.transform.js';
@@ -24,7 +25,15 @@ import { openProfileEditDialog } from './profile-edit-dialog.element.js';
 import { openVehicleEditDialog } from './profile-vehicle-dialog.element.js';
 import { VEHICLE_TYPE_LABELS } from './profile-vehicle-dialog-fields.js';
 import { formatDuration } from '../shared/utils/format.js';
+import { getApiBaseUrl } from '../shared/http/api-config.js';
+import { loadAuthSectionState, type AuthSectionState } from '../auth/auth-section.service.js';
+import { buildAuthSection } from '../auth/auth-section.js';
+import { openLoginDialog } from '../auth/auth-login-dialog.element.js';
+import { openRegisterDialog } from '../auth/auth-register-dialog.element.js';
+import { openForgotPasswordDialog } from '../auth/auth-forgot-password-dialog.element.js';
 import styles from './profile.element.css?inline';
+
+const EMPTY_AUTH_STATE: AuthSectionState = { status: 'logged-out' };
 
 const EMPTY_VIEW_MODEL: ProfileViewModel = { avatarUrl: null, name: null, vehicle: null };
 
@@ -44,9 +53,11 @@ interface ConfiguredVehicle {
 class ProfileView extends BaseElement {
   private _repository: IRouteRepository | null = null;
   private _profileRepository: IProfileRepository | null = null;
+  private _sessionRepository: ISessionRepository | null = null;
   private _loading = false;
   private viewModel: ProfileViewModel = EMPTY_VIEW_MODEL;
   private stats: ProfileStats | null = null;
+  private authState: AuthSectionState = EMPTY_AUTH_STATE;
 
   set repository(repo: IRouteRepository | null) {
     this._repository = repo;
@@ -66,6 +77,21 @@ class ProfileView extends BaseElement {
     return this._profileRepository;
   }
 
+  /**
+   * Independiente del gate `repository`+`profileRepository`: la sección
+   * "Cuenta" no depende de esos datos, así que se resuelve por su cuenta en
+   * cuanto se inyecta (mismo criterio que ADR de `pantallas-auth-mobile` —
+   * no tocar la lógica de negocio ya existente de las otras secciones).
+   */
+  set sessionRepository(repo: ISessionRepository | null) {
+    this._sessionRepository = repo;
+    if (repo) void this.refreshAuthState();
+  }
+
+  get sessionRepository(): ISessionRepository | null {
+    return this._sessionRepository;
+  }
+
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
@@ -75,6 +101,48 @@ class ProfileView extends BaseElement {
     if (this._repository && this._profileRepository) {
       void this.fetchAndRender();
     }
+    if (this._sessionRepository) {
+      void this.refreshAuthState();
+    }
+  }
+
+  private async refreshAuthState(): Promise<void> {
+    const sessionRepo = this._sessionRepository;
+    if (!sessionRepo) return;
+    this.authState = await loadAuthSectionState(getApiBaseUrl(), sessionRepo);
+    this.render();
+  }
+
+  private async handleOpenLogin(): Promise<void> {
+    const sessionRepo = this._sessionRepository;
+    if (!sessionRepo) return;
+    const result = await openLoginDialog({ apiBaseUrl: getApiBaseUrl(), sessionRepository: sessionRepo });
+    if (result === 'logged-in') await this.refreshAuthState();
+  }
+
+  private async handleOpenRegister(): Promise<void> {
+    await openRegisterDialog({ apiBaseUrl: getApiBaseUrl() });
+  }
+
+  private async handleOpenForgotPassword(): Promise<void> {
+    await openForgotPasswordDialog({ apiBaseUrl: getApiBaseUrl() });
+  }
+
+  private async handleLogout(): Promise<void> {
+    const sessionRepo = this._sessionRepository;
+    if (!sessionRepo) return;
+    await sessionRepo.clear();
+    this.authState = EMPTY_AUTH_STATE;
+    this.render();
+  }
+
+  private buildAccountSection(): HTMLElement {
+    return buildAuthSection(this.authState, {
+      onOpenLogin: () => { void this.handleOpenLogin(); },
+      onOpenRegister: () => { void this.handleOpenRegister(); },
+      onOpenForgotPassword: () => { void this.handleOpenForgotPassword(); },
+      onLogout: () => { void this.handleLogout(); },
+    });
   }
 
   private async fetchAndRender(): Promise<void> {
@@ -106,25 +174,43 @@ class ProfileView extends BaseElement {
     if (this._loading) {
       screen.appendChild(this.buildLoadingState());
     } else {
-      screen.appendChild(this.buildHeaderSection());
+      screen.appendChild(this.buildIdentityCard());
       screen.appendChild(this.buildVehicleSection());
       screen.appendChild(this.buildStatsSection());
     }
     this.renderShadow(styles, screen);
   }
 
-  private buildHeaderSection(): HTMLElement {
-    const section = document.createElement('div');
-    section.className = 'header-section';
-    section.appendChild(
+  /**
+   * Tarjeta única de identidad: avatar+nombre local (siempre editable,
+   * independiente de la sesión) y, justo debajo, el estado de cuenta —
+   * antes eran dos bloques sin relación visual (avatar arriba, "Cuenta" al
+   * final de la pantalla); ahora comparten una sola tarjeta ("Identidad
+   * unificada", propuesta elegida sobre las otras dos exploradas en el
+   * pitch de diseño).
+   */
+  private buildIdentityCard(): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'identity-card';
+
+    const profile = document.createElement('div');
+    profile.className = 'identity-card__profile';
+    profile.appendChild(
       buildProfileHeader({
         avatarUrl: this.viewModel.avatarUrl,
         name: this.viewModel.name,
         onAvatarClick: () => { void this.handleEditProfile(); },
       }),
     );
-    section.appendChild(this.buildEditProfileButton());
-    return section;
+    profile.appendChild(this.buildEditProfileButton());
+    card.appendChild(profile);
+
+    const divider = document.createElement('div');
+    divider.className = 'identity-card__divider';
+    card.appendChild(divider);
+
+    card.appendChild(this.buildAccountSection());
+    return card;
   }
 
   private buildEditProfileButton(): HTMLButtonElement {
