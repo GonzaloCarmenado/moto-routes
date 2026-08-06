@@ -91,17 +91,32 @@ func main() {
 	verificationRequestRateLimiter := auth.NewLoginRateLimiter(verificationRequestRateLimitMaxAttempts, verificationRequestRateLimitWindow)
 	registerRateLimiter := auth.NewLoginRateLimiter(registerRateLimitMaxAttempts, registerRateLimitWindow)
 
-	router.Post("/api/auth/register",
+	// httpmw.PublicCORS en las rutas que apps/mobile llama por fetch() cross-origin
+	// (localhost:1420 -> localhost:8080) — gap real encontrado verificando
+	// pantallas-auth-mobile contra un navegador de verdad (Cypress), invisible
+	// con curl o con las páginas server-rendered de apps/api (mismo origen).
+	// Cada una necesita también su propia ruta OPTIONS para el preflight —
+	// chi exige registro de método explícito, y el preflight nunca lleva el
+	// token de auth, así que va sin auth.RequireAuth.
+	router.With(httpmw.PublicCORS).Post("/api/auth/register",
 		auth.RateLimitedRegisterHandler(userStore, verificationTokenStore, resendSender, cfg.PublicAPIBaseURL, registerRateLimiter).ServeHTTP)
-	router.Post("/api/auth/login", auth.RateLimitedLoginHandler(userStore, tokenIssuer, loginRateLimiter).ServeHTTP)
-	router.With(auth.RequireAuth(tokenIssuer)).Get("/api/auth/me", auth.MeHandler(userStore).ServeHTTP)
-	router.Post("/api/auth/verify-email/request",
+	router.With(httpmw.PublicCORS).Options("/api/auth/register", func(http.ResponseWriter, *http.Request) {})
+
+	router.With(httpmw.PublicCORS).Post("/api/auth/login", auth.RateLimitedLoginHandler(userStore, tokenIssuer, loginRateLimiter).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/auth/login", func(http.ResponseWriter, *http.Request) {})
+
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/auth/me", auth.MeHandler(userStore).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/auth/me", func(http.ResponseWriter, *http.Request) {})
+
+	router.With(httpmw.PublicCORS).Post("/api/auth/verify-email/request",
 		auth.RateLimitedRequestVerificationHandler(userStore, verificationTokenStore, resendSender, cfg.PublicAPIBaseURL, verificationRequestRateLimiter).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/auth/verify-email/request", func(http.ResponseWriter, *http.Request) {})
 	router.Get("/api/auth/verify-email/confirm", auth.ConfirmVerificationHandler(userStore, verificationTokenStore).ServeHTTP)
 
 	passwordResetRateLimiter := auth.NewLoginRateLimiter(passwordResetRateLimitMaxAttempts, passwordResetRateLimitWindow)
-	router.Post("/api/auth/reset-password/request",
+	router.With(httpmw.PublicCORS).Post("/api/auth/reset-password/request",
 		auth.RateLimitedRequestPasswordResetHandler(userStore, passwordResetTokenStore, resendSender, cfg.PublicAPIBaseURL, passwordResetRateLimiter).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/auth/reset-password/request", func(http.ResponseWriter, *http.Request) {})
 	resetPasswordConfirmHandler := auth.ResetPasswordConfirmHandler(userStore, passwordResetTokenStore).ServeHTTP
 	router.Get("/api/auth/reset-password/confirm", resetPasswordConfirmHandler)
 	router.Post("/api/auth/reset-password/confirm", resetPasswordConfirmHandler)
