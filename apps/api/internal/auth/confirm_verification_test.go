@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -42,6 +43,9 @@ func TestConfirmVerificationHandler_ValidTokenVerifiesTheAccount(t *testing.T) {
 	}
 	if !verified.EmailVerified {
 		t.Fatal("expected the account to be verified after a valid token confirmation")
+	}
+	if !strings.Contains(rec.Body.String(), `class="panel"`) {
+		t.Fatalf("expected the success page to use the shared styled panel, got: %s", rec.Body.String())
 	}
 }
 

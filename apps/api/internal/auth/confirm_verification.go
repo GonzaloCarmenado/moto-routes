@@ -5,8 +5,10 @@ import (
 	"time"
 )
 
-const verificationFailureHTML = `<p>El enlace de verificación no es válido o ha caducado. Puedes solicitar uno nuevo.</p>`
-const verificationSuccessHTML = `<p>Email verificado correctamente. Ya puedes iniciar sesión.</p>`
+const verificationPageTitle = "Moto Routes — Verificación de email"
+
+const verificationFailureBody = `<h1>Enlace no válido</h1><p>El enlace de verificación no es válido o ha caducado. Puedes solicitar uno nuevo.</p>`
+const verificationSuccessBody = `<h1>Email verificado</h1><p>Email verificado correctamente. Ya puedes iniciar sesión.</p>`
 
 // ConfirmVerificationHandler confirma un token de verificación de email
 // recibido por GET (el email solo puede disparar una acción sin JavaScript
@@ -17,31 +19,25 @@ func ConfirmVerificationHandler(userStore UserStore, tokenStore VerificationToke
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := r.URL.Query().Get("token")
 		if token == "" {
-			writeVerificationHTML(w, http.StatusBadRequest, verificationFailureHTML)
+			writeHTMLPage(w, http.StatusBadRequest, authPageShell(verificationPageTitle, verificationFailureBody))
 			return
 		}
 
 		stored, err := tokenStore.FindByHash(r.Context(), hashOneTimeToken(token))
 		if err != nil || stored.UsedAt != nil || time.Now().After(stored.ExpiresAt) {
-			writeVerificationHTML(w, http.StatusBadRequest, verificationFailureHTML)
+			writeHTMLPage(w, http.StatusBadRequest, authPageShell(verificationPageTitle, verificationFailureBody))
 			return
 		}
 
 		if err := userStore.MarkEmailVerified(r.Context(), stored.UserID); err != nil {
-			writeVerificationHTML(w, http.StatusInternalServerError, verificationFailureHTML)
+			writeHTMLPage(w, http.StatusInternalServerError, authPageShell(verificationPageTitle, verificationFailureBody))
 			return
 		}
 		if err := tokenStore.MarkUsed(r.Context(), stored.ID); err != nil {
-			writeVerificationHTML(w, http.StatusInternalServerError, verificationFailureHTML)
+			writeHTMLPage(w, http.StatusInternalServerError, authPageShell(verificationPageTitle, verificationFailureBody))
 			return
 		}
 
-		writeVerificationHTML(w, http.StatusOK, verificationSuccessHTML)
+		writeHTMLPage(w, http.StatusOK, authPageShell(verificationPageTitle, verificationSuccessBody))
 	})
-}
-
-func writeVerificationHTML(w http.ResponseWriter, status int, body string) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	_, _ = w.Write([]byte(body))
 }
