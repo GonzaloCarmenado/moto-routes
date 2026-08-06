@@ -108,4 +108,84 @@ describe('fetchJson', () => {
 
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it('por defecto hace GET sin body ni Content-Type', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchJson('https://example.com/x');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.method).toBe('GET');
+    expect(init.body).toBeUndefined();
+  });
+
+  it('con method POST y body, envía Content-Type application/json y el body serializado', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: 1 }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchJson<{ id: number }>('https://example.com/x', {
+      method: 'POST',
+      body: { email: 'rider@example.com' },
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(JSON.stringify({ email: 'rider@example.com' }));
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
+    expect(result).toEqual({ id: 1 });
+  });
+
+  it('con checkStatus: true, rechaza con ExternalApiError kind "http-error" y el status/body cuando la respuesta no es ok', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 409, json: () => Promise.resolve({ error: 'email already registered' }) }),
+    );
+
+    const promise = fetchJson('https://example.com/x', { method: 'POST', body: {}, checkStatus: true });
+
+    await expect(promise).rejects.toBeInstanceOf(ExternalApiError);
+    await expect(promise).rejects.toMatchObject({
+      kind: 'http-error',
+      status: 409,
+      body: { error: 'email already registered' },
+    });
+  });
+
+  it('sin checkStatus, no comprueba response.ok (comportamiento existente sin cambios, p. ej. GET a APIs externas)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ json: () => Promise.resolve({ foo: 'bar' }) }),
+    );
+
+    await expect(fetchJson('https://example.com/x')).resolves.toEqual({ foo: 'bar' });
+  });
+
+  it('con headers, los combina con Content-Type cuando hay body', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchJson('https://example.com/x', {
+      method: 'POST',
+      body: { a: 1 },
+      headers: { Authorization: 'Bearer jwt-token' },
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer jwt-token');
+    expect(headers['Content-Type']).toBe('application/json');
+  });
+
+  it('con headers y sin body (GET autenticado), envía solo los headers indicados', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchJson('https://example.com/x', { headers: { Authorization: 'Bearer jwt-token' } });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer jwt-token');
+    expect(headers['Content-Type']).toBeUndefined();
+  });
 });

@@ -1,24 +1,31 @@
 /**
- * Causa de un fallo de `fetchJson` al consultar una API externa:
+ * Causa de un fallo de `fetchJson` al consultar una API:
  * - `network`: la petición no pudo completarse (fallo de red, DNS, CORS...).
  * - `timeout`: la petición se abortó por superar el tiempo máximo configurado.
  * - `invalid-json`: la respuesta se recibió, pero su cuerpo no es JSON válido.
+ * - `http-error`: la respuesta se recibió y es JSON válido, pero el status no
+ *   es 2xx — solo se comprueba si se pasa `checkStatus: true` (ver `fetchJson`).
  */
-export type ExternalApiErrorKind = 'network' | 'timeout' | 'invalid-json';
+export type ExternalApiErrorKind = 'network' | 'timeout' | 'invalid-json' | 'http-error';
 
 /**
  * Error tipado para fallos de integraciones HTTP con APIs externas.
  * El campo `kind` permite a cada consumidor decidir cómo reaccionar
  * (p. ej. ofrecer reintento en `network`/`timeout`, pero no en `invalid-json`).
+ * `status`/`body` solo se rellenan para `kind: 'http-error'`.
  */
 export class ExternalApiError extends Error {
   /**
-   * @param kind - Causa del fallo (`network`, `timeout` o `invalid-json`).
+   * @param kind - Causa del fallo (`network`, `timeout`, `invalid-json` o `http-error`).
    * @param message - Mensaje descriptivo del error.
+   * @param status - Status HTTP de la respuesta, solo para `kind: 'http-error'`.
+   * @param body - Cuerpo JSON ya parseado de la respuesta, solo para `kind: 'http-error'`.
    */
   constructor(
     public readonly kind: ExternalApiErrorKind,
     message: string,
+    public readonly status?: number,
+    public readonly body?: unknown,
   ) {
     super(message);
     this.name = 'ExternalApiError';
@@ -26,12 +33,25 @@ export class ExternalApiError extends Error {
 }
 
 /**
- * Opciones aceptadas por `fetchJson`. Se deja abierto a crecer (p. ej. `headers`
- * en el futuro) sin romper la firma pública actual.
+ * Opciones aceptadas por `fetchJson`.
  */
 export interface FetchJsonOptions {
   /** Tiempo máximo de espera en milisegundos antes de abortar la petición. */
   timeoutMs?: number;
+  /** Método HTTP. Por defecto `'GET'`. */
+  method?: 'GET' | 'POST';
+  /** Cuerpo de la petición, serializado a JSON con `Content-Type: application/json` añadido automáticamente. */
+  body?: unknown;
+  /** Cabeceras adicionales (p. ej. `Authorization`), combinadas con `Content-Type` si hay `body`. */
+  headers?: Record<string, string>;
+  /**
+   * Si es `true`, una respuesta con status no-2xx lanza `ExternalApiError`
+   * (`kind: 'http-error'`) en vez de devolver el body igualmente. Por
+   * defecto `false` para no cambiar el comportamiento ya probado de las
+   * integraciones `GET` existentes (catálogo de tipos de parada, vPIC), que
+   * siempre asumieron éxito implícito.
+   */
+  checkStatus?: boolean;
 }
 
 /** Timeout aplicado por defecto cuando no se especifica `options.timeoutMs`. */
@@ -40,12 +60,19 @@ const DEFAULT_TIMEOUT_MS = 8000;
 /**
  * Realiza una petición HTTP y parsea su respuesta como JSON, con timeout
  * explícito vía `AbortController` (nunca queda esperando indefinidamente) y
- * un `ExternalApiError` tipado que distingue error de red, timeout y
- * respuesta no-JSON. Infraestructura genérica y reutilizable por cualquier
- * integración con una API externa — no depende de ningún plugin de Tauri,
- * solo del `fetch()` nativo disponible en navegador y WebView.
+ * un `ExternalApiError` tipado que distingue error de red, timeout, respuesta
+ * no-JSON y (solo en `POST`) status HTTP de error. Infraestructura genérica y
+ * reutilizable por cualquier integración HTTP — no depende de ningún plugin
+ * de Tauri, solo del `fetch()` nativo disponible en navegador y WebView.
+ *
+ * El status HTTP solo se comprueba con `checkStatus: true`: las integraciones
+ * `GET` existentes (catálogo de tipos de parada, vPIC) siempre han asumido
+ * éxito implícito y no distinguen status — cambiarlo ahí sería un cambio de
+ * comportamiento no pedido. Las llamadas de auth (`POST` de registro/login/
+ * reset, y el `GET` autenticado de `/api/auth/me`) sí necesitan distinguir
+ * 200 de 401/403/409/429, así que pasan `checkStatus: true` explícitamente.
  * @param url - URL absoluta a consultar.
- * @param options - Opciones de la petición (p. ej. `timeoutMs`).
+ * @param options - Opciones de la petición (`timeoutMs`, `method`, `body`).
  * @returns El cuerpo de la respuesta ya parseado como `T`.
  */
 export async function fetchJson<T>(url: string, options?: FetchJsonOptions): Promise<T> {
@@ -57,7 +84,13 @@ export async function fetchJson<T>(url: string, options?: FetchJsonOptions): Pro
   try {
     let response: Response;
     try {
-      response = await fetch(url, { signal: controller.signal });
+      const method = options?.method ?? 'GET';
+      const hasBody = options?.body !== undefined;
+      const headers = { ...(hasBody ? { 'Content-Type': 'application/json' } : {}), ...options?.headers };
+      const init: RequestInit = { signal: controller.signal, method };
+      if (Object.keys(headers).length > 0) init.headers = headers;
+      if (hasBody) init.body = JSON.stringify(options?.body);
+      response = await fetch(url, init);
     } catch (err) {
       if (controller.signal.aborted) {
         throw new ExternalApiError('timeout', `Request to ${url} timed out`);
@@ -65,11 +98,23 @@ export async function fetchJson<T>(url: string, options?: FetchJsonOptions): Pro
       throw new ExternalApiError('network', `Network error requesting ${url}: ${String(err)}`);
     }
 
+    let parsed: unknown;
     try {
-      return (await response.json()) as T;
+      parsed = await response.json();
     } catch {
       throw new ExternalApiError('invalid-json', `Response from ${url} is not valid JSON`);
     }
+
+    if (options?.checkStatus && !response.ok) {
+      throw new ExternalApiError(
+        'http-error',
+        `Request to ${url} failed with status ${String(response.status)}`,
+        response.status,
+        parsed,
+      );
+    }
+
+    return parsed as T;
   } finally {
     clearTimeout(timer);
   }
