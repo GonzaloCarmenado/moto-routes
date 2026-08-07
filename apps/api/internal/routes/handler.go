@@ -52,14 +52,14 @@ type upsertStopRequest struct {
 }
 
 type upsertRequest struct {
-	ID            string              `json:"id"`
-	CreatedAt     string              `json:"created_at"`
-	Duration      float64             `json:"duration"`
-	TotalDistance float64             `json:"total_distance"`
-	AvgSpeed      float64             `json:"avg_speed"`
-	Status        string              `json:"status"`
-	Name          *string             `json:"name"`
-	Notes         *string             `json:"notes"`
+	ID            string               `json:"id"`
+	CreatedAt     string               `json:"created_at"`
+	Duration      float64              `json:"duration"`
+	TotalDistance float64              `json:"total_distance"`
+	AvgSpeed      float64              `json:"avg_speed"`
+	Status        string               `json:"status"`
+	Name          *string              `json:"name"`
+	Notes         *string              `json:"notes"`
 	Points        []upsertPointRequest `json:"points"`
 	Stops         []upsertStopRequest  `json:"stops"`
 }
