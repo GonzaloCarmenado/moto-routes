@@ -66,6 +66,45 @@
   background: var(--panel-sunken);
 }
 
+.thumb-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.sync-status-icon {
+  /* Insignia superpuesta en la esquina de la miniatura (mismo patrón que el
+     badge de "sincronizado" de apps de fotos) — puramente informativa (un
+     <span>, no un botón), no necesita el hitbox mínimo de 56px que sí exige
+     un elemento pulsable. */
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid var(--bg-top);
+  color: var(--ink-faint);
+}
+
+.sync-status-icon svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sync-status-icon--synced,
+.sync-status-icon--cloud-only {
+  color: var(--amber);
+}
+
 .route-card:active {
   background: var(--panel-sunken);
 }
@@ -145,6 +184,9 @@
 
 .badge {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
   padding: 3px 10px;
   border-radius: var(--r-pill);
   font-size: 12px;

@@ -85,7 +85,9 @@ class AppRoot extends BaseElement {
       repository: IRouteRepository;
       routeId: string;
       stopTypesCacheRepository: IStopTypesCacheRepository;
+      sessionRepository: ISessionRepository;
     };
+    routeDetail.sessionRepository = this.sessionRepo;
     routeDetail.repository = this.repo;
     routeDetail.stopTypesCacheRepository = this.stopTypesCacheRepo;
     routeDetail.className = 'app-view';
@@ -149,7 +151,11 @@ class AppRoot extends BaseElement {
     this.cockpitEl = cockpit;
     this.appendChild(cockpit);
 
-    const routeList = document.createElement('route-list') as HTMLElement & { repository: IRouteRepository };
+    const routeList = document.createElement('route-list') as HTMLElement & {
+      repository: IRouteRepository;
+      sessionRepository: ISessionRepository;
+    };
+    routeList.sessionRepository = this.sessionRepo;
     routeList.repository = this.repo;
     routeList.className = 'app-view';
     this.routeListEl = routeList;

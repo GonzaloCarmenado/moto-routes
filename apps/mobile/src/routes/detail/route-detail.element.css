@@ -39,11 +39,19 @@
   padding: 18px 22px 0;
 }
 
+.detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .detail-title {
   font-family: var(--font-display);
   font-size: 22px;
   color: var(--ink);
   margin-bottom: 4px;
+  flex: 1;
+  min-width: 0;
 }
 
 .detail-date {
@@ -88,6 +96,45 @@
   font-size: 13px;
   color: var(--ink-soft);
   font-weight: 500;
+}
+
+.sync-icon-btn {
+  flex-shrink: 0;
+  width: var(--hitbox-min);
+  height: var(--hitbox-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.sync-icon-btn:hover,
+.sync-icon-btn:focus-visible {
+  color: var(--amber);
+}
+
+.sync-icon-btn--synced {
+  color: var(--amber);
+}
+
+.sync-icon-btn svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sync-icon-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* Chart placeholder */
