@@ -48,18 +48,18 @@
 
 ## 8. Despliegue real y verificación (mismo patrón que ADR-034/038/039/041)
 
-- [ ] 8.1 Crear en el servidor un usuario/credenciales de MinIO dedicado para `apps/api` (no el root de MinIO) — `mc admin user add`/policy de solo el bucket `images`
-- [ ] 8.2 Generar `PHOTO_ENCRYPTION_KEY` real (32 bytes aleatorios, base64) y añadir junto a las credenciales de MinIO a `.env.prod` del servidor — nunca versionado
-- [ ] 8.3 Desplegar desde esta rama sin fusionar (checkout manual en el servidor, `docker compose up -d --build`) — el script `deploy-prod.sh` sigue apuntando a `master`, que todavía no incluye este cambio
-- [ ] 8.4 Verificar con `curl` real contra producción: subir una foto de prueba a una ruta de una cuenta de prueba, listarla, descargarla y comprobar que los bytes coinciden con el original, borrarla
-- [ ] 8.5 Verificar que los bytes almacenados en MinIO (`mc cat` directo, sin pasar por la API) no son una imagen válida — confirma que el cifrado en reposo funciona de verdad, no solo en tests
-- [ ] 8.6 Borrar la cuenta y ruta de prueba usadas en la verificación
+- [x] 8.1 Crear en el servidor un usuario/credenciales de MinIO dedicado para `apps/api` (no el root de MinIO) — `mc admin user add`/policy de solo el bucket `images`. Política `apps-api-photos` (`s3:GetObject/PutObject/DeleteObject/ListBucket` acotados a `arn:aws:s3:::images` y `images/*`), usuario `apps-api-<hex>` con esa política adjunta. Credenciales generadas y escritas directamente en `.env.prod` del servidor por un script remoto — nunca visibles en la salida de este agente.
+- [x] 8.2 Generar `PHOTO_ENCRYPTION_KEY` real (32 bytes aleatorios, base64) y añadir junto a las credenciales de MinIO a `.env.prod` del servidor — nunca versionado. `.env.prod` verificado en `600 gonzalo:gonzalo` tras el cambio.
+- [x] 8.3 Desplegar desde esta rama sin fusionar (checkout manual en el servidor, `docker compose up -d --build`) — el script `deploy-prod.sh` sigue apuntando a `master`, que todavía no incluye este cambio. Imagen anterior etiquetada `docker-api:pre-almacenamiento-fotos` para rollback.
+- [x] 8.4 Verificar con `curl` real contra producción: subir una foto de prueba a una ruta de una cuenta de prueba, listarla, descargarla y comprobar que los bytes coinciden con el original, borrarla. **Hallazgo real**: la primera petición `DELETE` a través de Tailscale Funnel devolvió un 404 genérico de chi justo después del redeploy — transitorio, confirmado reproduciendo la misma petición directamente contra `100.114.190.36:8080` (401 correcto) y repitiendo por Funnel poco después (funcionó, 204) — no es un bug de enrutado, probablemente Funnel con una conexión en vuelo hacia el contenedor recién reiniciado. Segunda ronda completa (registro→login→ruta→subida→borrado→verificación) sin ningún fallo. Cuenta y ruta de prueba borradas después, `count(*) = 0` en `users`/`routes`/`route_photos`.
+- [x] 8.5 Verificar que los bytes almacenados en MinIO (`mc cat` directo, con las credenciales acotadas de `apps/api`, sin pasar por la API) no son una imagen válida — confirmado: 97 bytes (69 originales + 12 nonce + 16 tag GCM), sin cabecera PNG (`89 50 4E 47`), mismo resultado que en la verificación local previa
+- [x] 8.6 Borrar la cuenta y ruta de prueba usadas en la verificación — hecho en ambas rondas de verificación (8.4), `count(*) = 0` confirmado en `users`/`routes`/`route_photos`
 
 ## 9. Cierre
 
-- [ ] 9.1 `go vet` + `go test ./...` sin regresiones
-- [ ] 9.2 `infra/docker/.env.prod.example` — documentar los nombres de las variables nuevas (nunca valores reales)
-- [ ] 9.3 Revisar el diff completo buscando secretos reales antes del PR (gate de seguridad)
-- [ ] 9.4 Actualizar `memory/context.md` con el estado del cambio y los hallazgos (ADR-042 ya añadida en el propio `/opsx:propose`)
+- [x] 9.1 `go vet` + `go test ./...` sin regresiones — 150/150 en verde
+- [x] 9.2 `infra/docker/.env.prod.example` — documentado nombres de variables nuevas (nunca valores reales)
+- [x] 9.3 Revisar el diff completo buscando secretos reales antes del PR (gate de seguridad) — sin hallazgos; único match (`MINIO_ROOT_PASSWORD` en `ci.yml`) es una credencial trivial de test efímero en el runner, mismo patrón ya aceptado para `POSTGRES_PASSWORD` en el mismo fichero
+- [x] 9.4 Actualizar `memory/context.md` con el estado del cambio y los hallazgos (ADR-042 ya añadida en el propio `/opsx:propose`)
 
 **Nota**: sin tarea de verificación en dispositivo Android real — este cambio es exclusivamente backend, `apps/mobile` no se toca (ver proposal.md, Fuera de alcance).
