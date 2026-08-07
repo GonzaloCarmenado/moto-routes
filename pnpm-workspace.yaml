@@ -23,3 +23,8 @@ overrides:
   minimatch@3>brace-expansion: 1.1.18
   minimatch@9>brace-expansion: 2.1.4
   minimatch@10>brace-expansion: 5.0.9
+  # js-yaml (GHSA-5p4m-2wfm-xmqj, CVE-2026-59870) llega fijado en 4.3.0 vía
+  # @eslint/eslintrc (13 rutas, todas dev-only: eslint/eslint-plugin-jsdoc/
+  # typescript-eslint). El fix (>=4.3.1) aún no se ha propagado desde eslintrc;
+  # se fuerza la versión parcheada en todo el árbol mientras tanto.
+  js-yaml: ^4.3.1

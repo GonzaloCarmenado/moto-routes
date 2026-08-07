@@ -1,17 +1,32 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MemoryRouteRepository } from '../../shared/repositories/memory-route.repository.js';
 import { MemoryPhotoRepository } from '../../shared/repositories/memory-photo.repository.js';
+import { MemorySessionRepository } from '../../shared/repositories/memory-session.repository.js';
 import type { IRouteRepository } from '../../shared/models/route.repository.js';
+import type { ISessionRepository } from '../../shared/models/session.repository.js';
 import type { Route } from '../../shared/models/route.types.js';
 import './route-detail.element.js';
 import { pickFromGallery } from '../../shared/services/photo-capture-adapter.service.js';
 import type * as PhotoCaptureAdapter from '../../shared/services/photo-capture-adapter.service.js';
+import { uploadRouteToCloud, loadCloudRouteDetail, checkIfRouteIsSynced, autoResyncIfNeeded } from './route-detail-cloud.service.js';
+import type * as RouteDetailCloudService from './route-detail-cloud.service.js';
 import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from '../../shared/route-map/route-map.element.js';
 import type { MapPhoto } from '../../shared/route-map/route-map-photos.js';
 
 vi.mock('../../shared/services/photo-capture-adapter.service.js', async (importOriginal) => {
   const actual = await importOriginal<typeof PhotoCaptureAdapter>();
   return { ...actual, pickFromGallery: vi.fn() };
+});
+
+vi.mock('./route-detail-cloud.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof RouteDetailCloudService>();
+  return {
+    ...actual,
+    uploadRouteToCloud: vi.fn(),
+    loadCloudRouteDetail: vi.fn(),
+    checkIfRouteIsSynced: vi.fn().mockResolvedValue(false),
+    autoResyncIfNeeded: vi.fn(),
+  };
 });
 
 // mapCtor se expone vía vi.hoisted para poder comprobar en los tests de pestañas
@@ -806,6 +821,296 @@ describe('route-detail - editor de notas (AC-010 a AC-017)', () => {
 
     expect(document.body.querySelector('[data-cy="photo-toast-error"]')?.textContent).toBe('⚠️ fallo de BBDD');
     expect(notesTextarea(root).value).toBe('Texto que no debe perderse');
+    document.body.removeChild(el);
+  });
+});
+
+type RouteDetailElWithSession = RouteDetailEl & { sessionRepository: ISessionRepository | null };
+
+async function mountRouteDetailWithSession(
+  repo: IRouteRepository,
+  routeId: string,
+  sessionRepository: ISessionRepository | null,
+): Promise<{ el: RouteDetailElWithSession; root: ShadowRoot }> {
+  const el = document.createElement('route-detail') as RouteDetailElWithSession;
+  el.sessionRepository = sessionRepository;
+  el.repository = repo;
+  el.routeId = routeId;
+  document.body.appendChild(el);
+  await waitRender();
+  return { el, root: el.shadowRoot! };
+}
+
+describe('route-detail - subir a la nube', () => {
+  let repo: IRouteRepository;
+  let savedRoute: Route;
+
+  beforeEach(async () => {
+    localStorage.clear();
+    vi.clearAllMocks();
+    // Otros specs de este fichero dejan sus toasts en document.body sin
+    // limpiarlos (showToast no se autodestruye hasta su timeout) — sin este
+    // barrido, querySelector('[data-cy="photo-toast..."]') podría devolver
+    // un toast de una prueba anterior en vez del que dispara esta.
+    document.body.querySelectorAll('[data-cy^="photo-toast"]').forEach((t) => { t.remove(); });
+    repo = new MemoryRouteRepository();
+    savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+  });
+
+  it('sin sesión activa, no muestra la acción de subir a la nube', async () => {
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, new MemorySessionRepository());
+    expect(root.querySelector('[data-cy="route-detail-btn-subir-nube"]')).toBeNull();
+    document.body.removeChild(el);
+  });
+
+  it('sin repositorio de sesión inyectado, se comporta igual que sin sesión', async () => {
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, null);
+    expect(root.querySelector('[data-cy="route-detail-btn-subir-nube"]')).toBeNull();
+    document.body.removeChild(el);
+  });
+
+  it('con sesión activa y ruta local, muestra la acción y sube la ruta al pulsarla', async () => {
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+    vi.mocked(uploadRouteToCloud).mockResolvedValue(undefined);
+
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
+    const btn = root.querySelector('[data-cy="route-detail-btn-subir-nube"]') as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+
+    btn.click();
+    await waitRender();
+
+    expect(uploadRouteToCloud).toHaveBeenCalledWith('http://localhost:8080', { token: 'jwt-token', email: 'rider@example.com' }, repo, savedRoute);
+    expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('☁ Ruta subida a la nube');
+    document.body.removeChild(el);
+  });
+
+  it('muestra un error sin bloquear la pantalla si la subida falla (sin conexión, límite de puntos, etc.)', async () => {
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+    vi.mocked(uploadRouteToCloud).mockRejectedValue(new Error('network down'));
+
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
+    const btn = root.querySelector('[data-cy="route-detail-btn-subir-nube"]') as HTMLButtonElement;
+
+    btn.click();
+    await waitRender();
+
+    expect(document.body.querySelector('[data-cy="photo-toast-error"]')?.textContent).toBe('⚠️ network down');
+    expect(root.querySelector('[data-cy="route-detail-btn-subir-nube"]')).not.toBeNull();
+    document.body.removeChild(el);
+  });
+});
+
+describe('route-detail - ruta exclusiva de la nube', () => {
+  let repo: IRouteRepository;
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+    document.body.querySelectorAll('[data-cy^="photo-toast"]').forEach((t) => { t.remove(); });
+    repo = new MemoryRouteRepository();
+  });
+
+  it('con sesión activa, si el id no existe localmente descarga el detalle de la nube y lo muestra igual que uno local', async () => {
+    const cloudId = crypto.randomUUID();
+    vi.mocked(loadCloudRouteDetail).mockResolvedValue({
+      route: {
+        id: cloudId,
+        createdAt: '2026-08-01T10:00:00.000Z',
+        duration: 120,
+        totalDistance: 30,
+        avgSpeed: 40,
+        status: 'completed',
+        visibility: 'private',
+        origin: 'remote',
+        previewPolyline: null,
+        name: 'Ruta solo en la nube',
+        notes: null,
+      },
+      points: [{ id: 'p1', routeId: cloudId, timestamp: 1000, lat: 40.1, lng: -3.1, alt: 600, speed: 10 }],
+      stops: [],
+    });
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const { el, root } = await mountRouteDetailWithSession(repo, cloudId, sessionRepository);
+
+    expect(root.querySelector('[data-cy="route-detail-load-error"]')).toBeNull();
+    expect(root.querySelector('.detail-title')?.textContent).toBe('Ruta solo en la nube');
+    // Ruta exclusiva de la nube: sin datos locales de los que subir nada.
+    expect(root.querySelector('[data-cy="route-detail-btn-subir-nube"]')).toBeNull();
+    document.body.removeChild(el);
+  });
+
+  it('sin conexión al abrir una ruta exclusiva de la nube, muestra un mensaje de error sin fallar en silencio', async () => {
+    const cloudId = crypto.randomUUID();
+    vi.mocked(loadCloudRouteDetail).mockResolvedValue({ error: 'network down' });
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const { el, root } = await mountRouteDetailWithSession(repo, cloudId, sessionRepository);
+
+    const errorEl = root.querySelector('[data-cy="route-detail-load-error"]');
+    expect(errorEl).not.toBeNull();
+    expect(errorEl?.textContent).toContain('network down');
+    expect(root.querySelector('.detail-title')).toBeNull();
+    document.body.removeChild(el);
+  });
+
+  it('sin sesión activa y sin datos locales, sigue mostrando "Ruta no encontrada" (no intenta consultar la nube)', async () => {
+    const unknownId = crypto.randomUUID();
+
+    const { el, root } = await mountRouteDetailWithSession(repo, unknownId, new MemorySessionRepository());
+
+    expect(root.querySelector('.empty-msg')?.textContent).toContain('Ruta no encontrada');
+    expect(loadCloudRouteDetail).not.toHaveBeenCalled();
+    document.body.removeChild(el);
+  });
+});
+
+describe('route-detail - icono de estado y re-subida automática', () => {
+  let repo: IRouteRepository;
+  let savedRoute: Route;
+  let sessionRepository: ISessionRepository;
+
+  function notasRoot(root: ShadowRoot): ShadowRoot {
+    return root.querySelector('tab-bar')!.shadowRoot!;
+  }
+
+  function clickTab(root: ShadowRoot, id: string): void {
+    (notasRoot(root).querySelector(`[data-cy="tab-bar-btn-${id}"]`) as HTMLButtonElement).click();
+  }
+
+  function syncIcon(root: ShadowRoot): HTMLButtonElement {
+    return root.querySelector('[data-cy="route-detail-btn-subir-nube"]') as HTMLButtonElement;
+  }
+
+  beforeEach(async () => {
+    localStorage.clear();
+    vi.clearAllMocks();
+    vi.mocked(checkIfRouteIsSynced).mockResolvedValue(false);
+    document.body.querySelectorAll('[data-cy^="photo-toast"]').forEach((t) => { t.remove(); });
+    repo = new MemoryRouteRepository();
+    savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [], [],
+    );
+    sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+  });
+
+  it('con una ruta ya sincronizada, el icono se muestra en su estado "sincronizada" desde el primer render', async () => {
+    vi.mocked(checkIfRouteIsSynced).mockResolvedValue(true);
+
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
+
+    expect(syncIcon(root).classList.contains('sync-icon-btn--synced')).toBe(true);
+    document.body.removeChild(el);
+  });
+
+  it('tras subir manualmente con éxito una ruta que no estaba sincronizada, el icono pasa a "sincronizada" sin recargar', async () => {
+    vi.mocked(uploadRouteToCloud).mockResolvedValue(undefined);
+
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
+    expect(syncIcon(root).classList.contains('sync-icon-btn--synced')).toBe(false);
+
+    syncIcon(root).click();
+    await waitRender();
+
+    expect(syncIcon(root).classList.contains('sync-icon-btn--synced')).toBe(true);
+    document.body.removeChild(el);
+  });
+
+  it('guardar una nota en una ruta ya sincronizada dispara una re-subida en segundo plano', async () => {
+    vi.mocked(checkIfRouteIsSynced).mockResolvedValue(true);
+
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
+    clickTab(root, 'notas');
+    const textarea = root.querySelector('[data-cy="route-detail-textarea-notas"]') as HTMLTextAreaElement;
+    textarea.value = 'Nota de prueba';
+    (root.querySelector('[data-cy="route-detail-btn-guardar-nota"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    expect(autoResyncIfNeeded).toHaveBeenCalledWith({
+      apiBaseUrl: 'http://localhost:8080',
+      session: { token: 'jwt-token', email: 'rider@example.com' },
+      repository: repo,
+      route: expect.objectContaining({ id: savedRoute.id }) as Route,
+      isSynced: true,
+    });
+    document.body.removeChild(el);
+  });
+
+  it('guardar una nota en una ruta que nunca se ha subido no dispara ninguna subida real', async () => {
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
+    clickTab(root, 'notas');
+    const textarea = root.querySelector('[data-cy="route-detail-textarea-notas"]') as HTMLTextAreaElement;
+    textarea.value = 'Nota de prueba';
+    (root.querySelector('[data-cy="route-detail-btn-guardar-nota"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    expect(autoResyncIfNeeded).toHaveBeenCalledWith({
+      apiBaseUrl: 'http://localhost:8080',
+      session: { token: 'jwt-token', email: 'rider@example.com' },
+      repository: repo,
+      route: expect.objectContaining({ id: savedRoute.id }) as Route,
+      isSynced: false,
+    });
+    document.body.removeChild(el);
+  });
+
+  it('añadir una foto (desde galería) en una ruta ya sincronizada dispara una re-subida de sus metadatos', async () => {
+    vi.mocked(checkIfRouteIsSynced).mockResolvedValue(true);
+    vi.mocked(pickFromGallery).mockResolvedValue([new File([''], 'a.jpg', { type: 'image/jpeg' })]);
+
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
+    const photoCapture = root.querySelector('[data-cy="detail-photo-capture"]')!;
+    (photoCapture.shadowRoot!.querySelector('.photo-btn') as HTMLButtonElement).click();
+    (photoCapture.shadowRoot!.querySelector('[data-cy="photo-menu-gallery"]') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(autoResyncIfNeeded).toHaveBeenCalledWith({
+      apiBaseUrl: 'http://localhost:8080',
+      session: { token: 'jwt-token', email: 'rider@example.com' },
+      repository: repo,
+      route: expect.objectContaining({ id: savedRoute.id }) as Route,
+      isSynced: true,
+    });
+    document.body.removeChild(el);
+  });
+
+  it('borrar una foto en una ruta ya sincronizada dispara una re-subida de sus metadatos', async () => {
+    vi.mocked(checkIfRouteIsSynced).mockResolvedValue(true);
+    localStorage.setItem('moto-routes-photos', JSON.stringify([
+      {
+        id: 'photo-1', routeId: savedRoute.id, filePath: 'photo-1.jpg',
+        latitude: 40.4168, longitude: -3.7038,
+        capturedAt: '2026-07-20T10:00:00.000Z', createdAt: '2026-07-20T10:00:00.000Z',
+      },
+    ]));
+
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
+    (galleryRoot(root).querySelector('[data-cy="photo-thumbnail"]') as HTMLElement).click();
+    const viewer = document.body.querySelector('photo-viewer')!;
+    (viewer.shadowRoot!.querySelector('[data-cy="photo-viewer-delete"]') as HTMLButtonElement).click();
+    await waitRender();
+    (document.body.querySelector('confirm-dialog')!.shadowRoot!.querySelector('[data-cy="confirm-dialog-action-confirm"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    expect(autoResyncIfNeeded).toHaveBeenCalledWith({
+      apiBaseUrl: 'http://localhost:8080',
+      session: { token: 'jwt-token', email: 'rider@example.com' },
+      repository: repo,
+      route: expect.objectContaining({ id: savedRoute.id }) as Route,
+      isSynced: true,
+    });
+    viewer.remove();
     document.body.removeChild(el);
   });
 });

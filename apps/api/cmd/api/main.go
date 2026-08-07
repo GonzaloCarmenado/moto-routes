@@ -16,6 +16,7 @@ import (
 	"github.com/crzverde/moto-routes/apps/api/internal/httpmw"
 	"github.com/crzverde/moto-routes/apps/api/internal/migrate"
 	"github.com/crzverde/moto-routes/apps/api/internal/ping"
+	"github.com/crzverde/moto-routes/apps/api/internal/routes"
 	"github.com/crzverde/moto-routes/apps/api/internal/stoptypes"
 )
 
@@ -120,6 +121,15 @@ func main() {
 	resetPasswordConfirmHandler := auth.ResetPasswordConfirmHandler(userStore, passwordResetTokenStore).ServeHTTP
 	router.Get("/api/auth/reset-password/confirm", resetPasswordConfirmHandler)
 	router.Post("/api/auth/reset-password/confirm", resetPasswordConfirmHandler)
+
+	routeStore := routes.PostgresRouteStore{Pool: pool}
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/routes", routes.UpsertHandler(routeStore).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/routes", func(http.ResponseWriter, *http.Request) {})
+
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/routes", routes.ListHandler(routeStore).ServeHTTP)
+
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/routes/{id}", routes.DetailHandler(routeStore).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/routes/{id}", func(http.ResponseWriter, *http.Request) {})
 
 	log.Printf("listening on %s", cfg.ServerAddress)
 	if err := http.ListenAndServe(cfg.ServerAddress, router); err != nil {

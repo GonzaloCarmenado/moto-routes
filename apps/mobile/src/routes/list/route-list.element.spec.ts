@@ -1,7 +1,16 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { MemoryRouteRepository } from '../../shared/repositories/memory-route.repository.js';
+import { MemorySessionRepository } from '../../shared/repositories/memory-session.repository.js';
 import type { IRouteRepository } from '../../shared/models/route.repository.js';
+import type { ISessionRepository } from '../../shared/models/session.repository.js';
+import { fetchCloudRoutes } from '../../shared/http/route-cloud-api.service.js';
+import type * as RouteCloudApiService from '../../shared/http/route-cloud-api.service.js';
 import './route-list.element.js';
+
+vi.mock('../../shared/http/route-cloud-api.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof RouteCloudApiService>();
+  return { ...actual, fetchCloudRoutes: vi.fn() };
+});
 
 async function waitRender(): Promise<void> {
   // 50ms: el borrado de ruta encadena confirmDialog + un import() dinámico
@@ -389,6 +398,91 @@ describe('route-list - trazado SVG y backfill perezoso (AC-021, AC-022, AC-023, 
     expect(currentThumb(list).querySelector('svg path[data-cy="route-card-trace"]')).not.toBeNull();
     expect(updateSpy).toHaveBeenCalledOnce();
 
+    document.body.removeChild(list);
+  });
+});
+
+describe('route-list - indicador de sincronización con la nube', () => {
+  let repo: IRouteRepository;
+
+  beforeEach(() => {
+    repo = new MemoryRouteRepository();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  async function createListWithSession(): Promise<{ list: HTMLElement; sessionRepository: ISessionRepository }> {
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+    const list = document.createElement('route-list') as HTMLElement & {
+      repository: IRouteRepository;
+      sessionRepository: ISessionRepository;
+    };
+    list.sessionRepository = sessionRepository;
+    list.repository = repo;
+    document.body.appendChild(list);
+    await waitRender();
+    return { list, sessionRepository };
+  }
+
+  it('sin sesión activa, no muestra ningún indicador de nube (comportamiento idéntico al actual)', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' }, [], []);
+    const list = await createList(repo);
+
+    expect(list.shadowRoot!.querySelector('[data-cy="route-card-sync-badge"]')).toBeNull();
+    document.body.removeChild(list);
+  });
+
+  it('con sesión activa, una ruta sin subir se marca "Solo local"', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' }, [], []);
+    vi.mocked(fetchCloudRoutes).mockResolvedValue([]);
+
+    const { list } = await createListWithSession();
+
+    const badge = list.shadowRoot!.querySelector('[data-cy="route-card-sync-badge"]');
+    expect(badge?.getAttribute('data-sync-state')).toBe('local');
+    document.body.removeChild(list);
+  });
+
+  it('con sesión activa, una ruta ya subida se marca "Sincronizada" (sin duplicar la tarjeta)', async () => {
+    const saved = await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' }, [], []);
+    vi.mocked(fetchCloudRoutes).mockResolvedValue([
+      { id: saved.id, createdAt: saved.createdAt, duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', name: null, notes: null },
+    ]);
+
+    const { list } = await createListWithSession();
+    const root = list.shadowRoot!;
+
+    expect(root.querySelectorAll('.route-card')).toHaveLength(1);
+    expect(root.querySelector('[data-cy="route-card-sync-badge"]')?.getAttribute('data-sync-state')).toBe('synced');
+    document.body.removeChild(list);
+  });
+
+  it('con sesión activa, una ruta exclusiva de la nube aparece marcada "En la nube" y sin botón de eliminar', async () => {
+    vi.mocked(fetchCloudRoutes).mockResolvedValue([
+      { id: 'cloud-only', createdAt: '2026-08-01T10:00:00.000Z', duration: 60, totalDistance: 5, avgSpeed: 20, status: 'completed', name: null, notes: null },
+    ]);
+
+    const { list } = await createListWithSession();
+    const root = list.shadowRoot!;
+    const card = root.querySelector('.route-card')!;
+
+    expect(card.querySelector('[data-cy="route-card-sync-badge"]')?.getAttribute('data-sync-state')).toBe('cloud-only');
+    expect(card.querySelector('[data-cy="route-card-btn-eliminar"]')).toBeNull();
+    document.body.removeChild(list);
+  });
+
+  it('con sesión activa pero sin conexión a la nube, muestra las rutas locales sin bloquearse (marcadas "Solo local", sin ninguna ruta cloud-only)', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' }, [], []);
+    vi.mocked(fetchCloudRoutes).mockRejectedValue(new Error('network down'));
+
+    const { list } = await createListWithSession();
+    const root = list.shadowRoot!;
+
+    expect(root.querySelectorAll('.route-card')).toHaveLength(1);
+    expect(root.querySelector('[data-cy="route-card-sync-badge"]')?.getAttribute('data-sync-state')).toBe('local');
     document.body.removeChild(list);
   });
 });

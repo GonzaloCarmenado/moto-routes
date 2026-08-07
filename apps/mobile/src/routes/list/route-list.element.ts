@@ -1,7 +1,9 @@
 import styles from './route-list.element.css?inline';
 import type { IRouteRepository } from '../../shared/models/route.repository.js';
 import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
+import type { ISessionRepository } from '../../shared/models/session.repository.js';
 import type { Route } from '../../shared/models/route.types.js';
+import { getApiBaseUrl } from '../../shared/http/api-config.js';
 import { formatDuration } from '../../shared/utils/format.js';
 import { formatRouteDate } from '../../shared/utils/date.js';
 import { buildRouteDisplayName } from '../../shared/utils/route-naming.js';
@@ -14,12 +16,29 @@ import { showToast } from '../../shared/feedback/toast.js';
 import { toErrorMessage } from '../../shared/utils/errors.js';
 import { buildPolylineSvgPath } from './route-list.transform.js';
 import { ensurePreviewPolyline } from './route-list-polyline.service.js';
+import { loadRouteListItems } from './route-list-sync.service.js';
+import type { RouteListItem, RouteSyncState } from './route-list-sync.transform.js';
+import { DEVICE_ICON, CLOUD_CHECK_ICON, CLOUD_ONLY_ICON } from '../../shared/icons/cloud-sync-icons.js';
 
 const THUMB_TRACE_SIZE = 72;
 
+const SYNC_ICON_BY_STATE: Record<RouteSyncState, string> = {
+  local: DEVICE_ICON,
+  synced: CLOUD_CHECK_ICON,
+  'cloud-only': CLOUD_ONLY_ICON,
+};
+
+const SYNC_LABEL_BY_STATE: Record<RouteSyncState, string> = {
+  local: 'Solo en este dispositivo',
+  synced: 'Sincronizada con la nube',
+  'cloud-only': 'Solo en la nube',
+};
+
 class RouteList extends BaseElement {
   private _repository: IRouteRepository | null = null;
-  private _routes: Route[] = [];
+  private _sessionRepository: ISessionRepository | null = null;
+  private _items: RouteListItem[] = [];
+  private _hasSession = false;
   private _loading = false;
   private photoRepo: IPhotoRepository | null = null;
 
@@ -35,6 +54,14 @@ class RouteList extends BaseElement {
 
   get repository(): IRouteRepository | null {
     return this._repository;
+  }
+
+  set sessionRepository(repo: ISessionRepository | null) {
+    this._sessionRepository = repo;
+  }
+
+  get sessionRepository(): ISessionRepository | null {
+    return this._sessionRepository;
   }
 
   private readonly onNavRutas = (): void => { void this.fetchAndRender(); };
@@ -59,7 +86,9 @@ class RouteList extends BaseElement {
     if (!this._repository) return;
     this._loading = true;
     this.render();
-    this._routes = await this._repository.getAll();
+    const result = await loadRouteListItems(getApiBaseUrl(), this._repository, this._sessionRepository);
+    this._items = result.items;
+    this._hasSession = result.hasSession;
     this._loading = false;
     this.render();
   }
@@ -78,14 +107,14 @@ class RouteList extends BaseElement {
     if (this._loading) {
       screen.appendChild(this.buildLoadingState());
     } else {
-      screen.appendChild(this.buildHeader(this._routes));
-      screen.appendChild(this.buildBody(this._routes));
+      screen.appendChild(this.buildHeader(this._items));
+      screen.appendChild(this.buildBody(this._items));
     }
 
     this.renderShadow(styles, screen);
   }
 
-  private buildHeader(routes: Route[]): DocumentFragment {
+  private buildHeader(items: RouteListItem[]): DocumentFragment {
     const fragment = document.createDocumentFragment();
 
     const title = document.createElement('h1');
@@ -93,17 +122,17 @@ class RouteList extends BaseElement {
     title.textContent = 'Tus rutas';
     fragment.appendChild(title);
 
-    const totalKm = routes.reduce((sum, r) => sum + r.totalDistance, 0);
+    const totalKm = items.reduce((sum, i) => sum + i.route.totalDistance, 0);
     const subtitle = document.createElement('p');
     subtitle.className = 'route-list__subtitle';
-    subtitle.textContent = `${String(routes.length)} rutas guardadas · ${totalKm.toFixed(1)} km recorridos`;
+    subtitle.textContent = `${String(items.length)} rutas guardadas · ${totalKm.toFixed(1)} km recorridos`;
     fragment.appendChild(subtitle);
 
     return fragment;
   }
 
-  private buildBody(routes: Route[]): HTMLElement {
-    if (routes.length === 0) {
+  private buildBody(items: RouteListItem[]): HTMLElement {
+    if (items.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'route-list__empty';
       empty.setAttribute('data-cy', 'route-list-empty');
@@ -113,13 +142,14 @@ class RouteList extends BaseElement {
 
     const list = document.createElement('div');
     list.className = 'route-list__cards';
-    for (const route of routes) {
-      list.appendChild(this.buildCard(route));
+    for (const item of items) {
+      list.appendChild(this.buildCard(item));
     }
     return list;
   }
 
-  private buildCard(route: Route): HTMLElement {
+  private buildCard(item: RouteListItem): HTMLElement {
+    const { route } = item;
     const card = document.createElement('div');
     card.className = 'route-card';
     card.setAttribute('data-cy', 'route-card');
@@ -128,8 +158,30 @@ class RouteList extends BaseElement {
       dispatchAppEvent(APP_EVENTS.VIEW_ROUTE, { routeId: route.id });
     });
 
-    card.appendChild(this.buildThumb(route, card));
+    card.appendChild(this.buildThumbWithBadge(item, card));
+    card.appendChild(this.buildInfo(item));
+    const deleteBtn = this.buildDeleteButton(item);
+    if (deleteBtn) card.appendChild(deleteBtn);
+    return card;
+  }
 
+  /**
+   * Envuelve la miniatura en un contenedor relativo con el icono de estado
+   * de sincronización superpuesto en su esquina (solo con sesión activa —
+   * sin sesión no hay ningún concepto de nube, AC de la spec
+   * `route-cloud-sync`) — mismo patrón que el badge de "sincronizado" de
+   * apps como Google Fotos, en vez de una columna de acciones aparte.
+   */
+  private buildThumbWithBadge(item: RouteListItem, card: HTMLElement): HTMLElement {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'thumb-wrapper';
+    wrapper.appendChild(this.buildThumb(item, card));
+    if (this._hasSession) wrapper.appendChild(this.buildSyncIcon(item.syncState));
+    return wrapper;
+  }
+
+  private buildInfo(item: RouteListItem): HTMLElement {
+    const { route } = item;
     const info = document.createElement('div');
     info.className = 'info';
 
@@ -143,14 +195,26 @@ class RouteList extends BaseElement {
     date.textContent = formatRouteDate(route.createdAt);
     info.appendChild(date);
 
+    info.appendChild(this.buildBadges(route));
+    return info;
+  }
+
+  private buildBadges(route: Route): HTMLElement {
     const badges = document.createElement('div');
     badges.className = 'badges';
     badges.innerHTML = `<span class="badge distance">${route.totalDistance.toFixed(1)} km</span><span class="badge duration">${formatDuration(route.duration)}</span>`;
-    info.appendChild(badges);
+    return badges;
+  }
 
-    card.appendChild(info);
-    card.appendChild(this.buildDeleteButton(route));
-    return card;
+  /** Icono de estado de sincronización, sin texto (ver design.md Decisión 9). */
+  private buildSyncIcon(syncState: RouteSyncState): HTMLElement {
+    const icon = document.createElement('span');
+    icon.className = `sync-status-icon sync-status-icon--${syncState}`;
+    icon.setAttribute('data-cy', 'route-card-sync-badge');
+    icon.setAttribute('aria-label', SYNC_LABEL_BY_STATE[syncState]);
+    icon.dataset.syncState = syncState;
+    icon.innerHTML = SYNC_ICON_BY_STATE[syncState];
+    return icon;
   }
 
   /**
@@ -159,11 +223,15 @@ class RouteList extends BaseElement {
    * este último caso, si la ruta aún no tiene el trazado calculado (`null`),
    * dispara el backfill perezoso en segundo plano (sin bloquear el render).
    */
-  private buildThumb(route: Route, card: HTMLElement): HTMLElement {
+  private buildThumb(item: RouteListItem, card: HTMLElement): HTMLElement {
+    const { route, syncState } = item;
     const svgPath = buildPolylineSvgPath(route.previewPolyline, THUMB_TRACE_SIZE, THUMB_TRACE_SIZE);
     if (svgPath) return this.buildTraceThumb(svgPath);
 
-    if (route.previewPolyline === null) {
+    // Una ruta exclusiva de la nube no tiene puntos locales de los que
+    // calcular el trazado — el backfill solo tiene sentido para rutas con
+    // datos en el repositorio local.
+    if (route.previewPolyline === null && syncState !== 'cloud-only') {
       this.scheduleBackfill(route, card);
     }
     return this.buildPlaceholderThumb();
@@ -219,7 +287,15 @@ class RouteList extends BaseElement {
       });
   }
 
-  private buildDeleteButton(route: Route): HTMLButtonElement {
+  /**
+   * `null` para una ruta exclusiva de la nube: no hay requisito de negocio
+   * para borrarla desde la app (ver design.md, Non-Goals) y, además, no
+   * existe fila local que `IRouteRepository.delete()` pudiera afectar.
+   */
+  private buildDeleteButton(item: RouteListItem): HTMLButtonElement | null {
+    if (item.syncState === 'cloud-only') return null;
+
+    const { route } = item;
     const btn = document.createElement('button');
     btn.className = 'route-card__delete';
     btn.setAttribute('data-cy', 'route-card-btn-eliminar');
@@ -252,7 +328,7 @@ class RouteList extends BaseElement {
       showToast(`⚠️ ${toErrorMessage(err, 'Error al eliminar la ruta')}`, 'error');
       return;
     }
-    this._routes = this._routes.filter((r) => r.id !== route.id);
+    this._items = this._items.filter((i) => i.route.id !== route.id);
     this.render();
     showToast('Ruta eliminada', 'success');
   }

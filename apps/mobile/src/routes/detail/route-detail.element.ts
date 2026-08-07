@@ -1,8 +1,14 @@
 import styles from './route-detail.element.css?inline';
 import type { IRouteRepository } from '../../shared/models/route.repository.js';
 import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
+import type { ISessionRepository } from '../../shared/models/session.repository.js';
+import type { Session } from '../../shared/models/session.types.js';
 import type { Route, RoutePoint, RouteStop } from '../../shared/models/route.types.js';
 import type { IStopTypesCacheRepository } from '../../shared/models/stop-types-cache.repository.js';
+import { getApiBaseUrl } from '../../shared/http/api-config.js';
+import { loadCloudRouteDetail, checkIfRouteIsSynced, autoResyncIfNeeded } from './route-detail-cloud.service.js';
+import { buildSyncIconButton } from './route-detail-cloud-upload.js';
+import { buildLoadingState, buildEmptyMessage, buildLoadErrorMessage } from './route-detail-states.js';
 import type { StopCategory } from '../../shared/stop-types/stop-types.types.js';
 import { formatDuration } from '../../shared/utils/format.js';
 import { formatRouteDate } from '../../shared/utils/date.js';
@@ -13,8 +19,6 @@ import type { MapPhoto } from '../../shared/route-map/route-map-photos.js';
 import type { MapStop } from '../../shared/route-map/route-map-stops.js';
 import '../../shared/photo-capture/photo-capture.element.js';
 import type { PhotoCaptureElement } from '../../shared/photo-capture/photo-capture.element.js';
-import { PHOTO_CAPTURE_EVENT, type PhotoCaptureEventDetail } from '../../shared/photo-capture/photo-capture.types.js';
-import { applyPhotoCaptureLimit } from '../../shared/photo-capture/photo-capture.limit.js';
 import { createPhotoRepository } from '../../shared/services/photo-storage.service.js';
 import { captureFromCamera, pickFromGallery } from '../../shared/services/photo-capture-adapter.service.js';
 import { addPhotoToRoute } from './route-detail-photo.service.js';
@@ -24,8 +28,7 @@ import { toErrorMessage } from '../../shared/utils/errors.js';
 import { showToast } from '../../shared/feedback/toast.js';
 import { BaseElement } from '../../shared/base-element.js';
 import { APP_EVENTS, dispatchAppEvent } from '../../shared/app-events.js';
-import '../../shared/photo-gallery/photo-gallery.element.js';
-import { PHOTO_GALLERY_SELECT_EVENT, type PhotoGallerySelectDetail, type GalleryPhoto, type PhotoGalleryLayout } from '../../shared/photo-gallery/photo-gallery.element.js';
+import { buildPhotosSection, toGalleryPhotos } from './route-detail-photos-panel.js';
 import { openPhotoViewer } from '../../shared/photo-viewer/photo-viewer.element.js';
 import '../../shared/tab-bar/tab-bar.element.js';
 import type { PhotoWithUrl, TabBarElement } from './route-detail.types.js';
@@ -48,6 +51,19 @@ class RouteDetail extends BaseElement {
   private _fotosPanelEl: HTMLElement | null = null;
   private _timelinePanelEl: HTMLElement | null = null;
   private _loading = false;
+  private _sessionRepository: ISessionRepository | null = null;
+  private _session: Session | null = null;
+  /** `false` cuando `_route` se cargó de la nube — sin datos locales de los
+   * que subir nada, así que la acción "Subir a la nube" no tiene sentido
+   * para esa ruta. */
+  private _isLocalRoute = true;
+  /** Si la ruta local actual ya existe también en la nube (ver
+   * `checkIfRouteIsSynced`) — decide el icono del detalle y si un cambio
+   * local (nota/foto) dispara una re-subida automática. */
+  private _isSynced = false;
+  /** Mensaje a mostrar si la ruta no existe localmente y falla la consulta a
+   * la nube (p. ej. sin conexión) — `null` mientras no haya ningún fallo. */
+  private _loadError: string | null = null;
 
   private async getPhotoRepo(): Promise<IPhotoRepository> {
     this._photoRepo ??= await createPhotoRepository();
@@ -64,6 +80,14 @@ class RouteDetail extends BaseElement {
 
   set stopTypesCacheRepository(repo: IStopTypesCacheRepository | null) {
     this._stopTypesCache = repo;
+  }
+
+  set sessionRepository(repo: ISessionRepository | null) {
+    this._sessionRepository = repo;
+  }
+
+  get sessionRepository(): ISessionRepository | null {
+    return this._sessionRepository;
   }
 
   set routeId(id: string | null) {
@@ -99,41 +123,86 @@ class RouteDetail extends BaseElement {
   private async fetchAndRender(): Promise<void> {
     if (!this._repository || !this._routeId) return;
     this._loading = true;
+    this._loadError = null;
     this.render();
 
+    this._session = (await this._sessionRepository?.get()) ?? null;
+    const categories = await (this._stopTypesCache?.getAll() ?? Promise.resolve([]));
+    this._categoriesById = new Map(categories.map((c) => [c.id, c]));
+
+    const localRoute = await this._repository.getById(this._routeId);
+    if (localRoute) {
+      await this.loadLocalRouteData(localRoute);
+    } else if (this._session) {
+      // Sin datos locales, pero con sesión: puede ser una ruta exclusiva de
+      // la nube (ver spec route-cloud-sync) — se descarga bajo demanda.
+      await this.loadCloudRouteData(this._routeId, this._session);
+    } else {
+      this._isLocalRoute = true;
+      this._isSynced = false;
+      this._route = null;
+    }
+
+    this._loading = false;
+    this.render();
+  }
+
+  private async loadLocalRouteData(route: Route): Promise<void> {
+    if (!this._repository || !this._routeId) return;
     const photoRepo = await this.getPhotoRepo();
-    const [route, points, stops, photos, categories] = await Promise.all([
-      this._repository.getById(this._routeId),
+    const [points, stops, photos, isSynced] = await Promise.all([
       this._repository.getPointsByRouteId(this._routeId),
       this._repository.getStopsByRouteId(this._routeId),
       photoRepo.getByRouteId(this._routeId),
-      this._stopTypesCache?.getAll() ?? Promise.resolve([]),
+      this._session ? checkIfRouteIsSynced(getApiBaseUrl(), this._session, this._routeId) : Promise.resolve(false),
     ]);
+    this._isLocalRoute = true;
+    this._isSynced = isSynced;
     this._route = route;
     this._routePoints = points;
     this._points = points.map((p) => ({ lat: p.lat, lng: p.lng }));
     this._routeStops = stops;
-    this._categoriesById = new Map(categories.map((c) => [c.id, c]));
     this.revokePhotoUrls();
     // Convert file paths to accessible URLs (handles Tauri convertFileSrc)
     this._photos = await Promise.all(photos.map(async (p) => ({
       ...p,
       objectUrl: await getPhotoUrl(p.filePath),
     })));
-    this._loading = false;
-    this.render();
+  }
+
+  /**
+   * Ruta exclusiva de la nube (no existe en `IRouteRepository`): sin fotos
+   * (fuera de alcance, ver design.md) — un fallo de red se convierte en
+   * `_loadError`, nunca deja la pantalla en blanco ni sin explicación.
+   */
+  private async loadCloudRouteData(routeId: string, session: Session): Promise<void> {
+    this._isLocalRoute = false;
+    this._isSynced = false;
+    this.revokePhotoUrls();
+    this._photos = [];
+
+    const result = await loadCloudRouteDetail(getApiBaseUrl(), session, routeId);
+    if (result.error !== undefined) {
+      this._route = null;
+      this._loadError = result.error;
+      return;
+    }
+    this._route = result.route;
+    this._routePoints = result.points;
+    this._points = result.points.map((p) => ({ lat: p.lat, lng: p.lng }));
+    this._routeStops = result.stops;
   }
 
   protected render(): void {
     if (!this.shadowRoot) return;
 
     if (this._loading) {
-      this.renderShadow(styles, this.buildLoadingState());
+      this.renderShadow(styles, buildLoadingState());
       return;
     }
 
     if (!this._route) {
-      this.renderShadow(styles, this.buildEmptyMessage());
+      this.renderShadow(styles, this._loadError ? buildLoadErrorMessage(this._loadError) : buildEmptyMessage());
       return;
     }
 
@@ -144,21 +213,6 @@ class RouteDetail extends BaseElement {
     detail.appendChild(this.buildContent(this._route));
 
     this.renderShadow(styles, detail);
-  }
-
-  private buildLoadingState(): HTMLElement {
-    const el = document.createElement('div');
-    el.className = 'empty-msg';
-    el.setAttribute('data-cy', 'route-detail-loading');
-    el.textContent = 'Cargando ruta…';
-    return el;
-  }
-
-  private buildEmptyMessage(): HTMLElement {
-    const empty = document.createElement('div');
-    empty.className = 'empty-msg';
-    empty.textContent = 'Ruta no encontrada';
-    return empty;
   }
 
   private buildBackButton(): HTMLElement {
@@ -185,7 +239,7 @@ class RouteDetail extends BaseElement {
     routeMap.stopCategoriesById = this._categoriesById;
     // AC-015/AC-017: solo el marcador individual dispara este evento, nunca un cluster.
     routeMap.addEventListener(ROUTE_MAP_PHOTO_SELECT_EVENT, ((event: CustomEvent<RouteMapPhotoSelectDetail>) => {
-      const index = this.toGalleryPhotos().findIndex((p) => p.id === event.detail.photo.id);
+      const index = toGalleryPhotos(this._photos).findIndex((p) => p.id === event.detail.photo.id);
       if (index !== -1) this.openPhotoViewerAt(index);
     }) as EventListener);
     return routeMap;
@@ -198,6 +252,26 @@ class RouteDetail extends BaseElement {
     content.appendChild(this.buildStatGrid(route));
     content.appendChild(this.buildTabBar(route));
     return content;
+  }
+
+  /**
+   * "Subir a la nube" / "Ya sincronizada": solo con sesión activa y ruta de
+   * origen local (AC de la spec `route-cloud-sync`) — sin sesión, o para una
+   * ruta ya cargada desde la nube, la acción no tiene sentido y no se muestra.
+   */
+  private buildSyncIcon(route: Route): HTMLButtonElement | null {
+    if (!this._session || !this._isLocalRoute || !this._repository) return null;
+    return buildSyncIconButton({
+      apiBaseUrl: getApiBaseUrl(),
+      session: this._session,
+      repository: this._repository,
+      route,
+      isSynced: this._isSynced,
+      onUploaded: () => {
+        this._isSynced = true;
+        this.render();
+      },
+    });
   }
 
   /**
@@ -225,7 +299,25 @@ class RouteDetail extends BaseElement {
 
   private async handleSaveNote(route: Route, textarea: HTMLTextAreaElement): Promise<boolean> {
     if (!this._repository) return false;
-    return saveRouteNote(this._repository, route, textarea);
+    const saved = await saveRouteNote(this._repository, route, textarea);
+    if (saved) this.triggerAutoResync(route);
+    return saved;
+  }
+
+  /**
+   * Re-sube en segundo plano una ruta ya sincronizada tras una nota o foto
+   * modificada localmente — no hace nada si la ruta nunca se ha subido (ver
+   * `autoResyncIfNeeded`, design.md Decisión 10).
+   */
+  private triggerAutoResync(route: Route): void {
+    if (!this._session || !this._repository) return;
+    void autoResyncIfNeeded({
+      apiBaseUrl: getApiBaseUrl(),
+      session: this._session,
+      repository: this._repository,
+      route,
+      isSynced: this._isSynced,
+    });
   }
 
   /** "Estadísticas": placeholder de gráfica ya existente, sin cambios (AC-007). */
@@ -238,11 +330,19 @@ class RouteDetail extends BaseElement {
   private buildHeader(route: Route): DocumentFragment {
     const fragment = document.createDocumentFragment();
 
+    const titleRow = document.createElement('div');
+    titleRow.className = 'detail-title-row';
+
     const title = document.createElement('h1');
     title.className = 'detail-title';
     title.setAttribute('data-cy', 'route-detail-title');
     title.textContent = buildRouteDisplayName(route.name, route.createdAt);
-    fragment.appendChild(title);
+    titleRow.appendChild(title);
+
+    const syncIcon = this.buildSyncIcon(route);
+    if (syncIcon) titleRow.appendChild(syncIcon);
+
+    fragment.appendChild(titleRow);
 
     const date = document.createElement('p');
     date.className = 'detail-date';
@@ -271,52 +371,21 @@ class RouteDetail extends BaseElement {
     return chart;
   }
 
-  private buildAddPhotoButton(): PhotoCaptureElement {
-    const photoCapture = document.createElement('photo-capture') as PhotoCaptureElement;
-    photoCapture.setAttribute('data-cy', 'detail-photo-capture');
-    photoCapture.classList.add('detail-photo-capture');
-    photoCapture.addEventListener(PHOTO_CAPTURE_EVENT, ((event: CustomEvent<PhotoCaptureEventDetail>) => {
-      void this.handleAddPhoto(event.detail.source);
-    }) as EventListener);
-    this._photoCaptureEl = photoCapture;
-    applyPhotoCaptureLimit(photoCapture, this._photos.length);
-    return photoCapture;
-  }
-
-  private toGalleryPhotos(): GalleryPhoto[] {
-    return this._photos.map((p) => ({ id: p.id, objectUrl: p.objectUrl }));
-  }
-
-  private buildGalleryElement(): HTMLElement {
-    const gallery = document.createElement('photo-gallery') as HTMLElement & { photos: GalleryPhoto[]; layout: PhotoGalleryLayout };
-    gallery.layout = 'grid';
-    gallery.photos = this.toGalleryPhotos();
-    gallery.addEventListener(PHOTO_GALLERY_SELECT_EVENT, ((event: CustomEvent<PhotoGallerySelectDetail>) => {
-      this.openPhotoViewerAt(event.detail.index);
-    }) as EventListener);
-    return gallery;
-  }
-
   /** Único punto de apertura del visor: galería en cuadrícula y popup del mapa
    * comparten esta misma llamada (AC-011, AC-015). */
   private openPhotoViewerAt(index: number): void {
-    openPhotoViewer({ photos: this.toGalleryPhotos(), startIndex: index, onDelete: (photo) => this.handleDeletePhoto(photo.id) });
+    openPhotoViewer({ photos: toGalleryPhotos(this._photos), startIndex: index, onDelete: (photo) => this.handleDeletePhoto(photo.id) });
   }
 
-  /** Panel de la pestaña "Fotos" (AC-006). Un `<div slot="fotos">` — no un
-   * `DocumentFragment`, que no puede llevar el atributo `slot`. */
   private buildPhotosSection(): HTMLElement {
-    const section = document.createElement('div');
-    section.setAttribute('slot', 'fotos');
-
-    const photosLabel = document.createElement('div');
-    photosLabel.className = 'section-label';
-    photosLabel.textContent = 'Fotos de la ruta';
-    section.appendChild(photosLabel);
-    section.appendChild(this.buildAddPhotoButton());
-    section.appendChild(this.buildGalleryElement());
-
-    return section;
+    return buildPhotosSection(
+      this._photos,
+      {
+        onAddPhoto: (source) => { void this.handleAddPhoto(source); },
+        onSelectPhoto: (index) => { this.openPhotoViewerAt(index); },
+      },
+      (el) => { this._photoCaptureEl = el; },
+    );
   }
 
   /** Persiste una foto y devuelve si se guardó de verdad (muestra su propio toast de error). */
@@ -359,6 +428,11 @@ class RouteDetail extends BaseElement {
           })),
         );
         this.refreshAllPanels();
+        // Re-sube solo metadatos/puntos/paradas (nunca la foto en sí — fuera
+        // de alcance hasta que exista blob storage, ver design.md Decisión 10).
+        // TODO: cuando se implemente la subida de fotos, esta foto también
+        // debe subirse aquí, no solo re-sincronizar los metadatos de la ruta.
+        if (this._route) this.triggerAutoResync(this._route);
       }
     } finally {
       if (this._photoCaptureEl) this._photoCaptureEl.loading = false;
@@ -393,7 +467,7 @@ class RouteDetail extends BaseElement {
     const el = buildTimelinePanel(
       { points: this._routePoints, photos: timelinePhotos, stops: timelineStops, categoriesById: this._categoriesById },
       (photoId: string): void => {
-        const idx = this.toGalleryPhotos().findIndex((gp) => gp.id === photoId);
+        const idx = toGalleryPhotos(this._photos).findIndex((gp) => gp.id === photoId);
         if (idx !== -1) this.openPhotoViewerAt(idx);
       },
     );
@@ -431,6 +505,8 @@ class RouteDetail extends BaseElement {
     this._photos = this._photos.filter((p) => p.id !== photoId);
     this.refreshAllPanels();
     showToast('Foto eliminada', 'success');
+    // TODO: cuando exista subida de fotos, borrar aquí también la copia remota.
+    if (this._route) this.triggerAutoResync(this._route);
     return true;
   }
 }
