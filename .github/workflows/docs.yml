@@ -11,6 +11,10 @@ on:
   pull_request:
     branches: [master]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   docs:
     runs-on: ubuntu-latest
@@ -33,6 +37,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev libgtk-3-dev
+
+      # `pnpm run docs` incluye `cargo doc`, que sin esto recompila el
+      # workspace Tauri entero desde cero en cada run -- a diferencia de
+      # quality-tauri en ci.yml, que sí cachea vía Swatinem/rust-cache.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/mobile/src-tauri
 
       - name: Build docs (VitePress + TypeDoc + cargo doc)
         run: pnpm run docs
