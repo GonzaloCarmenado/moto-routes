@@ -20,14 +20,14 @@
 
 ## 4. Despliegue real y verificación
 
-- [ ] 4.1 Etiquetar imagen actual para rollback en el servidor: `docker tag docker-api:latest docker-api:pre-hardening`
-- [ ] 4.2 Ejecutar `scripts/deploy-prod.sh` contra el servidor real
-- [ ] 4.3 Verificar el proceso no-root: `docker exec <contenedor> ps -o user= -p 1` no muestra `root`
-- [ ] 4.4 Verificar migración `0005` aplicada y `GET /api/routes` responde (401 sin token, 200 con token)
-- [ ] 4.5 Confirmar `/api/ping` responde `200` desde fuera del tailnet (Funnel)
+- [x] 4.1 Etiquetar imagen actual para rollback en el servidor: `docker tag docker-api:latest docker-api:pre-hardening`
+- [x] 4.2 Desplegar contra el servidor real desde esta rama sin fusionar (mismo patrón que ADR-034/038 — `scripts/deploy-prod.sh` hace `git pull origin master`, que todavía no incluye este cambio; se hizo `git checkout feature/hardening-despliegue-servidor` en el servidor + `docker compose up -d --build` manualmente)
+- [x] 4.3 Verificar el proceso no-root: `ps` no está instalado en `debian:trixie-slim` (sin `procps`) — verificado con `docker exec docker-api-1 id` (`uid=999(appuser) gid=999(appuser)`) y `docker top docker-api-1` (UID no root)
+- [x] 4.4 Verificar migración `0005` aplicada (`schema_migrations` la lista) y `GET /api/routes` responde 401 sin token / 200 con token — verificado con una cuenta real de prueba (registro, verificación por SQL, login, `GET /api/routes` → `200 []`), borrada después
+- [x] 4.5 Confirmar `/api/ping` responde `200` en `https://debian.taildf3dab.ts.net/api/ping` (URL pública de Funnel)
 
 ## 5. Cierre
 
-- [ ] 5.1 Ejecutar `go vet` + `go test ./...` de `apps/api` sin regresiones
-- [ ] 5.2 Actualizar `memory/context.md` con el estado del cambio y los hallazgos
-- [ ] 5.3 Revisar el diff completo del PR buscando secretos reales (gate de seguridad)
+- [x] 5.1 Ejecutar `go vet` + `go test ./...` de `apps/api` sin regresiones — `go vet` limpio, 82/82 tests en verde
+- [x] 5.2 Actualizar `memory/context.md` con el estado del cambio y los hallazgos
+- [x] 5.3 Revisar el diff completo del PR buscando secretos reales (gate de seguridad) — solo nombres de variables (nunca valores) y la IP/hostname de Tailscale ya públicos en ADRs anteriores; sin secretos nuevos
