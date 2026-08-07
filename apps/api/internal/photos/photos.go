@@ -47,10 +47,11 @@ type Photo struct {
 // PhotoStore persiste y consulta metadatos de fotos, siempre acotados a que
 // la ruta pertenezca al usuario indicado.
 type PhotoStore interface {
-	// Create guarda los metadatos de una nueva foto. Devuelve
+	// Create guarda los metadatos de una nueva foto y devuelve el registro
+	// completo (con CreatedAt ya asignado por la base de datos). Devuelve
 	// ErrRouteOwnedByAnotherUser si la ruta no existe o no es del usuario,
 	// ErrTooManyPhotos si la ruta ya tiene MaxPhotosPerRoute fotos.
-	Create(ctx context.Context, userID int64, photo Photo) error
+	Create(ctx context.Context, userID int64, photo Photo) (Photo, error)
 	// ListByRoute devuelve los metadatos de las fotos de una ruta del
 	// usuario, en orden de captura. Devuelve ErrRouteOwnedByAnotherUser si
 	// la ruta no existe o no es del usuario.

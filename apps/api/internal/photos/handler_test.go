@@ -30,12 +30,13 @@ func newFakePhotoStore() *fakePhotoStore {
 	return &fakePhotoStore{byRoute: map[string][]Photo{}, byID: map[string]Photo{}}
 }
 
-func (f *fakePhotoStore) Create(_ context.Context, _ int64, photo Photo) error {
+func (f *fakePhotoStore) Create(_ context.Context, _ int64, photo Photo) (Photo, error) {
 	if f.createErr != nil {
-		return f.createErr
+		return Photo{}, f.createErr
 	}
+	photo.CreatedAt = "2026-08-07T10:00:00Z"
 	f.created = append(f.created, photo)
-	return nil
+	return photo, nil
 }
 
 func (f *fakePhotoStore) ListByRoute(_ context.Context, _ int64, routeID string) ([]Photo, error) {

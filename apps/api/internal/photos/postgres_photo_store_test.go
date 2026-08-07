@@ -68,7 +68,7 @@ func TestPostgresPhotoStore_CreateThenGetByIDReturnsSamePhoto(t *testing.T) {
 	seedRoute(t, store.Pool, userID, routeID)
 	photo := samplePhoto("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", routeID)
 
-	if err := store.Create(context.Background(), userID, photo); err != nil {
+	if _, err := store.Create(context.Background(), userID, photo); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -88,7 +88,7 @@ func TestPostgresPhotoStore_CreateOnAnotherUsersRouteFails(t *testing.T) {
 	routeID := "22222222-2222-2222-2222-222222222222"
 	seedRoute(t, store.Pool, owner, routeID)
 
-	err := store.Create(context.Background(), attacker, samplePhoto("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", routeID))
+	_, err := store.Create(context.Background(), attacker, samplePhoto("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", routeID))
 	if err != ErrRouteOwnedByAnotherUser {
 		t.Fatalf("expected ErrRouteOwnedByAnotherUser, got %v", err)
 	}
@@ -106,7 +106,7 @@ func TestPostgresPhotoStore_CreateOnNonExistentRouteFails(t *testing.T) {
 	store := testPhotoStore(t)
 	userID := seedUser(t, store.Pool, "rider2@example.com")
 
-	err := store.Create(context.Background(), userID, samplePhoto("cccccccc-cccc-cccc-cccc-cccccccccccc", "99999999-9999-9999-9999-999999999999"))
+	_, err := store.Create(context.Background(), userID, samplePhoto("cccccccc-cccc-cccc-cccc-cccccccccccc", "99999999-9999-9999-9999-999999999999"))
 	if err != ErrRouteOwnedByAnotherUser {
 		t.Fatalf("expected ErrRouteOwnedByAnotherUser, got %v", err)
 	}
@@ -120,12 +120,12 @@ func TestPostgresPhotoStore_CreateRejectsWhenRouteAlreadyHasMaxPhotos(t *testing
 
 	for i := 0; i < MaxPhotosPerRoute; i++ {
 		photo := samplePhoto(uuid.NewString(), routeID)
-		if err := store.Create(context.Background(), userID, photo); err != nil {
+		if _, err := store.Create(context.Background(), userID, photo); err != nil {
 			t.Fatalf("unexpected error seeding photo %d: %v", i, err)
 		}
 	}
 
-	err := store.Create(context.Background(), userID, samplePhoto(uuid.NewString(), routeID))
+	_, err := store.Create(context.Background(), userID, samplePhoto(uuid.NewString(), routeID))
 	if err != ErrTooManyPhotos {
 		t.Fatalf("expected ErrTooManyPhotos, got %v", err)
 	}
@@ -176,7 +176,7 @@ func TestPostgresPhotoStore_DeleteRemovesPhotoFromListing(t *testing.T) {
 	routeID := "88888888-8888-8888-8888-888888888888"
 	seedRoute(t, store.Pool, userID, routeID)
 	photo := samplePhoto("dddddddd-dddd-dddd-dddd-dddddddddddd", routeID)
-	if err := store.Create(context.Background(), userID, photo); err != nil {
+	if _, err := store.Create(context.Background(), userID, photo); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -200,7 +200,7 @@ func TestPostgresPhotoStore_DeleteOnAnotherUsersRouteFailsWithoutDeleting(t *tes
 	routeID := "aaaaaaaa-1111-1111-1111-111111111111"
 	seedRoute(t, store.Pool, owner, routeID)
 	photo := samplePhoto("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee", routeID)
-	if err := store.Create(context.Background(), owner, photo); err != nil {
+	if _, err := store.Create(context.Background(), owner, photo); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

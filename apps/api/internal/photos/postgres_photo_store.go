@@ -19,35 +19,42 @@ type PostgresPhotoStore struct {
 
 // Create guarda los metadatos de una nueva foto tras comprobar que la ruta
 // pertenece al usuario y que no supera MaxPhotosPerRoute.
-func (s PostgresPhotoStore) Create(ctx context.Context, userID int64, photo Photo) error {
+func (s PostgresPhotoStore) Create(ctx context.Context, userID int64, photo Photo) (Photo, error) {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
-		return err
+		return Photo{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := checkRouteOwnership(ctx, tx, userID, photo.RouteID); err != nil {
-		return err
+		return Photo{}, err
 	}
 
 	var count int
 	if err := tx.QueryRow(ctx, "SELECT count(*) FROM route_photos WHERE route_id = $1", photo.RouteID).Scan(&count); err != nil {
-		return err
+		return Photo{}, err
 	}
 	if count >= MaxPhotosPerRoute {
-		return ErrTooManyPhotos
+		return Photo{}, ErrTooManyPhotos
 	}
 
-	_, err = tx.Exec(ctx, `
+	var createdAt time.Time
+	err = tx.QueryRow(ctx, `
 		INSERT INTO route_photos (id, route_id, object_key, mime_type, latitude, longitude, captured_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING created_at`,
 		photo.ID, photo.RouteID, photo.ObjectKey, photo.MimeType, photo.Latitude, photo.Longitude, photo.CapturedAt,
-	)
+	).Scan(&createdAt)
 	if err != nil {
-		return err
+		return Photo{}, err
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return Photo{}, err
+	}
+
+	photo.CreatedAt = createdAt.Format(time.RFC3339)
+	return photo, nil
 }
 
 // ListByRoute devuelve los metadatos de las fotos de una ruta del usuario, en orden de captura.

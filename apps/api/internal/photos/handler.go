@@ -134,12 +134,13 @@ func UploadHandler(photoStore PhotoStore, blobStore BlobStore, encryptionKey []b
 			return
 		}
 
-		if err := photoStore.Create(r.Context(), userID, photo); err != nil {
+		created, err := photoStore.Create(r.Context(), userID, photo)
+		if err != nil {
 			writeStoreError(w, err)
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, photo)
+		writeJSON(w, http.StatusCreated, created)
 	})
 }
 
