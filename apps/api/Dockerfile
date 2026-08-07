@@ -7,6 +7,9 @@
 # Questions). El binario resultante es estático: la etapa de runtime no
 # necesita el toolchain de Go, solo el binario — se mantiene debian:trixie-slim
 # para paridad operativa con el resto del monorepo (ver ADR-034).
+# El runtime ejecuta el binario como usuario no-root (appuser, ver
+# hardening-despliegue-servidor): el servicio no necesita privilegios de
+# superusuario para escuchar en :8080 ni para hablar con Postgres por loopback.
 
 FROM golang:1.25-trixie AS build
 WORKDIR /app
@@ -25,7 +28,21 @@ FROM debian:trixie-slim AS runtime
 # revisión de código.
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Usuario no-root para el proceso de la API: el contenedor corre con
+# network_mode: host y escucha en :8080 (>1024), así que ningún privilegio
+# de root es necesario. Un compromiso del proceso no otorga control root
+# del contenedor.
+RUN groupadd --system appuser && useradd --system --gid appuser --no-create-home appuser
+
 WORKDIR /app
 COPY --from=build /app/bin/api ./api
+
+# El binario y el directorio de trabajo deben ser legibles/ejecutables por
+# appuser. Sin volúmenes de escritura en el contenedor (Postgres es externo),
+# appuser solo necesita lectura/ejecución.
+RUN chown -R appuser:appuser /app
+
+USER appuser
 EXPOSE 8080
 ENTRYPOINT ["./api"]

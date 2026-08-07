@@ -54,3 +54,7 @@ Desktop.ini
 
 # scripts/pull-db.ps1 export
 moto-routes-export.db
+
+# scripts/deploy-prod.sh — datos de conexión al servidor de producción (host/usuario/URL),
+# no versionados por ser repo público (ver ADR-033/035, hardening-despliegue-servidor).
+scripts/.env.deploy.local
