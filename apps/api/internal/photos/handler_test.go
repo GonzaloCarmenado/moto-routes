@@ -307,6 +307,19 @@ func TestListHandler_EmptyWhenNoPhotos(t *testing.T) {
 	}
 }
 
+func TestListHandler_WithoutTokenReturns401(t *testing.T) {
+	handler := auth.RequireAuth(testIssuer())(ListHandler(newFakePhotoStore()))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/routes/route-1/photos", nil)
+	req = withURLParams(req, map[string]string{"id": "route-1"})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", rec.Code)
+	}
+}
+
 func TestListHandler_OnAnotherUsersRouteReturns404(t *testing.T) {
 	photoStore := newFakePhotoStore()
 	photoStore.getErr = ErrRouteOwnedByAnotherUser
@@ -386,6 +399,19 @@ func TestDownloadHandler_OnAnotherUsersRouteReturns404(t *testing.T) {
 	}
 }
 
+func TestDownloadHandler_WithoutTokenReturns401(t *testing.T) {
+	handler := auth.RequireAuth(testIssuer())(DownloadHandler(newFakePhotoStore(), newFakeBlobStore(), testKey()))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/routes/route-1/photos/photo-1", nil)
+	req = withURLParams(req, map[string]string{"id": "route-1", "photoId": "photo-1"})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", rec.Code)
+	}
+}
+
 func TestDeleteHandler_DeletesFromBlobStoreThenMetadata(t *testing.T) {
 	photoStore := newFakePhotoStore()
 	photoStore.byID["photo-1"] = Photo{ID: "photo-1", RouteID: "route-1", ObjectKey: "routes/route-1/photo-1"}
@@ -451,5 +477,18 @@ func TestDeleteHandler_BlobStoreFailureDoesNotDeleteMetadata(t *testing.T) {
 	}
 	if len(photoStore.deleted) != 0 {
 		t.Fatal("expected the metadata row to remain when the blob store delete fails")
+	}
+}
+
+func TestDeleteHandler_WithoutTokenReturns401(t *testing.T) {
+	handler := auth.RequireAuth(testIssuer())(DeleteHandler(newFakePhotoStore(), newFakeBlobStore()))
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/routes/route-1/photos/photo-1", nil)
+	req = withURLParams(req, map[string]string{"id": "route-1", "photoId": "photo-1"})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", rec.Code)
 	}
 }
