@@ -403,3 +403,41 @@ jobs:
             Cada release usa un keystore de debug distinto generado en el runner: si
             la instalación falla por incompatibilidad de firma sobre una versión
             anterior, desinstala primero (`adb uninstall com.motoroutes.app`).
+
+  # ADR-044 (despliegue-automatico-backend): despliega apps/api en el servidor
+  # de producción al publicar una release, revirtiendo deliberadamente la
+  # deuda de automatización pendiente desde ADR-033/036/041. `environment: prod`
+  # exige la aprobación explícita de un revisor (ver Settings > Environments)
+  # antes de que este job pueda arrancar -- ningun secret esta disponible ni
+  # se toca el servidor real hasta esa aprobacion.
+  #
+  # No reimplementa git pull / docker compose / verificacion de salud aqui --
+  # toda esa logica vive en scripts/deploy-local.sh, versionado, que es la
+  # shell de login del usuario restringido ci-deploy en el servidor (ver
+  # openspec/changes/despliegue-automatico-backend/design.md Decision 2). Este
+  # job solo une el runner efimero a la tailnet y abre esa sesion SSH --
+  # cualquier comando que se le pida a esa sesion se ignora, solo corre el
+  # script fijo.
+  deploy-prod:
+    name: Deploy apps/api to production
+    needs: [quality-go]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Join tailnet (ephemeral, scoped to tag:ci-deploy)
+        uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
+        with:
+          oauth-client-id: ${{ secrets.CLIENTID }}
+          oauth-secret: ${{ secrets.CLIENTSECRET }}
+          tags: tag:ci-deploy
+
+      - name: Run scripts/deploy-local.sh via ci-deploy's restricted login shell
+        env:
+          PROD_SERVER_HOST: ${{ secrets.PROD_SERVER_HOST }}
+        run: |
+          if [ -z "$PROD_SERVER_HOST" ]; then
+            echo "El secret PROD_SERVER_HOST no esta configurado en el Environment prod." >&2
+            exit 1
+          fi
+          ssh -o StrictHostKeyChecking=accept-new "ci-deploy@${PROD_SERVER_HOST}"
