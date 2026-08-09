@@ -20,4 +20,7 @@ export interface IPhotoRepository {
 
   /** Cuenta las fotos de una ruta (límite de 100 — ver `MAX_PHOTOS_PER_ROUTE`). */
   countByRouteId(routeId: string): Promise<number>;
+
+  /** Marca una foto como subida al backend, guardando su id remoto. */
+  markPhotoSynced(photoId: string, remotePhotoId: string): Promise<void>;
 }

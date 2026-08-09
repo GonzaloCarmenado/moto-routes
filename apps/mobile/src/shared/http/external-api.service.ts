@@ -39,8 +39,13 @@ export interface FetchJsonOptions {
   /** Tiempo máximo de espera en milisegundos antes de abortar la petición. */
   timeoutMs?: number;
   /** Método HTTP. Por defecto `'GET'`. */
-  method?: 'GET' | 'POST';
-  /** Cuerpo de la petición, serializado a JSON con `Content-Type: application/json` añadido automáticamente. */
+  method?: 'GET' | 'POST' | 'DELETE';
+  /**
+   * Cuerpo de la petición. Un `FormData` se envía tal cual, sin serializar a
+   * JSON ni fijar `Content-Type` (el navegador/WebView añade el `boundary`
+   * multipart correcto solo — fijarlo a mano lo rompe). Cualquier otro valor
+   * se serializa a JSON con `Content-Type: application/json` añadido automáticamente.
+   */
   body?: unknown;
   /** Cabeceras adicionales (p. ej. `Authorization`), combinadas con `Content-Type` si hay `body`. */
   headers?: Record<string, string>;
@@ -56,6 +61,23 @@ export interface FetchJsonOptions {
 
 /** Timeout aplicado por defecto cuando no se especifica `options.timeoutMs`. */
 const DEFAULT_TIMEOUT_MS = 8000;
+
+/** Construye el `RequestInit` de `fetchJson` a partir de las opciones y la señal de abort. */
+function buildRequestInit(controller: AbortController, options?: FetchJsonOptions): RequestInit {
+  const method = options?.method ?? 'GET';
+  const hasBody = options?.body !== undefined;
+  const isFormData = options?.body instanceof FormData;
+  const headers = { ...(hasBody && !isFormData ? { 'Content-Type': 'application/json' } : {}), ...options?.headers };
+  const init: RequestInit = { signal: controller.signal, method };
+  if (Object.keys(headers).length > 0) init.headers = headers;
+  if (hasBody) init.body = isFormData ? (options?.body as FormData) : JSON.stringify(options?.body);
+  return init;
+}
+
+/** Una respuesta 204 (p. ej. DELETE) o con Content-Length "0" no tiene cuerpo -- llamar a `response.json()` sobre ella lanzaría por JSON inválido. */
+function hasEmptyBody(response: Response): boolean {
+  return response.status === 204 || response.headers?.get('content-length') === '0';
+}
 
 /**
  * Realiza una petición HTTP y parsea su respuesta como JSON, con timeout
@@ -84,18 +106,19 @@ export async function fetchJson<T>(url: string, options?: FetchJsonOptions): Pro
   try {
     let response: Response;
     try {
-      const method = options?.method ?? 'GET';
-      const hasBody = options?.body !== undefined;
-      const headers = { ...(hasBody ? { 'Content-Type': 'application/json' } : {}), ...options?.headers };
-      const init: RequestInit = { signal: controller.signal, method };
-      if (Object.keys(headers).length > 0) init.headers = headers;
-      if (hasBody) init.body = JSON.stringify(options?.body);
-      response = await fetch(url, init);
+      response = await fetch(url, buildRequestInit(controller, options));
     } catch (err) {
       if (controller.signal.aborted) {
         throw new ExternalApiError('timeout', `Request to ${url} timed out`);
       }
       throw new ExternalApiError('network', `Network error requesting ${url}: ${String(err)}`);
+    }
+
+    if (hasEmptyBody(response)) {
+      if (options?.checkStatus && !response.ok) {
+        throw new ExternalApiError('http-error', `Request to ${url} failed with status ${String(response.status)}`, response.status);
+      }
+      return undefined as T;
     }
 
     let parsed: unknown;

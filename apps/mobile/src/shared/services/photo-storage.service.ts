@@ -93,6 +93,35 @@ export async function getPhotoUrl(filePath: string): Promise<string> {
 }
 
 /**
+ * Decodifica un `data:` URL a `Blob` sin pasar por `fetch()` -- el CSP de la
+ * app (`connect-src`) no incluye `data:` (solo `img-src` lo permite, para
+ * `<img src>`), así que un `fetch()` sobre un `data:` URL queda bloqueado en
+ * silencio por el navegador.
+ */
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [header, base64 = ''] = dataUrl.split(',');
+  const mimeMatch = /data:(.*?);base64/.exec(header ?? '');
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mimeMatch?.[1] ?? 'application/octet-stream' });
+}
+
+/**
+ * Lee los bytes de una foto guardada como `Blob`, para poder subirla al
+ * backend. En Tauri, lee el archivo de appDataDir vía el plugin fs; en
+ * navegador, decodifica el `data:` URL a mano (ver `dataUrlToBlob`).
+ */
+export async function readPhotoBlob(filePath: string): Promise<Blob> {
+  if (isTauri()) {
+    const { readFile } = await import('@tauri-apps/plugin-fs');
+    const bytes = await readFile(filePath);
+    return new Blob([bytes], { type: mimeTypeFromPath(filePath) });
+  }
+  return dataUrlToBlob(filePath);
+}
+
+/**
  * Borra el archivo físico de una foto guardada.
  * En Tauri, usa el plugin fs para borrar de appDataDir/photos/ — el borrado es
  * best-effort (si el archivo ya no existe, no lanza: el objetivo es no dejar

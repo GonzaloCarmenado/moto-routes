@@ -39,6 +39,7 @@ import {
   deletePhotoFile,
   createPhotoRepository,
   buildPhotoMetadata,
+  readPhotoBlob,
 } from './photo-storage.service.js';
 
 /**
@@ -224,6 +225,38 @@ describe('buildPhotoMetadata', () => {
 
     expect(metadata.latitude).toBeNull();
     expect(metadata.longitude).toBeNull();
+  });
+});
+
+describe('readPhotoBlob', () => {
+  afterEach(() => {
+    setTauri(false);
+    vi.clearAllMocks();
+  });
+
+  it('en Tauri, lee los bytes vía plugin-fs y construye un Blob con el mime type correcto', async () => {
+    setTauri(true);
+
+    const blob = await readPhotoBlob('/data/data/com.motoroutes.app/photos/abc.jpg');
+
+    expect(readFileMock).toHaveBeenCalledWith('/data/data/com.motoroutes.app/photos/abc.jpg');
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.type).toBe('image/jpeg');
+  });
+
+  it('fuera de Tauri, decodifica el data URL a Blob a mano, sin fetch() (bloqueado por CSP connect-src) ni plugin-fs', async () => {
+    const dataUrl = `data:image/jpeg;base64,${btoa('fake-image')}`;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    const blob = await readPhotoBlob(dataUrl);
+
+    expect(readFileMock).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.type).toBe('image/jpeg');
+    expect(blob.size).toBe('fake-image'.length);
+
+    fetchSpy.mockRestore();
   });
 });
 

@@ -35,10 +35,17 @@ export class MemoryPhotoRepository implements IPhotoRepository {
       ...photo,
       id,
       createdAt,
+      remotePhotoId: null,
     };
     this.photos.push(newPhoto);
     savePhotos(this.photos);
     return Promise.resolve(newPhoto);
+  }
+
+  markPhotoSynced(photoId: string, remotePhotoId: string): Promise<void> {
+    this.photos = loadPhotos().map((p) => (p.id === photoId ? { ...p, remotePhotoId } : p));
+    savePhotos(this.photos);
+    return Promise.resolve();
   }
 
   getByRouteId(routeId: string): Promise<Photo[]> {

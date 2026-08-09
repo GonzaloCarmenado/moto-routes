@@ -1,19 +1,62 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { uploadRouteToCloud, loadCloudRouteDetail, checkIfRouteIsSynced, autoResyncIfNeeded } from './route-detail-cloud.service.js';
+import {
+  uploadRouteToCloud, loadCloudRouteDetail, checkIfRouteIsSynced, autoResyncIfNeeded, uploadPhotoToCloud, deletePhotoFromCloud,
+} from './route-detail-cloud.service.js';
 import { uploadRoute, fetchCloudRouteDetail, fetchCloudRoutes, RouteCloudApiError } from '../../shared/http/route-cloud-api.service.js';
 import type * as RouteCloudApiService from '../../shared/http/route-cloud-api.service.js';
+import { uploadRoutePhoto, deleteRoutePhoto, PhotoCloudApiError } from '../../shared/http/photo-cloud-api.service.js';
+import type * as PhotoCloudApiService from '../../shared/http/photo-cloud-api.service.js';
+import { readPhotoBlob } from '../../shared/services/photo-storage.service.js';
+import type * as PhotoStorageService from '../../shared/services/photo-storage.service.js';
 import { showToast } from '../../shared/feedback/toast.js';
 import { MemoryRouteRepository } from '../../shared/repositories/memory-route.repository.js';
+import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
+import type { Photo } from '../../shared/models/photo.types.js';
 
 vi.mock('../../shared/http/route-cloud-api.service.js', async (importOriginal) => {
   const actual = await importOriginal<typeof RouteCloudApiService>();
   return { ...actual, uploadRoute: vi.fn(), fetchCloudRouteDetail: vi.fn(), fetchCloudRoutes: vi.fn() };
 });
 
+vi.mock('../../shared/http/photo-cloud-api.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof PhotoCloudApiService>();
+  return { ...actual, uploadRoutePhoto: vi.fn(), deleteRoutePhoto: vi.fn() };
+});
+
+vi.mock('../../shared/services/photo-storage.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof PhotoStorageService>();
+  return { ...actual, readPhotoBlob: vi.fn() };
+});
+
 vi.mock('../../shared/feedback/toast.js', () => ({ showToast: vi.fn((): (() => void) => (): void => undefined) }));
 
 const BASE_URL = 'http://localhost:8080';
 const SESSION = { token: 'jwt-token', email: 'rider@example.com' };
+
+function makePhoto(overrides?: Partial<Photo>): Photo {
+  return {
+    id: 'photo-1',
+    routeId: 'route-1',
+    filePath: '/photos/photo-1.jpg',
+    latitude: 40.1,
+    longitude: -3.1,
+    capturedAt: '2026-08-09T10:00:00.000Z',
+    createdAt: '2026-08-09T10:00:00.000Z',
+    remotePhotoId: null,
+    ...overrides,
+  };
+}
+
+function makePhotoRepo(): IPhotoRepository {
+  return {
+    add: vi.fn(),
+    getByRouteId: vi.fn(),
+    getById: vi.fn(),
+    delete: vi.fn(),
+    countByRouteId: vi.fn(),
+    markPhotoSynced: vi.fn().mockResolvedValue(undefined),
+  };
+}
 
 describe('uploadRouteToCloud', () => {
   afterEach(() => {
@@ -152,6 +195,117 @@ describe('autoResyncIfNeeded', () => {
     vi.mocked(uploadRoute).mockRejectedValue(new Error('network down'));
 
     await expect(autoResyncIfNeeded({ apiBaseUrl: BASE_URL, session: SESSION, repository, route, isSynced: true })).resolves.toBeUndefined();
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('network down'), 'error');
+  });
+});
+
+describe('uploadPhotoToCloud', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('si la ruta está sincronizada, lee los bytes, sube la foto y marca el id remoto en el repositorio', async () => {
+    const photoRepo = makePhotoRepo();
+    const photo = makePhoto();
+    const blob = new Blob(['x'], { type: 'image/jpeg' });
+    vi.mocked(readPhotoBlob).mockResolvedValue(blob);
+    vi.mocked(uploadRoutePhoto).mockResolvedValue({ id: 'remote-photo-1' });
+
+    await uploadPhotoToCloud({ apiBaseUrl: BASE_URL, session: SESSION, photoRepo, routeId: 'route-1', photo, isSynced: true });
+
+    expect(readPhotoBlob).toHaveBeenCalledWith(photo.filePath);
+    expect(uploadRoutePhoto).toHaveBeenCalledWith(BASE_URL, SESSION.token, 'route-1', expect.objectContaining({
+      file: blob,
+      latitude: 40.1,
+      longitude: -3.1,
+      capturedAt: photo.capturedAt,
+    }));
+    expect(photoRepo.markPhotoSynced).toHaveBeenCalledWith('photo-1', 'remote-photo-1');
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it('si la ruta no está sincronizada, no hace nada', async () => {
+    const photoRepo = makePhotoRepo();
+
+    await uploadPhotoToCloud({ apiBaseUrl: BASE_URL, session: SESSION, photoRepo, routeId: 'route-1', photo: makePhoto(), isSynced: false });
+
+    expect(readPhotoBlob).not.toHaveBeenCalled();
+    expect(uploadRoutePhoto).not.toHaveBeenCalled();
+  });
+
+  it('si la subida falla, muestra un aviso discreto sin lanzar y no marca la foto como sincronizada', async () => {
+    const photoRepo = makePhotoRepo();
+    vi.mocked(readPhotoBlob).mockResolvedValue(new Blob(['x']));
+    vi.mocked(uploadRoutePhoto).mockRejectedValue(new Error('network down'));
+
+    await expect(uploadPhotoToCloud({
+      apiBaseUrl: BASE_URL, session: SESSION, photoRepo, routeId: 'route-1', photo: makePhoto(), isSynced: true,
+    })).resolves.toBeUndefined();
+
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('network down'), 'error');
+    expect(photoRepo.markPhotoSynced).not.toHaveBeenCalled();
+  });
+
+  it('si el servidor rechaza la foto por tamaño excesivo, la foto local no se pierde ni se marca como sincronizada', async () => {
+    const photoRepo = makePhotoRepo();
+    vi.mocked(readPhotoBlob).mockResolvedValue(new Blob(['x']));
+    vi.mocked(uploadRoutePhoto).mockRejectedValue(new PhotoCloudApiError('too-large', 'photo exceeds the maximum allowed size'));
+
+    await expect(uploadPhotoToCloud({
+      apiBaseUrl: BASE_URL, session: SESSION, photoRepo, routeId: 'route-1', photo: makePhoto(), isSynced: true,
+    })).resolves.toBeUndefined();
+
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('maximum allowed size'), 'error');
+    expect(photoRepo.markPhotoSynced).not.toHaveBeenCalled();
+  });
+
+  it('si el servidor rechaza la foto porque la ruta ya alcanzó el máximo de fotos, la foto local no se pierde ni se marca como sincronizada', async () => {
+    const photoRepo = makePhotoRepo();
+    vi.mocked(readPhotoBlob).mockResolvedValue(new Blob(['x']));
+    vi.mocked(uploadRoutePhoto).mockRejectedValue(new PhotoCloudApiError('too-many-photos', 'route already has the maximum number of photos'));
+
+    await expect(uploadPhotoToCloud({
+      apiBaseUrl: BASE_URL, session: SESSION, photoRepo, routeId: 'route-1', photo: makePhoto(), isSynced: true,
+    })).resolves.toBeUndefined();
+
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('maximum number of photos'), 'error');
+    expect(photoRepo.markPhotoSynced).not.toHaveBeenCalled();
+  });
+});
+
+describe('deletePhotoFromCloud', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('si la ruta está sincronizada y la foto tiene id remoto, la borra del servidor', async () => {
+    vi.mocked(deleteRoutePhoto).mockResolvedValue(undefined);
+
+    await deletePhotoFromCloud({ apiBaseUrl: BASE_URL, session: SESSION, routeId: 'route-1', remotePhotoId: 'remote-photo-1', isSynced: true });
+
+    expect(deleteRoutePhoto).toHaveBeenCalledWith(BASE_URL, SESSION.token, 'route-1', 'remote-photo-1');
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it('si la foto nunca se subió (remotePhotoId null), no hace ninguna llamada de red', async () => {
+    await deletePhotoFromCloud({ apiBaseUrl: BASE_URL, session: SESSION, routeId: 'route-1', remotePhotoId: null, isSynced: true });
+
+    expect(deleteRoutePhoto).not.toHaveBeenCalled();
+  });
+
+  it('si la ruta no está sincronizada, no hace nada aunque haya id remoto', async () => {
+    await deletePhotoFromCloud({ apiBaseUrl: BASE_URL, session: SESSION, routeId: 'route-1', remotePhotoId: 'remote-photo-1', isSynced: false });
+
+    expect(deleteRoutePhoto).not.toHaveBeenCalled();
+  });
+
+  it('si el borrado remoto falla, muestra un aviso discreto sin lanzar', async () => {
+    vi.mocked(deleteRoutePhoto).mockRejectedValue(new Error('network down'));
+
+    await expect(deletePhotoFromCloud({
+      apiBaseUrl: BASE_URL, session: SESSION, routeId: 'route-1', remotePhotoId: 'remote-photo-1', isSynced: true,
+    })).resolves.toBeUndefined();
+
     expect(showToast).toHaveBeenCalledWith(expect.stringContaining('network down'), 'error');
   });
 });

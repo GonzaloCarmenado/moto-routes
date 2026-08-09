@@ -21,6 +21,7 @@ function createMockRepo(): IPhotoRepository {
     getById: vi.fn().mockResolvedValue(null),
     delete: vi.fn().mockResolvedValue(undefined),
     countByRouteId: vi.fn().mockResolvedValue(0),
+    markPhotoSynced: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -85,6 +86,18 @@ describe('persistCapturedPhoto', () => {
     const photo = await persistCapturedPhoto({ file: mockFile, routeId, photoRepo, routePoints: [] });
     expect(photo.latitude).toBeNull();
     expect(photo.longitude).toBeNull();
+  });
+
+  it('returns the entity persisted by the repository (with its generated id), not just the input metadata', async () => {
+    const persisted = {
+      routeId, filePath: 'stored/path.jpg', latitude: null, longitude: null,
+      capturedAt: '2026-01-01T00:00:00.000Z', id: 'photo-generated-id', createdAt: '2026-01-01T00:00:00.000Z', remotePhotoId: null,
+    };
+    const repoReturningPersisted: IPhotoRepository = { ...photoRepo, add: vi.fn().mockResolvedValue(persisted) };
+
+    const photo = await persistCapturedPhoto({ file: mockFile, routeId, photoRepo: repoReturningPersisted, routePoints: [] });
+
+    expect(photo).toEqual(persisted);
   });
 
   it('propagates a repository failure and surfaces its message', async () => {

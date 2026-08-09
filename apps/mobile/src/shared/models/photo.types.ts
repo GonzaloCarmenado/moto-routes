@@ -17,6 +17,8 @@ export interface Photo {
   readonly longitude: number | null;
   readonly capturedAt: string; // ISO 8601
   readonly createdAt: string; // ISO 8601
+  /** Id de esta foto en el backend de fotos, o `null` si nunca se ha subido. */
+  readonly remotePhotoId: string | null;
 }
 
 /* ------------------------------------------------------------------ */

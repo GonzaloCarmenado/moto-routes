@@ -188,4 +188,56 @@ describe('fetchJson', () => {
     expect(headers.Authorization).toBe('Bearer jwt-token');
     expect(headers['Content-Type']).toBeUndefined();
   });
+
+  it('con method DELETE, no envía body ni Content-Type', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 204, json: () => Promise.resolve(undefined) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchJson('https://example.com/x', { method: 'DELETE', headers: { Authorization: 'Bearer jwt-token' } });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(init.method).toBe('DELETE');
+    expect(init.body).toBeUndefined();
+    expect(headers['Content-Type']).toBeUndefined();
+  });
+
+  it('con body FormData, lo envía tal cual sin serializarlo a JSON ni fijar Content-Type', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    vi.stubGlobal('fetch', fetchMock);
+    const formData = new FormData();
+    formData.append('photo', new Blob(['x']), 'photo.jpg');
+
+    await fetchJson('https://example.com/x', { method: 'POST', body: formData });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = (init.headers ?? {}) as Record<string, string>;
+    expect(init.body).toBe(formData);
+    expect(headers['Content-Type']).toBeUndefined();
+  });
+
+  it('con status 204, resuelve a undefined sin llamar a response.json()', async () => {
+    const jsonSpy = vi.fn().mockResolvedValue({ should: 'not be read' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 204, json: jsonSpy }));
+
+    const result = await fetchJson('https://example.com/x', { method: 'DELETE' });
+
+    expect(result).toBeUndefined();
+    expect(jsonSpy).not.toHaveBeenCalled();
+  });
+
+  it('con Content-Length "0" y sin status 204, también resuelve a undefined sin llamar a response.json()', async () => {
+    const jsonSpy = vi.fn().mockResolvedValue({ should: 'not be read' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => (name.toLowerCase() === 'content-length' ? '0' : null) },
+      json: jsonSpy,
+    }));
+
+    const result = await fetchJson('https://example.com/x');
+
+    expect(result).toBeUndefined();
+    expect(jsonSpy).not.toHaveBeenCalled();
+  });
 });
