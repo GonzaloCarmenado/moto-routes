@@ -1,12 +1,14 @@
 import styles from './route-detail.element.css?inline';
 import type { IRouteRepository } from '../../shared/models/route.repository.js';
 import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
+import type { Photo } from '../../shared/models/photo.types.js';
 import type { ISessionRepository } from '../../shared/models/session.repository.js';
 import type { Session } from '../../shared/models/session.types.js';
 import type { Route, RoutePoint, RouteStop } from '../../shared/models/route.types.js';
 import type { IStopTypesCacheRepository } from '../../shared/models/stop-types-cache.repository.js';
 import { getApiBaseUrl } from '../../shared/http/api-config.js';
-import { loadCloudRouteDetail, checkIfRouteIsSynced, autoResyncIfNeeded } from './route-detail-cloud.service.js';
+import { loadCloudRouteDetail, checkIfRouteIsSynced } from './route-detail-cloud.service.js';
+import { triggerAutoResync, triggerPhotoUpload, triggerPhotoDelete, type SyncTriggerContext } from './route-detail-sync-triggers.js';
 import { buildSyncIconButton } from './route-detail-cloud-upload.js';
 import { buildLoadingState, buildEmptyMessage, buildLoadErrorMessage } from './route-detail-states.js';
 import type { StopCategory } from '../../shared/stop-types/stop-types.types.js';
@@ -21,7 +23,7 @@ import '../../shared/photo-capture/photo-capture.element.js';
 import type { PhotoCaptureElement } from '../../shared/photo-capture/photo-capture.element.js';
 import { createPhotoRepository } from '../../shared/services/photo-storage.service.js';
 import { captureFromCamera, pickFromGallery } from '../../shared/services/photo-capture-adapter.service.js';
-import { addPhotoToRoute } from './route-detail-photo.service.js';
+import { addPhotoToRoute, syncPhotoRemoteState } from './route-detail-photo.service.js';
 import { deletePhotoWithConfirmation } from '../../shared/services/photo-delete.service.js';
 import { getPhotoUrl } from '../../shared/services/photo-storage.service.js';
 import { toErrorMessage } from '../../shared/utils/errors.js';
@@ -300,24 +302,13 @@ class RouteDetail extends BaseElement {
   private async handleSaveNote(route: Route, textarea: HTMLTextAreaElement): Promise<boolean> {
     if (!this._repository) return false;
     const saved = await saveRouteNote(this._repository, route, textarea);
-    if (saved) this.triggerAutoResync(route);
+    if (saved) triggerAutoResync(this.syncContext(), route);
     return saved;
   }
 
-  /**
-   * Re-sube en segundo plano una ruta ya sincronizada tras una nota o foto
-   * modificada localmente — no hace nada si la ruta nunca se ha subido (ver
-   * `autoResyncIfNeeded`, design.md Decisión 10).
-   */
-  private triggerAutoResync(route: Route): void {
-    if (!this._session || !this._repository) return;
-    void autoResyncIfNeeded({
-      apiBaseUrl: getApiBaseUrl(),
-      session: this._session,
-      repository: this._repository,
-      route,
-      isSynced: this._isSynced,
-    });
+  /** Contexto común a los triggers de sincronización en segundo plano (ver `route-detail-sync-triggers.ts`). */
+  private syncContext(): SyncTriggerContext {
+    return { session: this._session, routeId: this._routeId, repository: this._repository, isSynced: this._isSynced };
   }
 
   /** "Estadísticas": placeholder de gráfica ya existente, sin cambios (AC-007). */
@@ -388,13 +379,14 @@ class RouteDetail extends BaseElement {
     );
   }
 
-  /** Persiste una foto y devuelve si se guardó de verdad (muestra su propio toast de error). */
-  private async persistSinglePhoto(file: File, photoRepo: IPhotoRepository): Promise<boolean> {
+  /** Persiste una foto y devuelve la entidad creada, o `null` si falló (muestra su propio toast de error). */
+  private async persistSinglePhoto(file: File, photoRepo: IPhotoRepository): Promise<Photo | null> {
     try {
-      return Boolean(await addPhotoToRoute(file, this._routeId!, photoRepo, this._points));
+      const result = await addPhotoToRoute(file, this._routeId!, photoRepo, this._points);
+      return result?.photo ?? null;
     } catch (err) {
       showToast(`⚠️ ${toErrorMessage(err, 'Error al añadir la foto')}`, 'error');
-      return false;
+      return null;
     }
   }
 
@@ -414,12 +406,13 @@ class RouteDetail extends BaseElement {
     if (this._photoCaptureEl) this._photoCaptureEl.loading = true;
     try {
       const photoRepo = await this.getPhotoRepo();
-      let addedAny = false;
+      const addedPhotos: Photo[] = [];
       for (const file of files) {
-        if (await this.persistSinglePhoto(file, photoRepo)) addedAny = true;
+        const photo = await this.persistSinglePhoto(file, photoRepo);
+        if (photo) addedPhotos.push(photo);
       }
 
-      if (addedAny) {
+      if (addedPhotos.length > 0) {
         // Refresh photos with proper URLs (handles Tauri convertFileSrc)
         this._photos = await Promise.all(
           (await photoRepo.getByRouteId(this._routeId)).map(async (p) => ({
@@ -428,11 +421,13 @@ class RouteDetail extends BaseElement {
           })),
         );
         this.refreshAllPanels();
-        // Re-sube solo metadatos/puntos/paradas (nunca la foto en sí — fuera
-        // de alcance hasta que exista blob storage, ver design.md Decisión 10).
-        // TODO: cuando se implemente la subida de fotos, esta foto también
-        // debe subirse aquí, no solo re-sincronizar los metadatos de la ruta.
-        if (this._route) this.triggerAutoResync(this._route);
+        // Re-sube metadatos/puntos/paradas y, además, cada foto en sí (subida
+        // secuencial, no en paralelo — ver design.md Decisión 6).
+        if (this._route) triggerAutoResync(this.syncContext(), this._route);
+        for (const photo of addedPhotos) {
+          void triggerPhotoUpload(this.syncContext(), photoRepo, photo)
+            .then(async () => { this._photos = await syncPhotoRemoteState(this._photos, photoRepo, photo.id); });
+        }
       }
     } finally {
       if (this._photoCaptureEl) this._photoCaptureEl.loading = false;
@@ -505,8 +500,11 @@ class RouteDetail extends BaseElement {
     this._photos = this._photos.filter((p) => p.id !== photoId);
     this.refreshAllPanels();
     showToast('Foto eliminada', 'success');
-    // TODO: cuando exista subida de fotos, borrar aquí también la copia remota.
-    if (this._route) this.triggerAutoResync(this._route);
+    if (this._route) triggerAutoResync(this.syncContext(), this._route);
+    // El remotePhotoId se captura del objeto `photo` ya cargado, antes de que
+    // deletePhotoWithConfirmation() borre la fila local — una vez borrada ya
+    // no sería recuperable (ver design.md Decisión 5).
+    triggerPhotoDelete(this.syncContext(), photo.remotePhotoId);
     return true;
   }
 }

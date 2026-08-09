@@ -32,6 +32,12 @@ function createMockDb(): SqlDb {
         rows = rows.filter((r) => r.id !== id && r.route_id !== id);
         return Promise.resolve({ rowsAffected: 1 });
       }
+      if (upper.startsWith('UPDATE PHOTOS SET REMOTE_PHOTO_ID')) {
+        const [remotePhotoId, id] = params as [string, string];
+        const row = rows.find((r) => r.id === id);
+        if (row) row.remote_photo_id = remotePhotoId;
+        return Promise.resolve({ rowsAffected: row ? 1 : 0 });
+      }
       return Promise.resolve({ rowsAffected: 0 });
     }),
     select: vi.fn((sql: string, params?: unknown[]) => {
@@ -161,5 +167,87 @@ describe('SqlitePhotoRepository', () => {
     expect(db.select).toBeDefined();
     // The mock itself enforces parameterized queries by only matching
     // calls that include params — safe by construction in this test pattern.
+  });
+
+  it('should initialize remotePhotoId to null on add', async () => {
+    const photo = await repo.add(makeCreatePhoto());
+    expect(photo.remotePhotoId).toBeNull();
+  });
+
+  it('markPhotoSynced() persists the remote id and getById/getByRouteId reflect it', async () => {
+    const added = await repo.add(makeCreatePhoto());
+
+    await repo.markPhotoSynced(added.id, 'remote-photo-1');
+
+    const byId = await repo.getById(added.id);
+    expect(byId?.remotePhotoId).toBe('remote-photo-1');
+    const byRoute = await repo.getByRouteId('route-1');
+    expect(byRoute[0]?.remotePhotoId).toBe('remote-photo-1');
+  });
+});
+
+/**
+ * Mock dedicado para el mecanismo de migración de columna `remote_photo_id`
+ * -- mismo patrón que `remote_photo_id column migration` de
+ * `sqlite-route.repository.spec.ts` (el mock compartido de arriba no modela
+ * `PRAGMA table_info`).
+ */
+function createMigrationMockDb(hasRemotePhotoIdColumn: boolean): { db: SqlDb; alterTableCalls: string[] } {
+  const alterTableCalls: string[] = [];
+  const columnInfo = hasRemotePhotoIdColumn
+    ? [{ name: 'id' }, { name: 'route_id' }, { name: 'remote_photo_id' }]
+    : [{ name: 'id' }, { name: 'route_id' }];
+  const preexistingRow = {
+    id: 'legacy-photo-1', route_id: 'route-1', file_path: '/photos/legacy.jpg', latitude: null, longitude: null,
+    captured_at: '2026-01-01T00:00:00.000Z', created_at: '2026-01-01T00:00:00.000Z',
+  };
+
+  return {
+    alterTableCalls,
+    db: {
+      execute: vi.fn((sql: string) => {
+        const upper = sql.trim().toUpperCase();
+        if (upper.startsWith('ALTER TABLE')) alterTableCalls.push(sql.trim());
+        return Promise.resolve({ rowsAffected: 0 });
+      }),
+      select: vi.fn((sql: string) => {
+        const upper = sql.trim().toUpperCase();
+        if (upper.startsWith('PRAGMA TABLE_INFO')) return Promise.resolve(columnInfo);
+        if (upper.startsWith('SELECT * FROM PHOTOS')) return Promise.resolve([{ ...preexistingRow }]);
+        return Promise.resolve([]);
+      }),
+    },
+  };
+}
+
+describe('remote_photo_id column migration', () => {
+  it('runs ALTER TABLE exactly once when remote_photo_id is missing from a preexisting photos table, keeping the existing row intact', async () => {
+    const { db, alterTableCalls } = createMigrationMockDb(false);
+    const repo = new SqlitePhotoRepository(db);
+
+    const all = await repo.getByRouteId('route-1');
+
+    expect(alterTableCalls).toEqual(['ALTER TABLE photos ADD COLUMN remote_photo_id TEXT;']);
+    expect(all).toHaveLength(1);
+    expect(all[0]!.id).toBe('legacy-photo-1');
+    expect(all[0]!.remotePhotoId).toBeNull();
+  });
+
+  it('does not run ALTER TABLE when remote_photo_id already exists', async () => {
+    const { db, alterTableCalls } = createMigrationMockDb(true);
+    const repo = new SqlitePhotoRepository(db);
+
+    await repo.getByRouteId('route-1');
+
+    expect(alterTableCalls).toHaveLength(0);
+  });
+
+  it('runs the migration exactly once when two callers race on the same shared repository instance', async () => {
+    const { db, alterTableCalls } = createMigrationMockDb(false);
+    const repo = new SqlitePhotoRepository(db);
+
+    await Promise.all([repo.getByRouteId('route-1'), repo.getByRouteId('route-1')]);
+
+    expect(alterTableCalls).toHaveLength(1);
   });
 });

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { addPhotoToRoute } from './route-detail-photo.service.js';
+import { addPhotoToRoute, syncPhotoRemoteState } from './route-detail-photo.service.js';
 import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
 import type { CreatePhoto } from '../../shared/models/photo.types.js';
+import type { PhotoWithUrl } from './route-detail.types.js';
 
 function createMockRepo(): IPhotoRepository {
   return {
@@ -12,6 +13,7 @@ function createMockRepo(): IPhotoRepository {
     getById: vi.fn().mockResolvedValue(null),
     delete: vi.fn().mockResolvedValue(undefined),
     countByRouteId: vi.fn().mockResolvedValue(0),
+    markPhotoSynced: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -70,5 +72,48 @@ describe('addPhotoToRoute', () => {
     const result = await addPhotoToRoute(mockFile, routeId, photoRepo);
     expect(result?.objectUrl).toBeTruthy();
     expect(typeof result?.objectUrl).toBe('string');
+  });
+});
+
+describe('syncPhotoRemoteState', () => {
+  function makePhotoWithUrl(overrides?: Partial<PhotoWithUrl>): PhotoWithUrl {
+    return {
+      id: 'photo-1', routeId: 'route-1', filePath: 'a.jpg', latitude: null, longitude: null,
+      capturedAt: '2026-01-01T00:00:00.000Z', createdAt: '2026-01-01T00:00:00.000Z',
+      remotePhotoId: null, objectUrl: 'blob:x',
+      ...overrides,
+    };
+  }
+
+  it('refleja en la lista el remotePhotoId que el repositorio tiene para esa foto', async () => {
+    const photos = [makePhotoWithUrl()];
+    const repo = {
+      getById: vi.fn().mockResolvedValue({ ...makePhotoWithUrl(), remotePhotoId: 'remote-photo-1' }),
+    } as unknown as IPhotoRepository;
+
+    const result = await syncPhotoRemoteState(photos, repo, 'photo-1');
+
+    expect(result[0]?.remotePhotoId).toBe('remote-photo-1');
+    expect(result[0]?.objectUrl).toBe('blob:x'); // no toca campos que no vienen del repositorio
+  });
+
+  it('deja la lista intacta si la foto ya no existe en el repositorio (borrada mientras tanto)', async () => {
+    const photos = [makePhotoWithUrl()];
+    const repo = { getById: vi.fn().mockResolvedValue(null) } as unknown as IPhotoRepository;
+
+    const result = await syncPhotoRemoteState(photos, repo, 'photo-1');
+
+    expect(result).toEqual(photos);
+  });
+
+  it('no toca otras fotos de la lista', async () => {
+    const photos = [makePhotoWithUrl({ id: 'photo-1' }), makePhotoWithUrl({ id: 'photo-2' })];
+    const repo = {
+      getById: vi.fn().mockResolvedValue({ ...makePhotoWithUrl(), remotePhotoId: 'remote-photo-1' }),
+    } as unknown as IPhotoRepository;
+
+    const result = await syncPhotoRemoteState(photos, repo, 'photo-1');
+
+    expect(result.find((p) => p.id === 'photo-2')?.remotePhotoId).toBeNull();
   });
 });

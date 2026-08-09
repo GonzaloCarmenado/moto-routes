@@ -145,6 +145,7 @@ function makePhoto(id: string, lat: number, lng: number, objectUrl?: string): Ma
     longitude: lng,
     capturedAt: '2026-07-20T10:00:00.000Z',
     createdAt: '2026-07-20T10:00:00.000Z',
+    remotePhotoId: null,
     ...(objectUrl !== undefined ? { objectUrl } : {}),
   };
 }

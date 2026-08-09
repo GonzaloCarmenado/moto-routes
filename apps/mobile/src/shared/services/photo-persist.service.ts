@@ -8,7 +8,7 @@
  */
 
 import type { IPhotoRepository } from '../models/photo.repository.js';
-import type { CreatePhoto } from '../models/photo.types.js';
+import type { CreatePhoto, Photo } from '../models/photo.types.js';
 import { validatePhoto } from './photo-capture-adapter.service.js';
 import { extractPhotoLocation } from './photo-geolocation.service.js';
 import { savePhotoFile } from './photo-storage.service.js';
@@ -25,11 +25,13 @@ export interface PersistCapturedPhotoParams {
 }
 
 /**
- * Ejecuta el pipeline y devuelve el `CreatePhoto` persistido.
+ * Ejecuta el pipeline y devuelve la entidad `Photo` ya persistida (con su
+ * `id` real asignado por el repositorio, no solo los metadatos de entrada --
+ * necesario para poder subirla al backend de fotos más adelante).
  * Lanza `Error` si la validación falla (formato/tamaño) o si falla el guardado
  * del archivo o la persistencia en BBDD — el llamador decide cómo mostrarlo.
  */
-export async function persistCapturedPhoto(params: PersistCapturedPhotoParams): Promise<CreatePhoto> {
+export async function persistCapturedPhoto(params: PersistCapturedPhotoParams): Promise<Photo> {
   const { file, routeId, photoRepo, fallbackPoint, routePoints } = params;
 
   const validationError = validatePhoto(file);
@@ -45,6 +47,5 @@ export async function persistCapturedPhoto(params: PersistCapturedPhotoParams): 
     longitude: location?.lng ?? null,
     capturedAt: new Date().toISOString(),
   };
-  await photoRepo.add(photo);
-  return photo;
+  return photoRepo.add(photo);
 }

@@ -8,7 +8,7 @@ function createMockPhotoRepo(initial: Photo[] = []): IPhotoRepository {
   let photos = [...initial];
   return {
     add: vi.fn().mockImplementation((photo: CreatePhoto) => {
-      const created: Photo = { ...photo, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+      const created: Photo = { ...photo, id: crypto.randomUUID(), createdAt: new Date().toISOString(), remotePhotoId: null };
       photos.push(created);
       return Promise.resolve(created);
     }),
@@ -21,6 +21,7 @@ function createMockPhotoRepo(initial: Photo[] = []): IPhotoRepository {
       return Promise.resolve();
     }),
     countByRouteId: vi.fn().mockResolvedValue(0),
+    markPhotoSynced: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -49,8 +50,8 @@ describe('deleteRouteAndPhotos', () => {
       [], [],
     );
     const photos: Photo[] = [
-      { id: 'p1', routeId: route.id, filePath: 'a.jpg', latitude: null, longitude: null, capturedAt: 'x', createdAt: 'x' },
-      { id: 'p2', routeId: route.id, filePath: 'b.jpg', latitude: null, longitude: null, capturedAt: 'x', createdAt: 'x' },
+      { id: 'p1', routeId: route.id, filePath: 'a.jpg', latitude: null, longitude: null, capturedAt: 'x', createdAt: 'x', remotePhotoId: null },
+      { id: 'p2', routeId: route.id, filePath: 'b.jpg', latitude: null, longitude: null, capturedAt: 'x', createdAt: 'x', remotePhotoId: null },
     ];
     const photoRepo = createMockPhotoRepo(photos);
 
@@ -72,8 +73,8 @@ describe('deleteRouteAndPhotos', () => {
       [], [],
     );
     const photos: Photo[] = [
-      { id: 'pa', routeId: routeA.id, filePath: 'a.jpg', latitude: null, longitude: null, capturedAt: 'x', createdAt: 'x' },
-      { id: 'pb', routeId: routeB.id, filePath: 'b.jpg', latitude: null, longitude: null, capturedAt: 'x', createdAt: 'x' },
+      { id: 'pa', routeId: routeA.id, filePath: 'a.jpg', latitude: null, longitude: null, capturedAt: 'x', createdAt: 'x', remotePhotoId: null },
+      { id: 'pb', routeId: routeB.id, filePath: 'b.jpg', latitude: null, longitude: null, capturedAt: 'x', createdAt: 'x', remotePhotoId: null },
     ];
     const photoRepo = createMockPhotoRepo(photos);
 

@@ -8,12 +8,13 @@ import '../../shared/feedback/confirm-dialog.element.js';
 function createMockRepo(): IPhotoRepository {
   return {
     add: vi.fn().mockImplementation((photo: CreatePhoto) =>
-      Promise.resolve({ ...photo, id: crypto.randomUUID(), createdAt: new Date().toISOString() }),
+      Promise.resolve({ ...photo, id: crypto.randomUUID(), createdAt: new Date().toISOString(), remotePhotoId: null }),
     ),
     getByRouteId: vi.fn().mockResolvedValue([]),
     getById: vi.fn().mockResolvedValue(null),
     delete: vi.fn().mockResolvedValue(undefined),
     countByRouteId: vi.fn().mockResolvedValue(0),
+    markPhotoSynced: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -154,6 +155,7 @@ describe('deleteCockpitPhoto', () => {
     longitude: null,
     capturedAt: '2026-07-20T10:00:00.000Z',
     createdAt: '2026-07-20T10:00:00.000Z',
+    remotePhotoId: null,
   };
 
   async function confirmPendingDialog(action: 'confirm' | 'cancel'): Promise<void> {

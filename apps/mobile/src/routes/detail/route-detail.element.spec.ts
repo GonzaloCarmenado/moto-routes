@@ -8,7 +8,9 @@ import type { Route } from '../../shared/models/route.types.js';
 import './route-detail.element.js';
 import { pickFromGallery } from '../../shared/services/photo-capture-adapter.service.js';
 import type * as PhotoCaptureAdapter from '../../shared/services/photo-capture-adapter.service.js';
-import { uploadRouteToCloud, loadCloudRouteDetail, checkIfRouteIsSynced, autoResyncIfNeeded } from './route-detail-cloud.service.js';
+import {
+  uploadRouteToCloud, loadCloudRouteDetail, checkIfRouteIsSynced, autoResyncIfNeeded, uploadPhotoToCloud, deletePhotoFromCloud,
+} from './route-detail-cloud.service.js';
 import type * as RouteDetailCloudService from './route-detail-cloud.service.js';
 import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from '../../shared/route-map/route-map.element.js';
 import type { MapPhoto } from '../../shared/route-map/route-map-photos.js';
@@ -26,6 +28,11 @@ vi.mock('./route-detail-cloud.service.js', async (importOriginal) => {
     loadCloudRouteDetail: vi.fn(),
     checkIfRouteIsSynced: vi.fn().mockResolvedValue(false),
     autoResyncIfNeeded: vi.fn(),
+    // uploadPhotoToCloud siempre devuelve una promesa real (nunca undefined):
+    // route-detail.element.ts encadena un .then() sobre su resultado para
+    // refrescar el remotePhotoId en memoria (ver syncPhotoRemoteState).
+    uploadPhotoToCloud: vi.fn().mockResolvedValue(undefined),
+    deletePhotoFromCloud: vi.fn(),
   };
 });
 
@@ -1065,7 +1072,7 @@ describe('route-detail - icono de estado y re-subida automática', () => {
     document.body.removeChild(el);
   });
 
-  it('añadir una foto (desde galería) en una ruta ya sincronizada dispara una re-subida de sus metadatos', async () => {
+  it('añadir una foto (desde galería) en una ruta ya sincronizada dispara su subida además de la re-subida de metadatos', async () => {
     vi.mocked(checkIfRouteIsSynced).mockResolvedValue(true);
     vi.mocked(pickFromGallery).mockResolvedValue([new File([''], 'a.jpg', { type: 'image/jpeg' })]);
 
@@ -1082,16 +1089,67 @@ describe('route-detail - icono de estado y re-subida automática', () => {
       route: expect.objectContaining({ id: savedRoute.id }) as Route,
       isSynced: true,
     });
+    expect(uploadPhotoToCloud).toHaveBeenCalledWith(expect.objectContaining({
+      apiBaseUrl: 'http://localhost:8080',
+      session: { token: 'jwt-token', email: 'rider@example.com' },
+      routeId: savedRoute.id,
+      isSynced: true,
+      photo: expect.objectContaining({ routeId: savedRoute.id }) as unknown,
+    }));
     document.body.removeChild(el);
   });
 
-  it('borrar una foto en una ruta ya sincronizada dispara una re-subida de sus metadatos', async () => {
+  it('tras completarse la subida en segundo plano de una foto, borrarla usa ya su remotePhotoId real (evita quedarse con el estado en memoria obsoleto)', async () => {
+    vi.mocked(checkIfRouteIsSynced).mockResolvedValue(true);
+    vi.mocked(pickFromGallery).mockResolvedValue([new File([''], 'a.jpg', { type: 'image/jpeg' })]);
+    let resolveUpload!: () => void;
+    vi.mocked(uploadPhotoToCloud).mockImplementation(async (options) => {
+      await options.photoRepo.markPhotoSynced(options.photo.id, 'remote-photo-1');
+      await new Promise<void>((resolve) => { resolveUpload = resolve; });
+    });
+
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
+    const photoCapture = root.querySelector('[data-cy="detail-photo-capture"]')!;
+    (photoCapture.shadowRoot!.querySelector('.photo-btn') as HTMLButtonElement).click();
+    (photoCapture.shadowRoot!.querySelector('[data-cy="photo-menu-gallery"]') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 200));
+
+    resolveUpload();
+    await waitRender();
+
+    (galleryRoot(root).querySelector('[data-cy="photo-thumbnail"]') as HTMLElement).click();
+    const viewer = document.body.querySelector('photo-viewer')!;
+    (viewer.shadowRoot!.querySelector('[data-cy="photo-viewer-delete"]') as HTMLButtonElement).click();
+    await waitRender();
+    (document.body.querySelector('confirm-dialog')!.shadowRoot!.querySelector('[data-cy="confirm-dialog-action-confirm"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    expect(deletePhotoFromCloud).toHaveBeenCalledWith(expect.objectContaining({ remotePhotoId: 'remote-photo-1' }));
+    viewer.remove();
+    document.body.removeChild(el);
+  });
+
+  it('añadir una foto (desde galería) en una ruta puramente local delega en uploadPhotoToCloud con isSynced false (el no-op vive ahí, ver Grupo 4)', async () => {
+    vi.mocked(pickFromGallery).mockResolvedValue([new File([''], 'a.jpg', { type: 'image/jpeg' })]);
+
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
+    const photoCapture = root.querySelector('[data-cy="detail-photo-capture"]')!;
+    (photoCapture.shadowRoot!.querySelector('.photo-btn') as HTMLButtonElement).click();
+    (photoCapture.shadowRoot!.querySelector('[data-cy="photo-menu-gallery"]') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(uploadPhotoToCloud).toHaveBeenCalledWith(expect.objectContaining({ isSynced: false }));
+    document.body.removeChild(el);
+  });
+
+  it('borrar una foto ya subida en una ruta sincronizada la borra también de la nube, además de re-subir metadatos', async () => {
     vi.mocked(checkIfRouteIsSynced).mockResolvedValue(true);
     localStorage.setItem('moto-routes-photos', JSON.stringify([
       {
         id: 'photo-1', routeId: savedRoute.id, filePath: 'photo-1.jpg',
         latitude: 40.4168, longitude: -3.7038,
         capturedAt: '2026-07-20T10:00:00.000Z', createdAt: '2026-07-20T10:00:00.000Z',
+        remotePhotoId: 'remote-photo-1',
       },
     ]));
 
@@ -1110,6 +1168,37 @@ describe('route-detail - icono de estado y re-subida automática', () => {
       route: expect.objectContaining({ id: savedRoute.id }) as Route,
       isSynced: true,
     });
+    expect(deletePhotoFromCloud).toHaveBeenCalledWith({
+      apiBaseUrl: 'http://localhost:8080',
+      session: { token: 'jwt-token', email: 'rider@example.com' },
+      routeId: savedRoute.id,
+      remotePhotoId: 'remote-photo-1',
+      isSynced: true,
+    });
+    viewer.remove();
+    document.body.removeChild(el);
+  });
+
+  it('borrar una foto que nunca se subió delega en deletePhotoFromCloud con remotePhotoId null (el no-op vive ahí, ver Grupo 4)', async () => {
+    vi.mocked(checkIfRouteIsSynced).mockResolvedValue(true);
+    localStorage.setItem('moto-routes-photos', JSON.stringify([
+      {
+        id: 'photo-1', routeId: savedRoute.id, filePath: 'photo-1.jpg',
+        latitude: 40.4168, longitude: -3.7038,
+        capturedAt: '2026-07-20T10:00:00.000Z', createdAt: '2026-07-20T10:00:00.000Z',
+        remotePhotoId: null,
+      },
+    ]));
+
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
+    (galleryRoot(root).querySelector('[data-cy="photo-thumbnail"]') as HTMLElement).click();
+    const viewer = document.body.querySelector('photo-viewer')!;
+    (viewer.shadowRoot!.querySelector('[data-cy="photo-viewer-delete"]') as HTMLButtonElement).click();
+    await waitRender();
+    (document.body.querySelector('confirm-dialog')!.shadowRoot!.querySelector('[data-cy="confirm-dialog-action-confirm"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    expect(deletePhotoFromCloud).toHaveBeenCalledWith(expect.objectContaining({ remotePhotoId: null, isSynced: true }));
     viewer.remove();
     document.body.removeChild(el);
   });

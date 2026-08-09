@@ -31,6 +31,7 @@ function createMockPhotoRepo(): IPhotoRepository {
     getById: vi.fn().mockResolvedValue(null),
     delete: vi.fn().mockResolvedValue(undefined),
     countByRouteId: vi.fn().mockResolvedValue(0),
+    markPhotoSynced: vi.fn().mockResolvedValue(undefined),
   };
 }
 
