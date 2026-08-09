@@ -28,3 +28,7 @@ overrides:
   # typescript-eslint). El fix (>=4.3.1) aún no se ha propagado desde eslintrc;
   # se fuerza la versión parcheada en todo el árbol mientras tanto.
   js-yaml: ^4.3.1
+  # nanoid (GHSA-2v37-7h3g-55p8, bucle infinito con size 0 en generadores
+  # personalizados) llega vía vitepress > postcss (18 rutas, todas dev-only:
+  # documentación). Se fuerza la versión parcheada en todo el árbol.
+  nanoid: ^3.3.17
