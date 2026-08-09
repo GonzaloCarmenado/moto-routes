@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Permite subir una ruta grabada localmente a la cuenta del usuario autenticado, y ver en un único listado combinado las rutas que existen en este dispositivo y las que además (o solo) existen en el servidor — sin fotos, y sin exigir sesión para las rutas ya locales.
+Permite subir una ruta grabada localmente a la cuenta del usuario autenticado, y ver en un único listado combinado las rutas que existen en este dispositivo y las que además (o solo) existen en el servidor — sin exigir sesión para las rutas ya locales. Una ruta sincronizada se re-sube sola al modificar sus metadatos o sus fotos.
 
 ## Requirements
 
@@ -75,20 +75,42 @@ El listado y el detalle de rutas de la nube SHALL mostrar únicamente las rutas 
 - **THEN** la petición se rechaza sin revelar si esa ruta existe
 
 ### Requirement: Una ruta ya sincronizada se actualiza sola en la nube al modificarla localmente
-La app SHALL volver a subir automáticamente (sin acción explícita del usuario) los metadatos de una ruta que ya está sincronizada, cada vez que esos datos cambian localmente — una ruta que nunca se ha subido no se ve afectada, sigue siendo puramente local hasta que el usuario decida subirla la primera vez.
+La app SHALL volver a subir automáticamente (sin acción explícita del usuario) los metadatos de una ruta que ya está sincronizada, cada vez que esos datos cambian localmente — una ruta que nunca se ha subido no se ve afectada, sigue siendo puramente local hasta que el usuario decida subirla la primera vez. Añadir o borrar una foto en una ruta sincronizada, además, sube o borra la foto en sí contra el servidor, no solo los metadatos de la ruta.
 
 #### Scenario: Guardar una nota en una ruta sincronizada la re-sube sola
 - **WHEN** un usuario guarda una nota en el detalle de una ruta que ya está marcada como sincronizada
 - **THEN** la app vuelve a subir la ruta a la nube en segundo plano, sin ninguna acción adicional del usuario y sin bloquear el guardado local (que ya ha tenido éxito)
 
-#### Scenario: Añadir o borrar una foto en una ruta sincronizada re-sube sus metadatos
-- **WHEN** un usuario añade o borra una foto en el detalle de una ruta que ya está marcada como sincronizada
-- **THEN** la app vuelve a subir los metadatos y puntos/paradas de la ruta a la nube en segundo plano — la foto en sí no se sube (sigue fuera de alcance, ver Non-Goals de `design.md`)
+#### Scenario: Añadir una foto en una ruta sincronizada la sube también a la nube
+- **WHEN** un usuario añade una foto (cámara o galería) en el detalle de una ruta que ya está marcada como sincronizada
+- **THEN** la app sube la foto al servidor y vuelve a subir los metadatos y puntos/paradas de la ruta en segundo plano, sin ninguna acción adicional del usuario y sin bloquear el guardado local de la foto (que ya ha tenido éxito)
+
+#### Scenario: Borrar una foto en una ruta sincronizada la borra también de la nube
+- **WHEN** un usuario borra una foto en el detalle de una ruta que ya está marcada como sincronizada, y esa foto ya tenía copia en el servidor
+- **THEN** la app borra la copia remota de la foto y vuelve a subir los metadatos de la ruta en segundo plano, sin ninguna acción adicional del usuario y sin bloquear el borrado local (que ya ha tenido éxito)
 
 #### Scenario: Modificar una ruta puramente local no la sube
 - **WHEN** un usuario guarda una nota, o añade/borra una foto, en una ruta que nunca se ha subido a la nube
-- **THEN** la ruta sigue siendo puramente local — no se dispara ninguna subida automática
+- **THEN** la ruta sigue siendo puramente local — no se dispara ninguna subida ni borrado remoto
 
-#### Scenario: La re-subida automática falla sin bloquear ni deshacer el cambio local
-- **WHEN** la re-subida automática de una ruta sincronizada falla (p. ej. sin conexión)
-- **THEN** el cambio local (nota o foto) permanece guardado, y la app no revierte nada ni interrumpe al usuario con un error bloqueante
+#### Scenario: La re-subida o el sincronizado de una foto falla sin bloquear ni deshacer el cambio local
+- **WHEN** la re-subida automática de metadatos, la subida de una foto nueva, o el borrado remoto de una foto fallan (p. ej. sin conexión)
+- **THEN** el cambio local (nota, foto añadida o foto borrada) permanece guardado, y la app no revierte nada ni interrumpe al usuario con un error bloqueante — solo muestra un aviso discreto
+
+### Requirement: Los límites del backend de fotos se respetan al subir
+La app SHALL tratar el rechazo del servidor por exceso de tamaño de una foto o por haber alcanzado el número máximo de fotos de una ruta como un fallo no bloqueante de la subida en segundo plano — nunca como una pérdida de la foto guardada localmente.
+
+#### Scenario: El servidor rechaza una foto por tamaño excesivo
+- **WHEN** la subida en segundo plano de una foto recién añadida es rechazada por el servidor por superar el tamaño máximo permitido
+- **THEN** la foto permanece guardada localmente y visible en la ruta, marcada como no sincronizada, con un aviso discreto — la app no la borra ni bloquea la interfaz
+
+#### Scenario: El servidor rechaza una foto porque la ruta ya alcanzó el máximo permitido
+- **WHEN** la subida en segundo plano de una foto recién añadida es rechazada por el servidor por haber alcanzado ya el número máximo de fotos de esa ruta
+- **THEN** la foto permanece guardada localmente y visible en la ruta, marcada como no sincronizada, con un aviso discreto — la app no la borra ni bloquea la interfaz
+
+### Requirement: Borrar una foto que nunca llegó a subirse no produce ningún error visible
+La app SHALL borrar una foto local con normalidad aunque esa foto nunca haya tenido copia en el servidor (por ejemplo, porque su subida anterior falló) — sin intentar un borrado remoto que fallaría, y sin mostrar ningún error al usuario por ello.
+
+#### Scenario: Borrar una foto que se guardó sin conexión y nunca se subió
+- **WHEN** un usuario borra en una ruta sincronizada una foto que se añadió previamente pero cuya subida a la nube nunca llegó a completarse
+- **THEN** la app borra la foto localmente sin mostrar ningún error relacionado con la nube, y no intenta ningún borrado remoto para esa foto

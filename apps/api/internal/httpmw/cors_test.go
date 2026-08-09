@@ -81,3 +81,26 @@ func TestPublicCORS_SetsAllowedMethodsAndHeadersForPOSTAndAuthorization(t *testi
 		t.Fatalf("expected Access-Control-Allow-Headers to include Authorization, got %q", got)
 	}
 }
+
+// Gap real encontrado verificando DELETE /api/routes/{id}/photos/{photoId}
+// contra un WebView Android real (subida_fotos_mobile): a diferencia de
+// Cypress (que no aplica CORS con el mismo rigor que un WebView real), un
+// fetch DELETE genuino queda bloqueado en el navegador tras un preflight que
+// no incluye "DELETE" en Access-Control-Allow-Methods -- nunca llega a la
+// red, así que ni logs de servidor ni curl directo lo revelan.
+func TestPublicCORS_AllowsMethodsDELETEForPreflight(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/routes/route-1/photos/photo-1", nil)
+	req.Header.Set("Origin", "http://tauri.localhost")
+	req.Header.Set("Access-Control-Request-Method", "DELETE")
+	rec := httptest.NewRecorder()
+
+	PublicCORS(inner).ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, "DELETE") {
+		t.Fatalf("expected Access-Control-Allow-Methods to include DELETE, got %q", got)
+	}
+}
