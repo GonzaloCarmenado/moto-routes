@@ -1,5 +1,6 @@
 import { BaseElement } from '../../shared/base-element.js';
 import type { StopCategory } from '../../shared/stop-types/stop-types.types.js';
+import { resolveStopTypeIcon } from '../../shared/icons/stop-type-icons.js';
 import styles from './cockpit-stop-type-dialog.element.css?inline';
 
 /**
@@ -96,7 +97,7 @@ class CockpitStopTypeDialogElement extends BaseElement {
       const option = document.createElement('button');
       option.className = 'option';
       option.setAttribute('data-cy', `stop-type-dialog-option-${category.key}`);
-      option.innerHTML = `<span class="option__icon">${category.icon}</span><span class="option__label">${category.label}</span>`;
+      option.innerHTML = `<span class="option__icon">${resolveStopTypeIcon(category.key)}</span><span class="option__label">${category.label}</span>`;
       option.addEventListener('click', () => { this.close(category); });
       list.appendChild(option);
     }

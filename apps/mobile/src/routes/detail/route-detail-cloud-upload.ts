@@ -48,10 +48,10 @@ async function handleUpload(options: SyncIconOptions, btn: HTMLButtonElement): P
   btn.disabled = true;
   try {
     await uploadRouteToCloud(options.apiBaseUrl, options.session, options.repository, options.route);
-    showToast('☁ Ruta subida a la nube', 'success');
+    showToast('Ruta subida a la nube', 'success');
     options.onUploaded();
   } catch (err) {
-    showToast(`⚠️ ${toErrorMessage(err, 'Error al subir la ruta')}`, 'error');
+    showToast(toErrorMessage(err, 'Error al subir la ruta'), 'error');
   } finally {
     btn.disabled = false;
   }

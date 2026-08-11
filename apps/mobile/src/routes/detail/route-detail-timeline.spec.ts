@@ -117,7 +117,8 @@ describe('buildTimelinePanel (AC-009, AC-018)', () => {
 
     const row = el.querySelector('[data-cy="route-detail-timeline-evento-parada"]');
     expect(row).not.toBeNull();
-    expect(row!.textContent).toContain('🌄');
+    expect(row!.querySelector('svg')).not.toBeNull();
+    expect(row!.textContent).not.toContain('🌄');
     expect(row!.textContent).toContain('Mirador');
   });
 

@@ -7,13 +7,24 @@ afterEach(() => {
 });
 
 describe('showToast', () => {
-  it('appends a success toast with the expected message, class and data-cy', () => {
-    showToast('📷 Foto añadida', 'success');
+  it('appends a success toast with the expected message, icon and data-cy', () => {
+    showToast('Foto añadida', 'success');
 
     const toast = document.body.querySelector('.photo-toast');
     expect(toast).not.toBeNull();
     expect(toast?.getAttribute('data-cy')).toBe('photo-toast');
-    expect(toast?.textContent).toBe('📷 Foto añadida');
+    expect(toast?.textContent).toBe('Foto añadida');
+    expect(toast?.querySelector('svg')).not.toBeNull();
+  });
+
+  it('an error toast includes the error icon, an info toast includes no icon (AC: sistema-iconos-svg)', () => {
+    showToast('fallo', 'error');
+    expect(document.body.querySelector('.photo-toast')?.querySelector('svg')).not.toBeNull();
+    document.body.innerHTML = '';
+
+    showToast('progreso', 'info');
+    expect(document.body.querySelector('.photo-toast')?.querySelector('svg')).toBeNull();
+    expect(document.body.querySelector('.photo-toast')?.textContent).toBe('progreso');
   });
 
   it('sets an accessible ARIA role per variant (AC-001): alert for errors, status otherwise', () => {
@@ -30,11 +41,11 @@ describe('showToast', () => {
   });
 
   it('appends an error toast with the error data-cy', () => {
-    showToast('⚠️ No se pudo guardar la foto', 'error');
+    showToast('No se pudo guardar la foto', 'error');
 
     const toast = document.body.querySelector('.photo-toast');
     expect(toast?.getAttribute('data-cy')).toBe('photo-toast-error');
-    expect(toast?.textContent).toBe('⚠️ No se pudo guardar la foto');
+    expect(toast?.textContent).toBe('No se pudo guardar la foto');
   });
 
   it('removes the success toast after its duration elapses', () => {

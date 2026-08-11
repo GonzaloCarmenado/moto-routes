@@ -25,7 +25,10 @@ describe('openPhotoViewer', () => {
 
     expect(root.querySelector('.img')?.getAttribute('src')).toBe('b.jpg');
     expect(root.querySelector('.counter')?.textContent).toBe('2 de 3');
-    expect(root.querySelector('[data-cy="photo-viewer-close"]')).not.toBeNull();
+    const closeBtn = root.querySelector('[data-cy="photo-viewer-close"]');
+    expect(closeBtn).not.toBeNull();
+    expect(closeBtn?.querySelector('svg')).not.toBeNull();
+    expect(closeBtn?.textContent).not.toContain('✕');
   });
 
   it('closes on close button click, on ESC, and on clicking the overlay background', () => {
@@ -97,8 +100,11 @@ describe('openPhotoViewer', () => {
     const onDelete = vi.fn().mockResolvedValue(true);
     openPhotoViewer({ photos: [...photos], startIndex: 1, onDelete });
     const root = getViewer().shadowRoot!;
+    const deleteBtn = root.querySelector('[data-cy="photo-viewer-delete"]');
+    expect(deleteBtn?.querySelector('svg')).not.toBeNull();
+    expect(deleteBtn?.textContent).not.toContain('🗑');
 
-    (root.querySelector('[data-cy="photo-viewer-delete"]') as HTMLButtonElement).click();
+    (deleteBtn as HTMLButtonElement).click();
     await Promise.resolve();
     await Promise.resolve();
 

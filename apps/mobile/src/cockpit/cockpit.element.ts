@@ -268,7 +268,7 @@ class CockpitView extends BaseElement {
     try {
       if (!(await deleteCockpitPhoto(photoId, await this.getPhotoRepo()))) return false;
     } catch (err) {
-      showToast(`⚠️ ${toErrorMessage(err, 'Error al eliminar la foto')}`, 'error');
+      showToast(toErrorMessage(err, 'Error al eliminar la foto'), 'error');
       return false;
     }
 
@@ -361,18 +361,17 @@ class CockpitView extends BaseElement {
       const photoRepo = await this.getPhotoRepo();
       const addedCount = await processMultiplePhotos({
         files, routeId, photoRepo, lastPoint, routePoints,
-        onError: (error) => { showToast(`⚠️ No se pudo guardar la foto: ${error}`, 'error'); },
+        onError: (error) => { showToast(`No se pudo guardar la foto: ${error}`, 'error'); },
       });
       if (addedCount > 0) {
-        showToast(addedCount === 1 ? '📷 Foto añadida' : `📷 ${String(addedCount)} fotos añadidas`, 'success');
+        showToast(addedCount === 1 ? 'Foto añadida' : `${String(addedCount)} fotos añadidas`, 'success');
         void this.refreshGallery(routeId);
       }
     } catch (err) {
       // Red de seguridad: cualquier fallo no cubierto por los callbacks de arriba
       // (p.ej. un error al abrir la cámara/galería) también debe ser visible,
       // nunca desaparecer como un unhandled promise rejection silencioso.
-      const message = toErrorMessage(err, 'Error inesperado al añadir la foto');
-      showToast(`⚠️ ${message}`, 'error');
+      showToast(toErrorMessage(err, 'Error inesperado al añadir la foto'), 'error');
     } finally {
       if (this.photoCaptureEl) this.photoCaptureEl.loading = false;
     }

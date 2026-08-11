@@ -18,6 +18,24 @@
   font-size: 14px;
   text-align: center;
   z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.photo-toast__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.photo-toast__icon svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .photo-toast--success {

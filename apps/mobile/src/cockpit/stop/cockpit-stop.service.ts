@@ -69,7 +69,7 @@ export async function resolveStopDecision(params: ResolveStopDecisionParams): Pr
     await deleteRouteAndPhotos(routeRepo, photoRepo, routeId);
   } catch (err) {
     dismissProgress();
-    showToast(`⚠️ ${toErrorMessage(err, 'Error al descartar la ruta')}`, 'error');
+    showToast(toErrorMessage(err, 'Error al descartar la ruta'), 'error');
     service.discardStop();
     return;
   }

@@ -36,7 +36,8 @@ describe('buildStopDelimiters', () => {
     expect(d.kind).toBe('parada');
     expect(d.startTime).toBe(5000);
     expect(d.endTime).toBe(5000); // instantánea: no hay intervalo, a diferencia de la vieja detección por GPS
-    expect(d.category).toEqual({ icon: '🌄', label: 'Mirador' });
+    // sistema-iconos-svg: category ya no lleva el emoji, lleva `key` para resolver el SVG en el renderer.
+    expect(d.category).toEqual({ key: 'mirador', label: 'Mirador' });
   });
 
   it('AC-6.4: descarta una parada cuyo stopCategoryId no está en el catálogo resuelto', () => {

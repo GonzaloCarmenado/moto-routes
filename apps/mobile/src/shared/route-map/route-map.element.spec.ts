@@ -401,7 +401,9 @@ describe('route-map', () => {
 
       const [marker] = findMarkerElements('route-map-stop-marker');
       expect(marker).toBeDefined();
-      expect(marker!.querySelector('.route-map-marker--stop')!.textContent).toBe('🌄');
+      const icon = marker!.querySelector('.route-map-marker--stop')!;
+      expect(icon.querySelector('svg')).not.toBeNull();
+      expect(icon.textContent).not.toContain('🌄');
 
       document.body.removeChild(el);
     });
@@ -416,8 +418,8 @@ describe('route-map', () => {
       await waitRender();
 
       const icons = findMarkerElements('route-map-stop-marker')
-        .map((el2) => el2.querySelector('.route-map-marker--stop')!.textContent);
-      expect(icons.sort()).toEqual(['🌄', '🍺'].sort());
+        .map((el2) => el2.querySelector('.route-map-marker--stop')!.innerHTML);
+      expect(icons[0]).not.toBe(icons[1]);
 
       document.body.removeChild(el);
     });

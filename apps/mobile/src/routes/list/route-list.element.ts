@@ -19,6 +19,7 @@ import { ensurePreviewPolyline } from './route-list-polyline.service.js';
 import { loadRouteListItems } from './route-list-sync.service.js';
 import type { RouteListItem, RouteSyncState } from './route-list-sync.transform.js';
 import { DEVICE_ICON, CLOUD_CHECK_ICON, CLOUD_ONLY_ICON } from '../../shared/icons/cloud-sync-icons.js';
+import { TRASH_ICON } from '../../shared/icons/action-icons.js';
 
 const THUMB_TRACE_SIZE = 72;
 
@@ -300,7 +301,7 @@ class RouteList extends BaseElement {
     btn.className = 'route-card__delete';
     btn.setAttribute('data-cy', 'route-card-btn-eliminar');
     btn.setAttribute('aria-label', 'Eliminar ruta');
-    btn.textContent = '🗑';
+    btn.innerHTML = TRASH_ICON;
     btn.addEventListener('click', (event) => {
       // La tarjeta entera navega al detalle al pulsarla — evitar que el click
       // de "eliminar" también dispare esa navegación.
@@ -325,7 +326,7 @@ class RouteList extends BaseElement {
       const photoRepo = await this.getPhotoRepo();
       await deleteRouteAndPhotos(this._repository, photoRepo, route.id);
     } catch (err) {
-      showToast(`⚠️ ${toErrorMessage(err, 'Error al eliminar la ruta')}`, 'error');
+      showToast(toErrorMessage(err, 'Error al eliminar la ruta'), 'error');
       return;
     }
     this._items = this._items.filter((i) => i.route.id !== route.id);

@@ -7,6 +7,7 @@ import {
   formatTimelineCoords,
   formatTimelineSpeed,
 } from './route-timeline.transform.js';
+import { resolveStopTypeIcon } from '../../shared/icons/stop-type-icons.js';
 
 /** Datos de entrada para construir el panel de Timeline (agrupados por max-params). */
 export interface TimelinePanelInput {
@@ -91,6 +92,21 @@ function buildGpsInsufficientMsg(): HTMLElement {
   return msg;
 }
 
+/** Etiqueta del delimitador: icono SVG de la categoría (si tiene) + el texto del tipo. */
+function buildDelimiterLabel(delimiter: TimelineDelimiter, kind: string): HTMLElement {
+  const label = document.createElement('span');
+  label.className = 'timeline-delimiter-label';
+  // AC-6.3: parada con tipo asignado muestra el icono SVG de su categoría.
+  if (delimiter.category) {
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'timeline-delimiter-icon';
+    iconSpan.innerHTML = resolveStopTypeIcon(delimiter.category.key);
+    label.appendChild(iconSpan);
+  }
+  label.appendChild(document.createTextNode(kind));
+  return label;
+}
+
 function buildDelimiterRow(
   delimiter: TimelineDelimiter,
 ): HTMLElement {
@@ -107,10 +123,7 @@ function buildDelimiterRow(
 
   row.setAttribute('data-cy', dataCy);
 
-  const label = document.createElement('span');
-  label.className = 'timeline-delimiter-label';
-  // AC-6.3: parada con tipo asignado muestra el icono de su categoría.
-  label.textContent = delimiter.category ? `${delimiter.category.icon} ${kind}` : kind;
+  const label = buildDelimiterLabel(delimiter, kind);
 
   const timeSpan = document.createElement('span');
   timeSpan.className = 'timeline-delimiter-time';

@@ -38,10 +38,11 @@ describe('addStopMarkers (AC-7.1 a AC-7.3)', () => {
     expect(markers).toHaveLength(1);
     const [options] = markerCtor.mock.calls[0]!;
     const icon = options.element.querySelector('.route-map-marker--stop');
-    expect(icon?.textContent).toBe('🌄');
+    expect(icon?.querySelector('svg')).not.toBeNull();
+    expect(icon?.textContent).not.toContain('🌄');
   });
 
-  it('AC-7.2: paradas de distinto tipo muestran iconos distintos', () => {
+  it('AC-7.2: paradas de distinto tipo muestran iconos SVG distintos', () => {
     const stops: MapStop[] = [
       { lat: 40.4, lng: -3.7, stopCategoryId: 1 },
       { lat: 40.41, lng: -3.71, stopCategoryId: 2 },
@@ -49,9 +50,9 @@ describe('addStopMarkers (AC-7.1 a AC-7.3)', () => {
     addStopMarkers(fakeMap, stops, new Map([[1, MIRADOR], [2, BAR]]));
 
     const icons = markerCtor.mock.calls.map(
-      ([options]) => options.element.querySelector('.route-map-marker--stop')!.textContent,
+      ([options]) => options.element.querySelector('.route-map-marker--stop')!.innerHTML,
     );
-    expect(icons).toEqual(['🌄', '🍺']);
+    expect(icons[0]).not.toBe(icons[1]);
   });
 
   it('AC-7.3: una parada sin categoría asignada (stopCategoryId null) no genera marcador', () => {

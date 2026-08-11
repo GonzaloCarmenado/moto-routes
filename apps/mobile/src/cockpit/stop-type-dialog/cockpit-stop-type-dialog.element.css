@@ -63,8 +63,18 @@
 }
 
 .option__icon {
-  font-size: 22px;
-  line-height: 1;
+  display: inline-flex;
+  color: var(--ink-faint);
+}
+
+.option__icon svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .empty-message {

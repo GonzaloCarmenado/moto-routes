@@ -22,7 +22,10 @@ describe('openStopTypeDialog', () => {
     void openStopTypeDialog(categories);
     const dialog = getDialog();
 
-    expect(dialog.shadowRoot!.querySelector('[data-cy="stop-type-dialog-option-bar-restaurante"]')).not.toBeNull();
+    const barOption = dialog.shadowRoot!.querySelector('[data-cy="stop-type-dialog-option-bar-restaurante"]');
+    expect(barOption).not.toBeNull();
+    expect(barOption?.querySelector('svg')).not.toBeNull();
+    expect(barOption?.textContent).not.toContain('🍽️');
     expect(dialog.shadowRoot!.querySelector('[data-cy="stop-type-dialog-option-mirador"]')).not.toBeNull();
   });
 

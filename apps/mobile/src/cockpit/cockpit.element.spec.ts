@@ -334,7 +334,8 @@ describe('CockpitView - foto durante grabación', () => {
 
     const gallery = shadowRoot.querySelector('[data-cy="cockpit-photo-gallery"]')!;
     expect(gallery.shadowRoot!.querySelectorAll('[data-cy="photo-thumbnail"]')).toHaveLength(3);
-    expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('📷 3 fotos añadidas');
+    // sistema-iconos-svg: sin emoji en el mensaje, el icono de éxito del toast lo cubre.
+    expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('3 fotos añadidas');
     document.body.removeChild(cockpit);
   });
 });
@@ -401,7 +402,8 @@ describe('CockpitView - marcar parada manual vía Pausar (catalogo-tipos-parada)
     (dialog.shadowRoot!.querySelector('[data-cy="stop-type-dialog-option-mirador"]') as HTMLButtonElement).click();
     await waitRender();
 
-    expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('🏔️ Parada marcada: Mirador');
+    // sistema-iconos-svg: el emoji de categoría ya no va en el mensaje, el icono de éxito del toast lo cubre (ver grupo 5).
+    expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('Parada marcada: Mirador');
     document.body.removeChild(cockpit);
   });
 

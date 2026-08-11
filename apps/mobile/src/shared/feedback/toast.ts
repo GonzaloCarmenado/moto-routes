@@ -2,6 +2,7 @@
  * @packageDocumentation
  * Toast flotante de feedback (éxito/error/info) montado en document.body.
  */
+import { TOAST_SUCCESS_ICON, TOAST_ERROR_ICON } from '../icons/toast-icons.js';
 
 /** Variante de toast: éxito, error o info (progreso). */
 export type ToastVariant = 'success' | 'error' | 'info';
@@ -30,6 +31,12 @@ const DURATION_MS_BY_VARIANT: Record<ToastVariant, number> = {
   info: 10000,
 };
 
+// info (progreso) no lleva icono — sin cambio de comportamiento respecto a antes.
+const ICON_BY_VARIANT: Partial<Record<ToastVariant, string>> = {
+  success: TOAST_SUCCESS_ICON,
+  error: TOAST_ERROR_ICON,
+};
+
 /**
  * Muestra un toast flotante sobre el documento (montado en document.body para que
  * `position: fixed` se posicione respecto al viewport). Los estilos viven en
@@ -41,7 +48,19 @@ export function showToast(message: string, variant: ToastVariant): () => void {
   toast.className = `photo-toast photo-toast--${variant}`;
   toast.setAttribute('data-cy', DATA_CY_BY_VARIANT[variant]);
   toast.setAttribute('role', ARIA_ROLE_BY_VARIANT[variant]);
-  toast.textContent = message;
+
+  const icon = ICON_BY_VARIANT[variant];
+  if (icon) {
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'photo-toast__icon';
+    iconSpan.innerHTML = icon;
+    toast.appendChild(iconSpan);
+  }
+  const messageSpan = document.createElement('span');
+  messageSpan.className = 'photo-toast__message';
+  messageSpan.textContent = message;
+  toast.appendChild(messageSpan);
+
   document.body.appendChild(toast);
 
   const timer = setTimeout(() => { toast.remove(); }, DURATION_MS_BY_VARIANT[variant]);

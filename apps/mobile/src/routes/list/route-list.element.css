@@ -58,12 +58,22 @@
   background: transparent;
   border: none;
   border-radius: var(--r-sm);
-  font-size: 20px;
+  color: var(--ink-faint);
   cursor: pointer;
 }
 
 .route-card__delete:hover {
   background: var(--panel-sunken);
+}
+
+.route-card__delete svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .thumb-wrapper {

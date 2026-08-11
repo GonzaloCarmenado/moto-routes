@@ -30,8 +30,8 @@ export interface TimelineDelimiter {
   endTime: number;
   lat: number;
   lng: number;
-  /** Solo presente en kind 'parada' con categoría resuelta del catálogo (AC-6.3). */
-  category?: { icon: string; label: string };
+  /** Solo presente en kind 'parada' con categoría resuelta del catálogo (AC-6.3). `key` resuelve el icono SVG (ver shared/icons/stop-type-icons.ts), nunca se renderiza el emoji del catálogo directamente. */
+  category?: { key: string; label: string };
 }
 
 /** Marcador de foto en la timeline (id y momento de captura). */

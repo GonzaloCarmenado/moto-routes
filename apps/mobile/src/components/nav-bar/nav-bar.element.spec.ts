@@ -27,6 +27,9 @@ describe('nav-bar', () => {
     expect(rutas).not.toBeNull();
     expect(grabar).not.toBeNull();
     expect(perfil).not.toBeNull();
+    // sistema-iconos-svg: Rutas y Perfil pasan a icono SVG de línea; Grabar mantiene su record-dot (fuera de alcance).
+    expect(rutas?.querySelector('svg')).not.toBeNull();
+    expect(perfil?.querySelector('svg')).not.toBeNull();
   });
 
   it('emits nav-grabar event on window when Grabar button is clicked', () => {
