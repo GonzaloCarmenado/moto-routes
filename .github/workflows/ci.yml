@@ -346,6 +346,17 @@ jobs:
           sed -i "s|http://localhost:8080|http://localhost:8080 ${PROD_API_BASE_URL}|" apps/mobile/index.html
           sed -i "s|http://localhost:8080|http://localhost:8080 ${PROD_API_BASE_URL}|" apps/mobile/src-tauri/tauri.conf.json
 
+      # tauri.conf.json versionado en el repo se queda en un placeholder de
+      # desarrollo local (nunca se escribe de vuelta) -- el CLI de Tauri deriva
+      # de "version" tanto el versionName como el versionCode de Android
+      # (formula propia: major*1_000_000 + minor*1_000 + patch), asi que basta
+      # con sustituirlo aqui, antes de compilar, para que el APK publicado
+      # quede etiquetado con la version real en vez de con el placeholder.
+      - name: Set app version from release tag
+        run: |
+          APP_VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s|\"version\": \"[^\"]*\"|\"version\": \"${APP_VERSION}\"|" apps/mobile/src-tauri/tauri.conf.json
+
       - name: Build APK (Tauri CLI — never a manual cargo build, see memory/context.md)
         working-directory: apps/mobile
         run: pnpm tauri android build --target aarch64 --debug
@@ -372,7 +383,7 @@ jobs:
             -x :app:rustBuildX86Debug \
             -x :app:rustBuildX86_64Debug
 
-      - name: Verify the APK bundles the freshly built frontend and the real apps/api host
+      - name: Verify the APK bundles the freshly built frontend, the real apps/api host and the release version
         run: |
           APK=apps/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
           EXPECTED=$(grep -o 'index-[A-Za-z0-9_]*\.js' apps/mobile/dist/index.html)
@@ -384,6 +395,20 @@ jobs:
           fi
           if ! echo "$PACKAGED_HTML" | grep -qF "$PROD_API_BASE_URL"; then
             echo "El CSP del APK empaquetado no incluye el host real de apps/api ($PROD_API_BASE_URL) -- la app no podra alcanzarlo en un movil real"
+            exit 1
+          fi
+
+          # aapt no esta en PATH por defecto, mismo gotcha ya documentado para
+          # sdkmanager mas arriba en este job (ADR-031).
+          AAPT_BIN=$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt -type f | head -n1)
+          if [ -z "$AAPT_BIN" ]; then
+            echo "aapt not found under $ANDROID_HOME/build-tools" >&2
+            exit 1
+          fi
+          EXPECTED_VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGED_VERSION=$("$AAPT_BIN" dump badging "$APK" | grep -o "versionName='[^']*'" | sed "s/versionName='//;s/'//")
+          if [ "$PACKAGED_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "El versionName empaquetado ($PACKAGED_VERSION) no coincide con el tag de la release ($EXPECTED_VERSION)"
             exit 1
           fi
         env:

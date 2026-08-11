@@ -182,9 +182,19 @@ describe('job build-and-release', () => {
     expect(job()).not.toMatch(/cargo build --target aarch64-linux-android/);
   });
 
+  it('derives the packaged app version from the release tag before building', () => {
+    expect(job()).toMatch(
+      /GITHUB_REF_NAME[\s\S]*?apps\/mobile\/src-tauri\/tauri\.conf\.json[\s\S]*?name: Build APK/,
+    );
+  });
+
   it('verifies the freshly built APK against apps/mobile paths', () => {
     expect(job()).toMatch(/apps\/mobile\/src-tauri\/gen\/android\/app\/build\/outputs\/apk/);
     expect(job()).toMatch(/apps\/mobile\/dist\/index\.html/);
+  });
+
+  it('verifies the packaged versionName matches the release tag', () => {
+    expect(job()).toMatch(/name: Verify the APK bundles[\s\S]*?dump badging[\s\S]*?versionName/);
   });
 
   it('publishes the APK as a GitHub Release asset', () => {
