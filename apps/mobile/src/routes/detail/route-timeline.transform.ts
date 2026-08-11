@@ -30,7 +30,7 @@ export function buildStopDelimiters(
         endTime: s.startTime,
         lat: s.lat,
         lng: s.lng,
-        category: { icon: category.icon, label: category.label },
+        category: { key: category.key, label: category.label },
       };
     })
     .sort((a, b) => a.startTime - b.startTime);

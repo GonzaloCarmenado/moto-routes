@@ -230,5 +230,15 @@
   justify-content: center;
   background: var(--panel);
   border-color: var(--ink);
-  font-size: 15px;
+  color: var(--amber);
+}
+
+.route-map-marker--stop svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }

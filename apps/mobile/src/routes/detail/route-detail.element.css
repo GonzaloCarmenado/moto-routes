@@ -289,6 +289,9 @@
 }
 
 .timeline-delimiter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 600;
@@ -296,6 +299,21 @@
   min-width: 60px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.timeline-delimiter-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.timeline-delimiter-icon svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .timeline-delimiter-time {

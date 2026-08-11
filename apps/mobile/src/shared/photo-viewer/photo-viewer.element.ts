@@ -1,5 +1,6 @@
 import { BaseElement } from '../base-element.js';
 import type { GalleryPhoto } from '../photo-gallery/photo-gallery.element.js';
+import { TRASH_ICON, CLOSE_ICON } from '../icons/action-icons.js';
 import styles from './photo-viewer.element.css?inline';
 
 const SWIPE_THRESHOLD_PX = 40;
@@ -102,7 +103,7 @@ class PhotoViewerElement extends BaseElement {
     btn.className = 'close';
     btn.setAttribute('data-cy', 'photo-viewer-close');
     btn.setAttribute('aria-label', 'Cerrar');
-    btn.textContent = '✕';
+    btn.innerHTML = CLOSE_ICON;
     btn.addEventListener('click', () => { this.close(); });
     return btn;
   }
@@ -113,7 +114,7 @@ class PhotoViewerElement extends BaseElement {
     btn.className = 'delete';
     btn.setAttribute('data-cy', 'photo-viewer-delete');
     btn.setAttribute('aria-label', 'Eliminar foto');
-    btn.textContent = '🗑';
+    btn.innerHTML = TRASH_ICON;
     btn.addEventListener('click', () => { void this.handleDeleteClick(); });
     return btn;
   }

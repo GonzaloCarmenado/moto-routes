@@ -51,7 +51,7 @@ export async function autoResyncIfNeeded(options: AutoResyncOptions): Promise<vo
   try {
     await uploadRouteToCloud(options.apiBaseUrl, options.session, options.repository, options.route);
   } catch (err) {
-    showToast(`⚠️ ${toErrorMessage(err, 'No se pudo actualizar la ruta en la nube')}`, 'error');
+    showToast(toErrorMessage(err, 'No se pudo actualizar la ruta en la nube'), 'error');
   }
 }
 
@@ -136,7 +136,7 @@ export async function uploadPhotoToCloud(options: UploadPhotoToCloudOptions): Pr
     });
     await options.photoRepo.markPhotoSynced(options.photo.id, uploaded.id);
   } catch (err) {
-    showToast(`⚠️ ${toErrorMessage(err, 'No se pudo subir la foto a la nube')}`, 'error');
+    showToast(toErrorMessage(err, 'No se pudo subir la foto a la nube'), 'error');
   }
 }
 
@@ -161,6 +161,6 @@ export async function deletePhotoFromCloud(options: DeletePhotoFromCloudOptions)
   try {
     await deleteRoutePhoto(options.apiBaseUrl, options.session.token, options.routeId, options.remotePhotoId);
   } catch (err) {
-    showToast(`⚠️ ${toErrorMessage(err, 'No se pudo borrar la foto de la nube')}`, 'error');
+    showToast(toErrorMessage(err, 'No se pudo borrar la foto de la nube'), 'error');
   }
 }

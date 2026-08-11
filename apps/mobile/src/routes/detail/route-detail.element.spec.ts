@@ -826,7 +826,7 @@ describe('route-detail - editor de notas (AC-010 a AC-017)', () => {
     saveNoteBtn(root).click();
     await waitRender();
 
-    expect(document.body.querySelector('[data-cy="photo-toast-error"]')?.textContent).toBe('⚠️ fallo de BBDD');
+    expect(document.body.querySelector('[data-cy="photo-toast-error"]')?.textContent).toBe('fallo de BBDD');
     expect(notesTextarea(root).value).toBe('Texto que no debe perderse');
     document.body.removeChild(el);
   });
@@ -893,7 +893,7 @@ describe('route-detail - subir a la nube', () => {
     await waitRender();
 
     expect(uploadRouteToCloud).toHaveBeenCalledWith('http://localhost:8080', { token: 'jwt-token', email: 'rider@example.com' }, repo, savedRoute);
-    expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('☁ Ruta subida a la nube');
+    expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('Ruta subida a la nube');
     document.body.removeChild(el);
   });
 
@@ -908,7 +908,7 @@ describe('route-detail - subir a la nube', () => {
     btn.click();
     await waitRender();
 
-    expect(document.body.querySelector('[data-cy="photo-toast-error"]')?.textContent).toBe('⚠️ network down');
+    expect(document.body.querySelector('[data-cy="photo-toast-error"]')?.textContent).toBe('network down');
     expect(root.querySelector('[data-cy="route-detail-btn-subir-nube"]')).not.toBeNull();
     document.body.removeChild(el);
   });

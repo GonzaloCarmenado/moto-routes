@@ -19,5 +19,6 @@ export async function markStopFlow(service: CockpitService, stopTypesCache: ISto
   const chosen = await openStopTypeDialog(categories);
   if (!chosen) return;
   service.addManualStop(chosen.id);
-  showToast(`${chosen.icon} Parada marcada: ${chosen.label}`, 'success');
+  // sistema-iconos-svg: sin emoji de categoría en el mensaje — el icono de éxito del propio toast ya lo comunica visualmente.
+  showToast(`Parada marcada: ${chosen.label}`, 'success');
 }

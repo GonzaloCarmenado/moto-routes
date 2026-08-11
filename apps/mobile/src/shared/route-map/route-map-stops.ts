@@ -4,6 +4,7 @@
 
 import * as maplibregl from 'maplibre-gl';
 import type { StopCategory } from '../stop-types/stop-types.types.js';
+import { resolveStopTypeIcon } from '../icons/stop-type-icons.js';
 
 /** Parada con lo mínimo que necesita el mapa: ubicación y su categoría (si tiene). */
 export interface MapStop {
@@ -34,7 +35,7 @@ export function addStopMarkers(
 
     const icon = document.createElement('div');
     icon.className = 'route-map-marker route-map-marker--stop';
-    icon.textContent = category.icon;
+    icon.innerHTML = resolveStopTypeIcon(category.key);
 
     // Mismo patrón de hitarea que los marcadores de foto (route-map-photos.ts):
     // el icono visible queda pequeño, pero el área de clic/toque mantiene

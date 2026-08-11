@@ -92,10 +92,14 @@ describe('Catálogo de tipos de parada - marcar parada al pausar y verla en el t
     cy.contains('[data-cy="route-card"]', routeName).click();
     cy.get('[data-cy="tab-bar-btn-timeline"]').click();
 
-    const stopRow = cy.get('[data-cy="route-detail-timeline-evento-parada"]');
-    stopRow.should('be.visible');
-    stopRow.should('contain', '🏔️'); // icono real sembrado por 0002_create_stop_types.sql para "mirador"
-    stopRow.should('contain', 'Mirador');
+    // sistema-iconos-svg: el icono SVG del tipo sustituye al emoji '🏔️' sembrado por 0002_create_stop_types.sql para "mirador".
+    // Cada expectativa vuelve a consultar el selector (en vez de encadenar sobre una
+    // referencia guardada): encadenar .find() y .should() sobre la misma variable
+    // desplaza el "subject" de las siguientes aserciones al resultado de .find().
+    cy.get('[data-cy="route-detail-timeline-evento-parada"]').should('be.visible');
+    cy.get('[data-cy="route-detail-timeline-evento-parada"]').find('svg').should('exist');
+    cy.get('[data-cy="route-detail-timeline-evento-parada"]').should('not.contain', '🏔️');
+    cy.get('[data-cy="route-detail-timeline-evento-parada"]').should('contain', 'Mirador');
   });
 
   it('cancelling the stop-type dialog still pauses the recording but persists no stop (AC-4.5 regression, real backend)', () => {

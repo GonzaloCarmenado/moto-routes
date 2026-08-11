@@ -233,6 +233,8 @@ describe('route-list - eventos e interacción', () => {
     const root = list.shadowRoot!;
     const deleteBtn = root.querySelector('[data-cy="route-card-btn-eliminar"]') as HTMLButtonElement;
     expect(deleteBtn).not.toBeNull();
+    expect(deleteBtn.querySelector('svg')).not.toBeNull();
+    expect(deleteBtn.textContent).not.toContain('🗑');
 
     const viewHandler = vi.fn();
     window.addEventListener('view-route', viewHandler);

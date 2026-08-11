@@ -29,7 +29,7 @@ export async function saveRouteNote(
   try {
     await repository.updateNotes(route.id, notes);
   } catch (err) {
-    showToast(`⚠️ ${toErrorMessage(err, 'Error al guardar la nota')}`, 'error');
+    showToast(toErrorMessage(err, 'Error al guardar la nota'), 'error');
     return false;
   }
 

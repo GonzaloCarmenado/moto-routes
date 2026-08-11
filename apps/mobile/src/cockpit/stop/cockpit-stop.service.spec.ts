@@ -101,7 +101,7 @@ describe('resolveStopDecision', () => {
 
     expect(service.discardStop).toHaveBeenCalledOnce();
     expect(document.body.querySelector('[data-cy="photo-toast-error"]')?.textContent)
-      .toBe('⚠️ no se pudo abrir el repositorio de fotos');
+      .toBe('no se pudo abrir el repositorio de fotos');
     // Al fallar, no se afirma "Ruta descartada" — sería contradictorio con el error mostrado
     expect(document.body.querySelector('[data-cy="photo-toast"]')).toBeNull();
   });

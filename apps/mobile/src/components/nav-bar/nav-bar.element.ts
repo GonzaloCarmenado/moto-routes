@@ -1,6 +1,7 @@
 import styles from './nav-bar.element.css?inline';
 import { BaseElement } from '../../shared/base-element.js';
 import { APP_EVENTS, dispatchAppEvent } from '../../shared/app-events.js';
+import { ROUTES_TAB_ICON, PROFILE_TAB_ICON } from '../../shared/icons/nav-icons.js';
 
 /** Vista activa que `<nav-bar>` es capaz de representar visualmente. */
 export type NavBarActiveView = 'cockpit' | 'routes' | 'profile';
@@ -101,15 +102,11 @@ class NavBar extends BaseElement {
   }
 
   private buildListIcon(): string {
-    return `<span class="nav-icon-list">
-      <span class="nav-icon-list__bar"></span>
-      <span class="nav-icon-list__bar"></span>
-      <span class="nav-icon-list__bar nav-icon-list__bar--short"></span>
-    </span>`;
+    return `<span class="nav-icon">${ROUTES_TAB_ICON}</span>`;
   }
 
   private buildProfileIcon(): string {
-    return `<span class="nav-icon-profile"></span>`;
+    return `<span class="nav-icon">${PROFILE_TAB_ICON}</span>`;
   }
 }
 

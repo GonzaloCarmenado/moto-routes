@@ -385,7 +385,7 @@ class RouteDetail extends BaseElement {
       const result = await addPhotoToRoute(file, this._routeId!, photoRepo, this._points);
       return result?.photo ?? null;
     } catch (err) {
-      showToast(`⚠️ ${toErrorMessage(err, 'Error al añadir la foto')}`, 'error');
+      showToast(toErrorMessage(err, 'Error al añadir la foto'), 'error');
       return null;
     }
   }
@@ -492,7 +492,7 @@ class RouteDetail extends BaseElement {
       const photoRepo = await this.getPhotoRepo();
       if (await deletePhotoWithConfirmation(photo, photoRepo) === 'cancelled') return false;
     } catch (err) {
-      showToast(`⚠️ ${toErrorMessage(err, 'Error al eliminar la foto')}`, 'error');
+      showToast(toErrorMessage(err, 'Error al eliminar la foto'), 'error');
       return false;
     }
 
