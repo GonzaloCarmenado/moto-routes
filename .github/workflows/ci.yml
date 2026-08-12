@@ -359,7 +359,7 @@ jobs:
 
       - name: Build APK (Tauri CLI — never a manual cargo build, see memory/context.md)
         working-directory: apps/mobile
-        run: pnpm tauri android build --target aarch64 --debug
+        run: pnpm tauri android build --target aarch64
 
       # Gotcha documentado en memory/context.md (2026-08-02): `pnpm tauri android build`
       # a veces no vuelve a copiar el `dist/` recien generado dentro de
@@ -376,16 +376,16 @@ jobs:
           cp -r dist/assets "$ASSETS_DIR/assets"
           cp dist/index.html "$ASSETS_DIR/index.html"
           cd src-tauri/gen/android
-          ./gradlew assembleUniversalDebug \
-            -x :app:rustBuildUniversalDebug \
-            -x :app:rustBuildArm64Debug \
-            -x :app:rustBuildArmDebug \
-            -x :app:rustBuildX86Debug \
-            -x :app:rustBuildX86_64Debug
+          ./gradlew assembleUniversalRelease \
+            -x :app:rustBuildUniversalRelease \
+            -x :app:rustBuildArm64Release \
+            -x :app:rustBuildArmRelease \
+            -x :app:rustBuildX86Release \
+            -x :app:rustBuildX86_64Release
 
-      - name: Verify the APK bundles the freshly built frontend, the real apps/api host and the release version
+      - name: Verify the APK bundles the freshly built frontend, the real apps/api host, the release version and no sourcemaps
         run: |
-          APK=apps/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+          APK=apps/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
           EXPECTED=$(grep -o 'index-[A-Za-z0-9_]*\.js' apps/mobile/dist/index.html)
           PACKAGED_HTML=$(unzip -p "$APK" assets/index.html)
           ACTUAL=$(echo "$PACKAGED_HTML" | grep -o 'index-[A-Za-z0-9_]*\.js')
@@ -395,6 +395,14 @@ jobs:
           fi
           if ! echo "$PACKAGED_HTML" | grep -qF "$PROD_API_BASE_URL"; then
             echo "El CSP del APK empaquetado no incluye el host real de apps/api ($PROD_API_BASE_URL) -- la app no podra alcanzarlo en un movil real"
+            exit 1
+          fi
+
+          # Ver openspec/changes/optimizar-bundle-produccion: los sourcemaps ya no
+          # se generan (vite.config.ts) y no deberian empaquetarse en el APK.
+          MAP_FILES=$(unzip -l "$APK" | grep -c '\.map$' || true)
+          if [ "$MAP_FILES" -gt 0 ]; then
+            echo "El APK empaqueta $MAP_FILES fichero(s) .map -- los sourcemaps no deberian publicarse en produccion"
             exit 1
           fi
 
@@ -414,20 +422,38 @@ jobs:
         env:
           PROD_API_BASE_URL: ${{ secrets.MOBILE_PROD_API_BASE_URL }}
 
+      # Umbral fijado tras medir el primer APK release real generado por este
+      # pipeline (openspec/changes/optimizar-bundle-produccion, tarea 4.2):
+      # 9MB reales (tag de prueba v0.0.1-optimizar-bundle-test, run 31582905618),
+      # con margen para crecimiento legitimo antes de bloquear una release.
+      - name: Check APK size budget
+        env:
+          MAX_APK_SIZE_MB: 20
+        run: |
+          APK=apps/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+          SIZE_BYTES=$(stat -c%s "$APK")
+          SIZE_MB=$((SIZE_BYTES / 1024 / 1024))
+          echo "Tamano del APK release: ${SIZE_MB}MB (presupuesto: ${MAX_APK_SIZE_MB}MB)"
+          if [ "$SIZE_MB" -gt "$MAX_APK_SIZE_MB" ]; then
+            echo "El APK release pesa ${SIZE_MB}MB, supera el presupuesto de ${MAX_APK_SIZE_MB}MB" >&2
+            exit 1
+          fi
+
       - name: Rename APK with the release tag
         run: |
           mkdir -p release
-          cp apps/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk "release/moto-routes-${GITHUB_REF_NAME}-arm64-debug.apk"
+          cp apps/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk "release/moto-routes-${GITHUB_REF_NAME}-arm64.apk"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: release/*.apk
           body: |
-            APK de depuración (sin firma de release) — instalar con `adb install -r`.
-            Cada release usa un keystore de debug distinto generado en el runner: si
-            la instalación falla por incompatibilidad de firma sobre una versión
-            anterior, desinstala primero (`adb uninstall com.motoroutes.app`).
+            APK release (minificado, sin sourcemaps) — instalar con `adb install -r`.
+            Sigue firmado con un keystore de depuración efímero generado en el runner
+            (sin firma de release real, ver ADR-031): si la instalación falla por
+            incompatibilidad de firma sobre una versión anterior, desinstala primero
+            (`adb uninstall com.motoroutes.app`).
 
   # ADR-044 (despliegue-automatico-backend): despliega apps/api en el servidor
   # de producción al publicar una release, revirtiendo deliberadamente la

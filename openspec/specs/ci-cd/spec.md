@@ -68,16 +68,16 @@ El job `build-and-release` de `.github/workflows/ci.yml` SHALL ejecutarse única
 - **WHEN** `quality-ts` o `quality-tauri` para ese mismo commit terminan en rojo
 - **THEN** el job `build-and-release` no se ejecuta, por su dependencia `needs: [quality-ts, quality-tauri]`
 
-#### Scenario: El APK resultante se publica como asset del GitHub Release
-- **WHEN** el build de Android (`pnpm tauri android build --target aarch64 --debug`) termina con éxito
+#### Scenario: El APK resultante se publica como asset del GitHub Release, compilado en modo release optimizado
+- **WHEN** el build de Android del job `build-and-release` termina con éxito, compilando el buildType `release` de Android (minificado, con recursos reducidos y el profile `release` de Rust) en vez del buildType `debug` usado antes de `optimizar-bundle-produccion`
 - **THEN** el `.apk` generado queda adjunto como asset descargable en el Release de GitHub asociado al tag
-- **Nota de verificación**: verificado con un tag real de prueba (`v0.0.1-test`) durante la implementación de este cambio — el Release se creó con el asset `moto-routes-v0.0.1-test-arm64-debug.apk` adjunto, confirmado con `gh release view` y borrado después. No automatizable con Vitest/Cypress, requiere publicar un release de verdad.
+- **Nota de verificación**: verificado con un tag real de prueba (`v0.0.1-optimizar-bundle-test`) — el Release se creó con el asset `moto-routes-v0.0.1-optimizar-bundle-test-arm64.apk` adjunto (sin sufijo `-debug`), APK real de 9MB, confirmado con `gh release view` y borrado después. No automatizable con Vitest/Cypress, requiere publicar un release de verdad.
 
 ### Requirement: El linker de Android en CI no depende de la ruta local de ninguna máquina de desarrollo
 El job `build-and-release` de `.github/workflows/ci.yml` SHALL fijar `CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER` como variable de entorno del propio job, apuntando al NDK instalado en el runner — SHALL NOT depender de ninguna ruta hardcodeada en `src-tauri/.cargo/config.toml` (que sigue existiendo tal cual para builds locales en Windows).
 
 #### Scenario: El build de Android en CI no falla por una ruta de linker inexistente
-- **WHEN** se ejecuta `pnpm tauri android build --target aarch64 --debug` en el runner del job `build-and-release`
+- **WHEN** se ejecuta `pnpm tauri android build --target aarch64` en el runner del job `build-and-release`
 - **THEN** el linker usado es el del NDK instalado en ese runner (vía la variable de entorno del job), no la ruta `D:\Android\Sdk\...` de `src-tauri/.cargo/config.toml`
 
 ### Requirement: pnpm y Cargo reutilizan caché entre ejecuciones

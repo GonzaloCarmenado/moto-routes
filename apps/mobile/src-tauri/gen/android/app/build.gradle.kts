@@ -38,6 +38,11 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = true
+            isShrinkResources = true
+            // Reutiliza el keystore de depuración efímero ya generado por AGP en cada
+            // runner de CI (sin keystore ni secreto de firma nuevo) -- ver design.md
+            // D1 de openspec/changes/optimizar-bundle-produccion.
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
