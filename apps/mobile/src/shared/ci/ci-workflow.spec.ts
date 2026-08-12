@@ -175,10 +175,11 @@ describe('job build-and-release', () => {
     expect(job()).toMatch(/actions\/cache@v\d/);
   });
 
-  it('builds via the Tauri CLI inside apps/mobile, never a manual cargo build', () => {
+  it('builds via the Tauri CLI inside apps/mobile using the release buildType, never --debug', () => {
     expect(job()).toMatch(
-      /name: Build APK[\s\S]*?working-directory: apps\/mobile[\s\S]*?run: pnpm tauri android build --target aarch64 --debug/,
+      /name: Build APK[\s\S]*?working-directory: apps\/mobile[\s\S]*?run: pnpm tauri android build --target aarch64\s*\n/,
     );
+    expect(job()).not.toMatch(/pnpm tauri android build --target aarch64 --debug/);
     expect(job()).not.toMatch(/cargo build --target aarch64-linux-android/);
   });
 
@@ -188,16 +189,31 @@ describe('job build-and-release', () => {
     );
   });
 
-  it('verifies the freshly built APK against apps/mobile paths', () => {
-    expect(job()).toMatch(/apps\/mobile\/src-tauri\/gen\/android\/app\/build\/outputs\/apk/);
+  it('force-syncs assets and repackages with the release Gradle variant, not debug', () => {
+    expect(job()).toMatch(/gradlew assembleUniversalRelease/);
+    expect(job()).toMatch(/-x :app:rustBuildUniversalRelease/);
+    expect(job()).not.toMatch(/assembleUniversalDebug/);
+  });
+
+  it('verifies the freshly built release APK against apps/mobile paths, and that no sourcemaps are packaged', () => {
+    expect(job()).toMatch(/apps\/mobile\/src-tauri\/gen\/android\/app\/build\/outputs\/apk\/universal\/release\/app-universal-release\.apk/);
+    expect(job()).not.toMatch(/apk\/universal\/debug\/app-universal-debug\.apk/);
     expect(job()).toMatch(/apps\/mobile\/dist\/index\.html/);
+    expect(job()).toMatch(/name: Verify the APK bundles[\s\S]*?\.map/);
   });
 
   it('verifies the packaged versionName matches the release tag', () => {
     expect(job()).toMatch(/name: Verify the APK bundles[\s\S]*?dump badging[\s\S]*?versionName/);
   });
 
-  it('publishes the APK as a GitHub Release asset', () => {
+  it('checks the release APK against a documented size budget and fails the job if it is exceeded', () => {
+    expect(job()).toMatch(/MAX_APK_SIZE_MB/);
+    expect(job()).toMatch(/name: Check APK size budget[\s\S]*?exit 1/);
+  });
+
+  it('publishes the release APK as a GitHub Release asset, without the old debug-only disclaimer', () => {
     expect(job()).toMatch(/action-gh-release@v\d/);
+    expect(job()).toMatch(/app-universal-release\.apk/);
+    expect(job()).not.toMatch(/APK de depuración \(sin firma de release\)/);
   });
 });
