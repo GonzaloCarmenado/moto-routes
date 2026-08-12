@@ -18,7 +18,7 @@
 .close,
 .delete {
   position: absolute;
-  top: 16px;
+  top: var(--space-4);
   z-index: 10;
   width: var(--hitbox-min);
   height: var(--hitbox-min);
@@ -31,12 +31,12 @@
 }
 
 .close {
-  right: 16px;
+  right: var(--space-4);
   color: var(--ink);
 }
 
 .delete {
-  left: 16px;
+  left: var(--space-4);
   color: var(--danger);
 }
 
@@ -69,11 +69,11 @@
 }
 
 .nav--prev {
-  left: 4px;
+  left: var(--space-1);
 }
 
 .nav--next {
-  right: 4px;
+  right: var(--space-1);
 }
 
 .img {
@@ -87,7 +87,7 @@
 
 .counter {
   position: absolute;
-  bottom: 32px;
+  bottom: var(--space-6);
   left: 50%;
   transform: translateX(-50%);
   color: var(--ink-faint);

@@ -1,7 +1,7 @@
 import styles from './nav-bar.element.css?inline';
-import { BaseElement } from '../../shared/base-element.js';
-import { APP_EVENTS, dispatchAppEvent } from '../../shared/app-events.js';
-import { ROUTES_TAB_ICON, PROFILE_TAB_ICON } from '../../shared/icons/nav-icons.js';
+import { BaseElement } from '../base-element.js';
+import { APP_EVENTS, dispatchAppEvent } from '../app-events.js';
+import { ROUTES_TAB_ICON, PROFILE_TAB_ICON } from '../icons/nav-icons.js';
 
 /** Vista activa que `<nav-bar>` es capaz de representar visualmente. */
 export type NavBarActiveView = 'cockpit' | 'routes' | 'profile';

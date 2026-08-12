@@ -9,7 +9,7 @@
 }
 
 .profile-view {
-  padding: 24px 22px;
+  padding: var(--space-5) 22px;
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
@@ -71,6 +71,11 @@
   height: 7px;
   border-radius: var(--r-pill);
   background: var(--success);
+  /* Anillo translúcido de un solo uso alrededor del punto de estado -- no hay
+     token --success-soft/--success-glow equivalente al patrón --amber-soft/
+     --amber-glow (que además es un blur difuso, no un anillo sólido como
+     este); se deja como excepción documentada en vez de forzar un token que
+     no encaja o crear uno nuevo para un único consumidor. */
   box-shadow: 0 0 0 3px oklch(28% 0.05 140 / 0.6);
   flex-shrink: 0;
 }
