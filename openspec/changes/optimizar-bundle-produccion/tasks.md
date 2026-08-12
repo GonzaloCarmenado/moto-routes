@@ -26,12 +26,12 @@
 
 ## 4. Verificación real end-to-end (release de prueba)
 
-- [ ] 4.1 Publicar un tag de prueba real (mismo patrón que la verificación original de ADR-031) y confirmar en GitHub Actions que `build-and-release` termina en verde, publica el Release con el APK release adjunto, y que el paso de presupuesto de tamaño se ejecuta correctamente.
-- [ ] 4.2 Con el tamaño real medido en 4.1/2.6, fijar el valor definitivo del umbral en el workflow (con margen razonable) y documentarlo en el propio YAML.
-- [ ] 4.3 Borrar el Release y el tag de prueba tras confirmar (mismo criterio que la verificación original de ADR-031).
+- [x] 4.1 Publicar un tag de prueba real (mismo patrón que la verificación original de ADR-031) y confirmar en GitHub Actions que `build-and-release` termina en verde, publica el Release con el APK release adjunto, y que el paso de presupuesto de tamaño se ejecuta correctamente. **Tag `v0.0.1-optimizar-bundle-test`, run 31582905618: `Build & release Android APK` en verde (18m44s), APK real de 9MB.**
+- [x] 4.2 Con el tamaño real medido en 4.1/2.6, fijar el valor definitivo del umbral en el workflow (con margen razonable) y documentarlo en el propio YAML. **`MAX_APK_SIZE_MB: 20`** (real medido: 9MB).
+- [x] 4.3 Borrar el Release y el tag de prueba tras confirmar (mismo criterio que la verificación original de ADR-031). **Borrado con `gh release delete --cleanup-tag`, confirmado que no queda en local ni en remoto.**
 
 ## 5. Cierre
 
-- [ ] 5.1 Actualizar `memory/context.md` (sección Build Android) con el tamaño real medido antes/después y el nuevo comportamiento de `build-and-release`.
-- [ ] 5.2 Añadir una ADR nueva en `memory/decisions.md` documentando la decisión de reutilizar el signing de debug para el buildType release (sin keystore nuevo) y su relación con ADR-031.
-- [ ] 5.3 Revisar el diff completo buscando cualquier string de secreto antes de abrir la PR, aunque no se haya introducido ninguno nuevo (regla de seguridad del proyecto).
+- [x] 5.1 Actualizar `memory/context.md` (sección Build Android) con el tamaño real medido antes/después y el nuevo comportamiento de `build-and-release`.
+- [x] 5.2 Añadir una ADR nueva en `memory/decisions.md` documentando la decisión de reutilizar el signing de debug para el buildType release (sin keystore nuevo) y su relación con ADR-031. **ADR-047.**
+- [x] 5.3 Revisar el diff completo buscando cualquier string de secreto antes de abrir la PR, aunque no se haya introducido ninguno nuevo (regla de seguridad del proyecto). **Sin coincidencias.**

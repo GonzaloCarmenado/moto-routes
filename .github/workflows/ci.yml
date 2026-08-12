@@ -422,12 +422,13 @@ jobs:
         env:
           PROD_API_BASE_URL: ${{ secrets.MOBILE_PROD_API_BASE_URL }}
 
-      # Umbral derivado de medir el primer APK release real generado tras
-      # optimizar-bundle-produccion (ver openspec/changes/optimizar-bundle-produccion,
-      # tarea 4.2) -- placeholder hasta confirmarlo con una release de prueba real.
+      # Umbral fijado tras medir el primer APK release real generado por este
+      # pipeline (openspec/changes/optimizar-bundle-produccion, tarea 4.2):
+      # 9MB reales (tag de prueba v0.0.1-optimizar-bundle-test, run 31582905618),
+      # con margen para crecimiento legitimo antes de bloquear una release.
       - name: Check APK size budget
         env:
-          MAX_APK_SIZE_MB: 60
+          MAX_APK_SIZE_MB: 20
         run: |
           APK=apps/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
           SIZE_BYTES=$(stat -c%s "$APK")
