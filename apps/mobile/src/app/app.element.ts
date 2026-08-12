@@ -1,5 +1,5 @@
 import '../cockpit/cockpit.element.js';
-import '../components/nav-bar/nav-bar.element.js';
+import '../shared/nav-bar/nav-bar.element.js';
 import '../routes/list/route-list.element.js';
 import '../routes/detail/route-detail.element.js';
 import '../profile/profile.element.js';
@@ -25,7 +25,7 @@ import { BaseElement } from '../shared/base-element.js';
 import { APP_EVENTS, type AppEventDetailMap } from '../shared/app-events.js';
 import { isTauri } from '../shared/services/photo-capture-adapter.service.js';
 import { applyCypressSeed } from './app-seed.service.js';
-import type { NavBarActiveView } from '../components/nav-bar/nav-bar.element.js';
+import type { NavBarActiveView } from '../shared/nav-bar/nav-bar.element.js';
 
 /** Vista interna de `app-root` (4 vistas — `nav-bar` solo entiende 3, ver `navViewFor`). */
 type AppView = 'cockpit' | 'routes' | 'detail' | 'profile';

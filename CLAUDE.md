@@ -32,6 +32,7 @@ Detalle navegable en `docs/` (`pnpm run docs`). Histórico del SDD anterior en `
 - **Nunca hardcodear** color, fuente, espaciado, sombra ni radio: siempre `var(--token)` de `src/shared/styles/tokens.css`. Modo oscuro obligatorio, hitbox mínima 56×56px.
 - **Sin CSS inline** salvo animación o posicionamiento dinámico justificado. Los estilos van en el `*.element.css` del componente, que importa `tokens.css` (un Shadow DOM no hereda `index.css`).
 - **Componentes compartidos** van en `src/shared/`, nunca duplicados entre dominios. Si dudas si algo es shared, pregunta antes de crearlo.
+- **Extracción por límite de líneas**: si un `.element.ts` supera el límite de líneas del proyecto (`eslint.config.js`, `max-lines`), la lógica extraída puede vivir en un `.ts` suelto sin sufijo `.element`/`.transform` (p. ej. `route-detail-notes.ts`, `profile-header.ts`) — siempre con JSDoc explicando el porqué de la extracción. Excepción documentada al patrón de sufijos, no una convención nueva a seguir por defecto.
 - **JSDoc conciso** (qué y por qué, no cómo) en todo símbolo exportado; el pre-commit lo verifica. Los `*.spec.ts` están exentos.
 - **Nunca secretos** en código — van a variables de entorno o GitHub Secrets. Solo claves públicas pueden vivir en código.
 

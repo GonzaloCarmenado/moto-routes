@@ -7,7 +7,7 @@ import './nav-bar.element.js';
 // cadena vacía bajo Vitest — este proyecto no activa `test.css` (ver
 // vitest.config.ts), así que el import real no sirve para inspeccionar el
 // CSS fuente en un test. Se lee el fichero directamente en su lugar.
-const cssPath = resolve(process.cwd(), 'src/components/nav-bar/nav-bar.element.css');
+const cssPath = resolve(process.cwd(), 'src/shared/nav-bar/nav-bar.element.css');
 const styles = readFileSync(cssPath, 'utf8');
 
 describe('nav-bar', () => {

@@ -30,7 +30,7 @@
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 24px 22px calc(var(--nav-height) + 40px);
+  padding: var(--space-5) 22px calc(var(--nav-height) + 40px);
 }
 
 /* ==========================================================================
@@ -48,7 +48,7 @@
   font-family: var(--font-ui);
   font-weight: 600;
   font-size: 16px;
-  padding: 14px 24px;
+  padding: 14px var(--space-5);
   cursor: pointer;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
   -webkit-tap-highlight-color: transparent;
@@ -212,17 +212,17 @@
   border-top: 13px solid transparent;
   border-bottom: 13px solid transparent;
   border-left: 20px solid var(--ink);
-  margin-left: 4px;
+  margin-left: var(--space-1);
 }
 .control-btn .icon-stop { width: 26px; height: 26px; border-radius: 6px; background: var(--bezel); }
 
 /* Arco de progreso (mantener pulsado para finalizar) */
 .control-btn__arc {
   position: absolute;
-  top: -4px;
-  left: -4px;
-  width: calc(100% + 8px);
-  height: calc(100% + 8px);
+  top: calc(-1 * var(--space-1));
+  left: calc(-1 * var(--space-1));
+  width: calc(100% + var(--space-2));
+  height: calc(100% + var(--space-2));
   transform: rotate(-90deg);
   pointer-events: none;
 }
@@ -239,7 +239,7 @@
   display: flex;
   justify-content: center;
   gap: 22px;
-  margin-top: 8px;
+  margin-top: var(--space-2);
   font-size: 11px;
   font-weight: 600;
   color: var(--ink-faint);

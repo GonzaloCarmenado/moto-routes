@@ -14,8 +14,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-around;
-  padding: 8px 16px 0;
-  padding-bottom: env(safe-area-inset-bottom, 8px);
+  padding: var(--space-2) var(--space-4) 0;
+  padding-bottom: env(safe-area-inset-bottom, var(--space-2));
   z-index: 100;
   border-top: 1px solid var(--line);
 }
@@ -24,7 +24,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: var(--hitbox-min);
   min-height: var(--hitbox-min);
   justify-content: center;
@@ -38,7 +38,7 @@
   transition: color var(--transition-fast);
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
-  padding: 4px;
+  padding: var(--space-1);
 }
 
 .nav-item--active {
@@ -59,7 +59,7 @@
   grid-template-areas: "circle" "label";
   grid-template-rows: 56px auto;
   justify-items: center;
-  row-gap: 4px;
+  row-gap: var(--space-1);
 }
 
 .nav-item--record::before {
