@@ -170,6 +170,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
+        id: setup-go
         with:
           go-version: '1.26.6'
           cache-dependency-path: apps/api/go.sum
@@ -224,11 +225,15 @@ jobs:
       # de setup-go cubre GOMODCACHE/GOCACHE pero no GOBIN. Cachear el binario
       # es seguro: la base de datos de vulnerabilidades la descarga govulncheck
       # en tiempo de ejecución, no viaja embebida en el binario instalado.
+      # La key incluye la versión de Go resuelta: un binario compilado con un
+      # toolchain más antiguo no puede analizar paquetes vendored que exigen
+      # una versión más nueva (fallo real visto al pasar de 1.25 a 1.26.6 con
+      # una key sin versión: "file requires newer Go version go1.26").
       - name: Cache govulncheck binary
         uses: actions/cache@v4
         with:
           path: ~/go/bin/govulncheck
-          key: govulncheck-${{ runner.os }}
+          key: govulncheck-${{ runner.os }}-${{ steps.setup-go.outputs.go-version }}
 
       - name: govulncheck
         working-directory: apps/api
