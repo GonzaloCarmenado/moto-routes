@@ -52,6 +52,7 @@ export interface CloudRouteSummary {
   status: string;
   name: string | null;
   notes: string | null;
+  isFavorite: boolean;
 }
 
 /** Punto GPS de una ruta de la nube, tal como lo devuelve el servidor. */
@@ -88,6 +89,7 @@ interface CloudRouteSummaryResponse {
   status: string;
   name: string | null;
   notes: string | null;
+  is_favorite: boolean;
 }
 
 interface CloudRouteDetailResponse extends CloudRouteSummaryResponse {
@@ -105,6 +107,7 @@ function toCloudRouteSummary(r: CloudRouteSummaryResponse): CloudRouteSummary {
     status: r.status,
     name: r.name,
     notes: r.notes,
+    isFavorite: r.is_favorite,
   };
 }
 
@@ -135,6 +138,7 @@ export async function uploadRoute(apiBaseUrl: string, token: string, payload: Up
         status: route.status,
         name: route.name,
         notes: route.notes,
+        is_favorite: route.isFavorite,
         points: points.map((p) => ({ timestamp: p.timestamp, lat: p.lat, lng: p.lng, alt: p.alt, speed: p.speed })),
         stops: stops.map((s) => ({
           start_time: s.startTime,

@@ -16,6 +16,7 @@ function buildRoute(id: string): Route {
     previewPolyline: null,
     name: null,
     notes: null,
+    isFavorite: false,
   };
 }
 

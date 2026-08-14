@@ -48,6 +48,7 @@ function buildRoute(overrides: Partial<Route>): Route {
     previewPolyline: null,
     name: null,
     notes: null,
+    isFavorite: false,
     ...overrides,
   };
 }

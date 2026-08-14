@@ -90,6 +90,7 @@ export class SqliteRouteRepository implements IRouteRepository {
     await this.ensurePreviewPolylineColumn();
     await this.ensureColumn('name', 'TEXT');
     await this.ensureColumn('notes', 'TEXT');
+    await this.ensureColumn('is_favorite', 'INTEGER');
     await this.ensureStopTypeIdColumn();
   }
 
@@ -186,7 +187,15 @@ export class SqliteRouteRepository implements IRouteRepository {
     // save() nunca lista preview_polyline/notes en su INSERT/UPDATE, así que nunca los
     // sobrescribe en BBDD — solo hace falta reflejar el valor ya existente aquí
     // para que el objeto devuelto cumpla el tipo Route.
-    return { ...route, id, createdAt, previewPolyline: existing?.previewPolyline ?? null, name, notes: existing?.notes ?? null };
+    return {
+      ...route,
+      id,
+      createdAt,
+      previewPolyline: existing?.previewPolyline ?? null,
+      name,
+      notes: existing?.notes ?? null,
+      isFavorite: existing?.isFavorite ?? false,
+    };
   }
 
   async getById(id: string): Promise<Route | null> {
@@ -238,6 +247,11 @@ export class SqliteRouteRepository implements IRouteRepository {
     await this.ensureSchema();
     await this.db.execute(`UPDATE routes SET notes = ? WHERE id = ?`, [notes, routeId]);
   }
+
+  async updateFavorite(routeId: string, isFavorite: boolean): Promise<void> {
+    await this.ensureSchema();
+    await this.db.execute(`UPDATE routes SET is_favorite = ? WHERE id = ?`, [isFavorite ? 1 : 0, routeId]);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -256,6 +270,7 @@ interface RouteRow {
   preview_polyline?: string | null;
   name?: string | null;
   notes?: string | null;
+  is_favorite?: number | null;
 }
 
 interface RoutePointRow {
@@ -292,6 +307,7 @@ function rowToRoute(r: RouteRow): Route {
     previewPolyline: r.preview_polyline != null ? (JSON.parse(r.preview_polyline) as [number, number][]) : null,
     name: r.name ?? null,
     notes: r.notes ?? null,
+    isFavorite: r.is_favorite === 1,
   };
 }
 

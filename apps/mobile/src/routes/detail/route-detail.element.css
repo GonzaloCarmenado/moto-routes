@@ -137,6 +137,48 @@
   cursor: default;
 }
 
+.favorite-icon {
+  flex-shrink: 0;
+  width: var(--hitbox-min);
+  height: var(--hitbox-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+span.favorite-icon {
+  cursor: default;
+}
+
+.favorite-icon:hover,
+.favorite-icon:focus-visible {
+  color: var(--amber);
+}
+
+.favorite-icon--active {
+  color: var(--amber);
+}
+
+.favorite-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.favorite-icon--active svg {
+  fill: currentColor;
+}
+
 /* Chart placeholder */
 .route-chart {
   margin-bottom: var(--space-5);

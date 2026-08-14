@@ -30,6 +30,7 @@ type Route struct {
 	Status        string  `json:"status"`
 	Name          *string `json:"name"`
 	Notes         *string `json:"notes"`
+	IsFavorite    bool    `json:"is_favorite"`
 }
 
 // Point es un punto GPS individual de una ruta.

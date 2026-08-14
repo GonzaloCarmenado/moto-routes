@@ -18,6 +18,7 @@ function buildRoute(id: string, createdAt: string): Route {
     previewPolyline: null,
     name: null,
     notes: null,
+    isFavorite: false,
   };
 }
 

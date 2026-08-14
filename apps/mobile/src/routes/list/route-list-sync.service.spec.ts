@@ -47,8 +47,8 @@ describe('loadRouteListItems', () => {
     const sessionRepository = new MemorySessionRepository();
     await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
     vi.mocked(fetchCloudRoutes).mockResolvedValue([
-      { id: saved.id, createdAt: saved.createdAt, duration: 1, totalDistance: 1, avgSpeed: 1, status: 'completed', name: null, notes: null },
-      { id: 'cloud-only', createdAt: '2026-08-01T10:00:00.000Z', duration: 5, totalDistance: 5, avgSpeed: 5, status: 'completed', name: null, notes: null },
+      { id: saved.id, createdAt: saved.createdAt, duration: 1, totalDistance: 1, avgSpeed: 1, status: 'completed', name: null, notes: null, isFavorite: false },
+      { id: 'cloud-only', createdAt: '2026-08-01T10:00:00.000Z', duration: 5, totalDistance: 5, avgSpeed: 5, status: 'completed', name: null, notes: null, isFavorite: false },
     ]);
 
     const result = await loadRouteListItems(BASE_URL, repository, sessionRepository);

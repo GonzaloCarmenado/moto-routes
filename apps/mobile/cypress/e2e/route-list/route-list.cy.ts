@@ -16,6 +16,7 @@ function buildSeedRoute(overrides: Partial<Route> = {}): Route {
     previewPolyline: null,
     name: `Ruta test ${String(Date.now())}`,
     notes: null,
+    isFavorite: false,
     ...overrides,
   };
 }
@@ -81,5 +82,44 @@ describe('Route list - Listado, estado vacío y eliminación', () => {
 
     cy.contains('[data-cy="route-card"]', route.name as string).should('exist');
     cy.get('[data-cy="route-card"]').should('have.length', 1);
+  });
+});
+
+describe('Route list - filtro "Solo favoritas" (favoritos-rutas)', () => {
+  it('no muestra el filtro cuando no hay ninguna ruta', () => {
+    cy.visit('/');
+    cy.get('[data-cy="nav-rutas"]').click();
+
+    cy.get('[data-cy="route-list-filtro-favoritas"]').should('not.exist');
+  });
+
+  it('activar el filtro oculta las rutas no favoritas; desactivarlo restaura el listado completo', () => {
+    const favorite = buildSeedRoute({ name: `Ruta favorita ${String(Date.now())}`, isFavorite: true });
+    const normal = buildSeedRoute({ name: `Ruta normal ${String(Date.now())}` });
+
+    cy.visitWithSeed({ routes: [favorite, normal] });
+    cy.get('[data-cy="nav-rutas"]').click();
+    cy.get('[data-cy="route-card"]').should('have.length', 2);
+
+    cy.get('[data-cy="route-list-filtro-favoritas"]').click();
+    cy.get('[data-cy="route-card"]').should('have.length', 1);
+    cy.contains('[data-cy="route-card"]', favorite.name as string).should('exist');
+    cy.contains('[data-cy="route-card"]', normal.name as string).should('not.exist');
+
+    cy.get('[data-cy="route-list-filtro-favoritas"]').click();
+    cy.get('[data-cy="route-card"]').should('have.length', 2);
+  });
+
+  it('muestra un estado vacío dedicado cuando no hay ninguna favorita con el filtro activo', () => {
+    const route = buildSeedRoute({ name: `Ruta sin favoritos ${String(Date.now())}` });
+
+    cy.visitWithSeed({ routes: [route] });
+    cy.get('[data-cy="nav-rutas"]').click();
+    cy.get('[data-cy="route-list-filtro-favoritas"]').click();
+
+    cy.get('[data-cy="route-list-empty-favoritas"]')
+      .should('be.visible')
+      .and('contain', 'No tienes rutas favoritas todavía');
+    cy.get('[data-cy="route-card"]').should('not.exist');
   });
 });

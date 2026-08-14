@@ -33,4 +33,7 @@ export interface IRouteRepository {
 
   /** Persiste las notas de una ruta de forma independiente del resto de campos. `null` borra la nota existente. */
   updateNotes(routeId: string, notes: string | null): Promise<void>;
+
+  /** Marca o desmarca una ruta como favorita, de forma independiente del resto de campos. */
+  updateFavorite(routeId: string, isFavorite: boolean): Promise<void>;
 }

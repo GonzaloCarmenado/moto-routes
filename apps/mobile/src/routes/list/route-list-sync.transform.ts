@@ -55,5 +55,6 @@ function cloudSummaryToRoute(summary: CloudRouteSummary): Route {
     previewPolyline: null,
     name: summary.name,
     notes: summary.notes,
+    isFavorite: summary.isFavorite,
   };
 }

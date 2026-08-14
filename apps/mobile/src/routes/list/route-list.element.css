@@ -31,6 +31,27 @@
   padding: var(--space-7) var(--space-4);
 }
 
+.favorites-filter {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 var(--space-3);
+  margin-bottom: var(--space-4);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--panel-sunken);
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.favorites-filter--active {
+  background: var(--amber-soft);
+  border-color: var(--amber-soft);
+  color: var(--amber);
+}
+
 .route-list__cards {
   display: flex;
   flex-direction: column;
@@ -74,6 +95,51 @@
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* Icono de favorito por card (favoritos-rutas) — mismo componente/estilo que
+   `route-detail`, importado aquí porque un Shadow DOM no hereda CSS de otro
+   componente aunque compartan la clase. */
+.favorite-icon {
+  flex-shrink: 0;
+  width: var(--hitbox-min);
+  height: var(--hitbox-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+span.favorite-icon {
+  cursor: default;
+}
+
+.favorite-icon:hover,
+.favorite-icon:focus-visible {
+  color: var(--amber);
+}
+
+.favorite-icon--active {
+  color: var(--amber);
+}
+
+.favorite-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.favorite-icon--active svg {
+  fill: currentColor;
 }
 
 .thumb-wrapper {

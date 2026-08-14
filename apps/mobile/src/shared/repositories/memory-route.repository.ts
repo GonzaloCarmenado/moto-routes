@@ -44,6 +44,7 @@ export class MemoryRouteRepository implements IRouteRepository {
       previewPolyline: existing?.previewPolyline ?? null,
       name: route.name ?? existing?.name ?? null,
       notes: existing?.notes ?? null,
+      isFavorite: existing?.isFavorite ?? false,
     };
     this.routes.set(id, savedRoute);
     if (!existing) this.orderMap.set(id, this.insertOrder++);
@@ -140,6 +141,14 @@ export class MemoryRouteRepository implements IRouteRepository {
     const existing = this.routes.get(routeId);
     if (existing) {
       this.routes.set(routeId, { ...existing, notes });
+    }
+    return Promise.resolve();
+  }
+
+  updateFavorite(routeId: string, isFavorite: boolean): Promise<void> {
+    const existing = this.routes.get(routeId);
+    if (existing) {
+      this.routes.set(routeId, { ...existing, isFavorite });
     }
     return Promise.resolve();
   }

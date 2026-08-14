@@ -17,6 +17,7 @@ function buildRoute(overrides: Partial<Route>): Route {
     previewPolyline: overrides.previewPolyline ?? null,
     name: overrides.name ?? null,
     notes: overrides.notes ?? null,
+    isFavorite: overrides.isFavorite ?? false,
   };
 }
 

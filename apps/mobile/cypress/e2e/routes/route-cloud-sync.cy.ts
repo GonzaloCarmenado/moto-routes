@@ -53,6 +53,7 @@ function buildSeedRoute(overrides: Partial<Route> = {}): Route {
     previewPolyline: null,
     name: `Ruta test ${String(Date.now())}`,
     notes: null,
+    isFavorite: false,
     ...overrides,
   };
 }
@@ -72,6 +73,7 @@ function uploadRouteViaApi(token: string, route: Route, points: RoutePoint[] = [
       status: route.status,
       name: route.name,
       notes: route.notes,
+      is_favorite: route.isFavorite,
       points: points.map((p) => ({ timestamp: p.timestamp, lat: p.lat, lng: p.lng, alt: p.alt, speed: p.speed })),
       stops: stops.map((s) => ({
         start_time: s.startTime,
@@ -155,6 +157,74 @@ describe('Rutas en la nube - subida, listado combinado, detalle y aislamiento en
         }).its('body.notes').should('eq', 'Nota real de verificación');
       });
     });
+  });
+
+  it('marcar/desmarcar favorita con sesión activa persiste local y se re-sincroniza sola contra el servidor real', () => {
+    const email = uniqueTestEmail('favorito');
+    const route = buildSeedRoute({ name: `Ruta favorita ${String(Date.now())}` });
+
+    registerVerifiedAccountViaApi(email).then((token) => {
+      uploadRouteViaApi(token, route).then(() => {
+        cy.visitWithSeed({ routes: [route] });
+        loginViaUi(email);
+
+        cy.get('[data-cy="nav-rutas"]').click();
+        cy.contains('[data-cy="route-card"]', route.name as string).click();
+
+        cy.get('[data-cy="route-detail-btn-favorito"]').should('not.have.class', 'favorite-icon--active');
+        cy.get('[data-cy="route-detail-btn-favorito"]').click();
+        cy.get('[data-cy="route-detail-btn-favorito"]').should('have.class', 'favorite-icon--active');
+
+        // La re-subida es en segundo plano, sin toast propio (favoritos-rutas, design.md D3) —
+        // se comprueba contra el servidor real, mismo criterio que la re-subida de notas.
+        cy.request({
+          url: `http://localhost:8080/api/routes/${route.id}`,
+          headers: { Authorization: `Bearer ${token}` },
+        }).its('body.is_favorite').should('eq', true);
+
+        cy.get('[data-cy="route-detail-btn-favorito"]').click();
+        cy.get('[data-cy="route-detail-btn-favorito"]').should('not.have.class', 'favorite-icon--active');
+      });
+    });
+  });
+
+  it('marcar favorita desde el listado (sin entrar al detalle) persiste y re-sincroniza sola contra el servidor real', () => {
+    const email = uniqueTestEmail('favorito-listado');
+    const route = buildSeedRoute({ name: `Ruta favorita desde listado ${String(Date.now())}` });
+
+    registerVerifiedAccountViaApi(email).then((token) => {
+      uploadRouteViaApi(token, route).then(() => {
+        cy.visitWithSeed({ routes: [route] });
+        loginViaUi(email);
+
+        cy.get('[data-cy="nav-rutas"]').click();
+        cy.contains('[data-cy="route-card"]', route.name as string)
+          .find('[data-cy="route-card-btn-favorito"]')
+          .as('favoriteIcon')
+          .should('not.have.class', 'favorite-icon--active');
+
+        cy.get('@favoriteIcon').click();
+        cy.get('@favoriteIcon').should('have.class', 'favorite-icon--active');
+
+        // La card no navega al detalle al pulsar el icono de favorito (stopPropagation).
+        cy.get('[data-cy="route-detail-title"]').should('not.exist');
+
+        cy.request({
+          url: `http://localhost:8080/api/routes/${route.id}`,
+          headers: { Authorization: `Bearer ${token}` },
+        }).its('body.is_favorite').should('eq', true);
+      });
+    });
+  });
+
+  it('sin sesión activa, el indicador de favorito se muestra pero como <span> no interactivo', () => {
+    const route = buildSeedRoute({ name: `Ruta sin sesion favorito ${String(Date.now())}` });
+
+    cy.visitWithSeed({ routes: [route] });
+    cy.get('[data-cy="nav-rutas"]').click();
+    cy.contains('[data-cy="route-card"]', route.name as string).click();
+
+    cy.get('[data-cy="route-detail-btn-favorito"]').should('exist').and('match', 'span');
   });
 
   it('sin sesión activa, el listado y el detalle se comportan igual que antes de este cambio', () => {
