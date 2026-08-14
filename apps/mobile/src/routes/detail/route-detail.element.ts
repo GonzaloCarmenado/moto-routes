@@ -254,6 +254,7 @@ class RouteDetail extends BaseElement {
       session: this._session,
       isLocalRoute: this._isLocalRoute,
       isSynced: this._isSynced,
+      existsOnServer: this._isSynced || !this._isLocalRoute,
       onFavoriteToggled: () => {
         triggerAutoResync(this.syncContext(), route);
         this.render();

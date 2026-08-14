@@ -1,0 +1,115 @@
+@import '../../shared/styles/tokens.css';
+
+:host {
+  display: block;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--bg-top);
+}
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-3) 22px;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--ink);
+  margin: 0 22px var(--space-4);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0 22px var(--space-6);
+}
+
+.empty {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+  padding: var(--space-5) 0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.card-name {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.card-meta {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.card-status {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.card-status--accepted {
+  color: var(--amber);
+}
+
+.card-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.action {
+  min-height: var(--hitbox-min);
+  padding: 0 var(--space-4);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.action--primary {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: var(--bg-bottom);
+}
+
+.action--danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
