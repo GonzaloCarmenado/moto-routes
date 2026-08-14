@@ -5,11 +5,18 @@ import type { IRouteRepository } from '../../shared/models/route.repository.js';
 import type { ISessionRepository } from '../../shared/models/session.repository.js';
 import { fetchCloudRoutes } from '../../shared/http/route-cloud-api.service.js';
 import type * as RouteCloudApiService from '../../shared/http/route-cloud-api.service.js';
+import { autoResyncIfNeeded } from '../detail/route-detail-cloud.service.js';
+import type * as RouteDetailCloudService from '../detail/route-detail-cloud.service.js';
 import './route-list.element.js';
 
 vi.mock('../../shared/http/route-cloud-api.service.js', async (importOriginal) => {
   const actual = await importOriginal<typeof RouteCloudApiService>();
   return { ...actual, fetchCloudRoutes: vi.fn() };
+});
+
+vi.mock('../detail/route-detail-cloud.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof RouteDetailCloudService>();
+  return { ...actual, autoResyncIfNeeded: vi.fn() };
 });
 
 async function waitRender(): Promise<void> {
@@ -451,7 +458,7 @@ describe('route-list - indicador de sincronización con la nube', () => {
   it('con sesión activa, una ruta ya subida se marca "Sincronizada" (sin duplicar la tarjeta)', async () => {
     const saved = await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' }, [], []);
     vi.mocked(fetchCloudRoutes).mockResolvedValue([
-      { id: saved.id, createdAt: saved.createdAt, duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', name: null, notes: null },
+      { id: saved.id, createdAt: saved.createdAt, duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', name: null, notes: null, isFavorite: false },
     ]);
 
     const { list } = await createListWithSession();
@@ -464,7 +471,7 @@ describe('route-list - indicador de sincronización con la nube', () => {
 
   it('con sesión activa, una ruta exclusiva de la nube aparece marcada "En la nube" y sin botón de eliminar', async () => {
     vi.mocked(fetchCloudRoutes).mockResolvedValue([
-      { id: 'cloud-only', createdAt: '2026-08-01T10:00:00.000Z', duration: 60, totalDistance: 5, avgSpeed: 20, status: 'completed', name: null, notes: null },
+      { id: 'cloud-only', createdAt: '2026-08-01T10:00:00.000Z', duration: 60, totalDistance: 5, avgSpeed: 20, status: 'completed', name: null, notes: null, isFavorite: false },
     ]);
 
     const { list } = await createListWithSession();
@@ -485,6 +492,177 @@ describe('route-list - indicador de sincronización con la nube', () => {
 
     expect(root.querySelectorAll('.route-card')).toHaveLength(1);
     expect(root.querySelector('[data-cy="route-card-sync-badge"]')?.getAttribute('data-sync-state')).toBe('local');
+    document.body.removeChild(list);
+  });
+});
+
+describe('route-list - favorito por card', () => {
+  let repo: IRouteRepository;
+
+  beforeEach(() => {
+    repo = new MemoryRouteRepository();
+    vi.clearAllMocks();
+  });
+
+  function favoriteIcon(list: HTMLElement): HTMLElement {
+    return list.shadowRoot!.querySelector('[data-cy="route-card-btn-favorito"]') as HTMLElement;
+  }
+
+  async function mountWithSession(sessionRepository: ISessionRepository): Promise<HTMLElement> {
+    const list = document.createElement('route-list') as HTMLElement & {
+      repository: IRouteRepository;
+      sessionRepository: ISessionRepository;
+    };
+    list.sessionRepository = sessionRepository;
+    list.repository = repo;
+    document.body.appendChild(list);
+    await waitRender();
+    return list;
+  }
+
+  it('sin sesión activa, el indicador se muestra (localizable) pero sin acción táctil', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' }, [], []);
+    const list = await createList(repo);
+
+    const icon = favoriteIcon(list);
+    expect(icon).not.toBeNull();
+    expect(icon.tagName).toBe('SPAN');
+    document.body.removeChild(list);
+  });
+
+  it('con sesión activa, marca la ruta como favorita al pulsar el icono, sin navegar al detalle', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' }, [], []);
+    vi.mocked(fetchCloudRoutes).mockResolvedValue([]);
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const list = await mountWithSession(sessionRepository);
+    const viewHandler = vi.fn();
+    window.addEventListener('view-route', viewHandler);
+
+    const icon = favoriteIcon(list);
+    expect(icon.tagName).toBe('BUTTON');
+    icon.click();
+    await waitRender();
+
+    expect(favoriteIcon(list).classList.contains('favorite-icon--active')).toBe(true);
+    expect(viewHandler).not.toHaveBeenCalled();
+    window.removeEventListener('view-route', viewHandler);
+    document.body.removeChild(list);
+  });
+
+  it('con sesión activa, desmarcar una ruta ya favorita la devuelve al estado normal', async () => {
+    const saved = await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' }, [], []);
+    await repo.updateFavorite(saved.id, true);
+    vi.mocked(fetchCloudRoutes).mockResolvedValue([]);
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const list = await mountWithSession(sessionRepository);
+    expect(favoriteIcon(list).classList.contains('favorite-icon--active')).toBe(true);
+
+    favoriteIcon(list).click();
+    await waitRender();
+
+    expect(favoriteIcon(list).classList.contains('favorite-icon--active')).toBe(false);
+    document.body.removeChild(list);
+  });
+
+  it('marcar favorita una ruta ya sincronizada dispara la re-subida en segundo plano (isSynced: true)', async () => {
+    const saved = await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' }, [], []);
+    vi.mocked(fetchCloudRoutes).mockResolvedValue([
+      { id: saved.id, createdAt: saved.createdAt, duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', name: null, notes: null, isFavorite: false },
+    ]);
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const list = await mountWithSession(sessionRepository);
+    favoriteIcon(list).click();
+    await waitRender();
+
+    expect(autoResyncIfNeeded).toHaveBeenCalledWith(expect.objectContaining({
+      apiBaseUrl: 'http://localhost:8080',
+      session: { token: 'jwt-token', email: 'rider@example.com' },
+      repository: repo,
+      isSynced: true,
+    }));
+    document.body.removeChild(list);
+  });
+
+  it('marcar favorita una ruta puramente local no dispara ninguna subida real (isSynced: false)', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' }, [], []);
+    vi.mocked(fetchCloudRoutes).mockResolvedValue([]);
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const list = await mountWithSession(sessionRepository);
+    favoriteIcon(list).click();
+    await waitRender();
+
+    expect(autoResyncIfNeeded).toHaveBeenCalledWith(expect.objectContaining({ isSynced: false }));
+    document.body.removeChild(list);
+  });
+});
+
+describe('route-list - filtro "Solo favoritas"', () => {
+  let repo: IRouteRepository;
+
+  beforeEach(() => {
+    repo = new MemoryRouteRepository();
+  });
+
+  function filterToggle(list: HTMLElement): HTMLButtonElement {
+    return list.shadowRoot!.querySelector('[data-cy="route-list-filtro-favoritas"]') as HTMLButtonElement;
+  }
+
+  it('no muestra el filtro cuando no hay ninguna ruta', async () => {
+    const list = await createList(repo);
+    expect(filterToggle(list)).toBeNull();
+    document.body.removeChild(list);
+  });
+
+  it('activar el filtro oculta las rutas no favoritas', async () => {
+    const favorite = await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Favorita' }, [], []);
+    await repo.updateFavorite(favorite.id, true);
+    await repo.save({ duration: 200, totalDistance: 20, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Normal' }, [], []);
+
+    const list = await createList(repo);
+    expect(list.shadowRoot!.querySelectorAll('.route-card')).toHaveLength(2);
+
+    filterToggle(list).click();
+    await waitRender();
+
+    const root = list.shadowRoot!;
+    expect(root.querySelectorAll('.route-card')).toHaveLength(1);
+    expect(root.querySelector('.name')?.textContent).toBe('Favorita');
+    document.body.removeChild(list);
+  });
+
+  it('muestra un estado vacío dedicado cuando no hay ninguna favorita con el filtro activo', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' }, [], []);
+
+    const list = await createList(repo);
+    filterToggle(list).click();
+    await waitRender();
+
+    expect(list.shadowRoot!.querySelector('[data-cy="route-list-empty-favoritas"]')).not.toBeNull();
+    expect(list.shadowRoot!.querySelectorAll('.route-card')).toHaveLength(0);
+    document.body.removeChild(list);
+  });
+
+  it('desactivar el filtro restaura el listado completo', async () => {
+    const favorite = await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' }, [], []);
+    await repo.updateFavorite(favorite.id, true);
+    await repo.save({ duration: 200, totalDistance: 20, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' }, [], []);
+
+    const list = await createList(repo);
+    filterToggle(list).click();
+    await waitRender();
+    expect(list.shadowRoot!.querySelectorAll('.route-card')).toHaveLength(1);
+
+    filterToggle(list).click();
+    await waitRender();
+    expect(list.shadowRoot!.querySelectorAll('.route-card')).toHaveLength(2);
     document.body.removeChild(list);
   });
 });

@@ -53,6 +53,7 @@ function buildSeedRoute(overrides: Partial<Route> = {}): Route {
     previewPolyline: null,
     name: `Ruta test ${String(Date.now())}`,
     notes: null,
+    isFavorite: false,
     ...overrides,
   };
 }
@@ -72,6 +73,7 @@ function uploadRouteViaApi(token: string, route: Route, points: RoutePoint[] = [
       status: route.status,
       name: route.name,
       notes: route.notes,
+      is_favorite: route.isFavorite,
       points: points.map((p) => ({ timestamp: p.timestamp, lat: p.lat, lng: p.lng, alt: p.alt, speed: p.speed })),
       stops: stops.map((s) => ({
         start_time: s.startTime,
@@ -82,6 +84,31 @@ function uploadRouteViaApi(token: string, route: Route, points: RoutePoint[] = [
         stop_category_id: s.stopCategoryId,
       })),
     },
+  });
+}
+
+/**
+ * Comprueba un campo de una ruta contra el servidor real, reintentando la
+ * petición HTTP de verdad (no solo releyendo la misma respuesta) hasta que
+ * el valor esperado llega o se agota el presupuesto de tiempo — necesario
+ * porque la re-subida que dispara este campo es fire-and-forget en segundo
+ * plano (design.md D3 de favoritos-rutas): un `cy.request(...).its(...)`
+ * encadenado no reintenta la llamada de red en cada retry de `.should()`,
+ * solo relee la respuesta ya resuelta la primera vez, así que puede fallar
+ * por pura carrera aunque la re-subida sí termine a tiempo.
+ */
+function expectSyncedField(routeId: string, token: string, field: 'notes' | 'is_favorite', expected: unknown, attempt = 0): void {
+  cy.request({
+    url: `${API_BASE_URL}/api/routes/${routeId}`,
+    headers: { Authorization: `Bearer ${token}` },
+  }).then((response) => {
+    const actual = (response.body as Record<string, unknown>)[field];
+    if (actual === expected || attempt >= 20) {
+      expect(actual).to.eq(expected);
+      return;
+    }
+    cy.wait(200);
+    expectSyncedField(routeId, token, field, expected, attempt + 1);
   });
 }
 
@@ -149,12 +176,71 @@ describe('Rutas en la nube - subida, listado combinado, detalle y aislamiento en
 
         // La re-subida es en segundo plano y sin toast propio — se comprueba
         // contra el servidor real, no contra ningún indicador visual nuevo.
-        cy.request({
-          url: `http://localhost:8080/api/routes/${route.id}`,
-          headers: { Authorization: `Bearer ${token}` },
-        }).its('body.notes').should('eq', 'Nota real de verificación');
+        expectSyncedField(route.id, token, 'notes', 'Nota real de verificación');
       });
     });
+  });
+
+  it('marcar/desmarcar favorita con sesión activa persiste local y se re-sincroniza sola contra el servidor real', () => {
+    const email = uniqueTestEmail('favorito');
+    const route = buildSeedRoute({ name: `Ruta favorita ${String(Date.now())}` });
+
+    registerVerifiedAccountViaApi(email).then((token) => {
+      uploadRouteViaApi(token, route).then(() => {
+        cy.visitWithSeed({ routes: [route] });
+        loginViaUi(email);
+
+        cy.get('[data-cy="nav-rutas"]').click();
+        cy.contains('[data-cy="route-card"]', route.name as string).click();
+
+        cy.get('[data-cy="route-detail-btn-favorito"]').should('not.have.class', 'favorite-icon--active');
+        cy.get('[data-cy="route-detail-btn-favorito"]').click();
+        cy.get('[data-cy="route-detail-btn-favorito"]').should('have.class', 'favorite-icon--active');
+
+        // La re-subida es en segundo plano, sin toast propio (favoritos-rutas, design.md D3) —
+        // se comprueba contra el servidor real, mismo criterio que la re-subida de notas.
+        expectSyncedField(route.id, token, 'is_favorite', true);
+
+        cy.get('[data-cy="route-detail-btn-favorito"]').click();
+        cy.get('[data-cy="route-detail-btn-favorito"]').should('not.have.class', 'favorite-icon--active');
+      });
+    });
+  });
+
+  it('marcar favorita desde el listado (sin entrar al detalle) persiste y re-sincroniza sola contra el servidor real', () => {
+    const email = uniqueTestEmail('favorito-listado');
+    const route = buildSeedRoute({ name: `Ruta favorita desde listado ${String(Date.now())}` });
+
+    registerVerifiedAccountViaApi(email).then((token) => {
+      uploadRouteViaApi(token, route).then(() => {
+        cy.visitWithSeed({ routes: [route] });
+        loginViaUi(email);
+
+        cy.get('[data-cy="nav-rutas"]').click();
+        cy.contains('[data-cy="route-card"]', route.name as string)
+          .find('[data-cy="route-card-btn-favorito"]')
+          .as('favoriteIcon')
+          .should('not.have.class', 'favorite-icon--active');
+
+        cy.get('@favoriteIcon').click();
+        cy.get('@favoriteIcon').should('have.class', 'favorite-icon--active');
+
+        // La card no navega al detalle al pulsar el icono de favorito (stopPropagation).
+        cy.get('[data-cy="route-detail-title"]').should('not.exist');
+
+        expectSyncedField(route.id, token, 'is_favorite', true);
+      });
+    });
+  });
+
+  it('sin sesión activa, el indicador de favorito se muestra pero como <span> no interactivo', () => {
+    const route = buildSeedRoute({ name: `Ruta sin sesion favorito ${String(Date.now())}` });
+
+    cy.visitWithSeed({ routes: [route] });
+    cy.get('[data-cy="nav-rutas"]').click();
+    cy.contains('[data-cy="route-card"]', route.name as string).click();
+
+    cy.get('[data-cy="route-detail-btn-favorito"]').should('exist').and('match', 'span');
   });
 
   it('sin sesión activa, el listado y el detalle se comportan igual que antes de este cambio', () => {

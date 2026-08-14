@@ -36,8 +36,8 @@ func (s PostgresRouteStore) Upsert(ctx context.Context, userID int64, route Deta
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	tag, err := tx.Exec(ctx, `
-		INSERT INTO routes (id, user_id, created_at, duration, total_distance, avg_speed, status, name, notes, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+		INSERT INTO routes (id, user_id, created_at, duration, total_distance, avg_speed, status, name, notes, is_favorite, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
 		ON CONFLICT (id) DO UPDATE SET
 			duration = EXCLUDED.duration,
 			total_distance = EXCLUDED.total_distance,
@@ -45,9 +45,10 @@ func (s PostgresRouteStore) Upsert(ctx context.Context, userID int64, route Deta
 			status = EXCLUDED.status,
 			name = EXCLUDED.name,
 			notes = EXCLUDED.notes,
+			is_favorite = EXCLUDED.is_favorite,
 			updated_at = now()
 		WHERE routes.user_id = $2`,
-		route.ID, userID, route.CreatedAt, route.Duration, route.TotalDistance, route.AvgSpeed, route.Status, route.Name, route.Notes,
+		route.ID, userID, route.CreatedAt, route.Duration, route.TotalDistance, route.AvgSpeed, route.Status, route.Name, route.Notes, route.IsFavorite,
 	)
 	if err != nil {
 		return err
@@ -118,7 +119,7 @@ func insertStops(ctx context.Context, tx pgx.Tx, routeID string, stops []Stop) e
 // ListByUser devuelve solo los resúmenes (sin puntos/paradas) de las rutas del usuario.
 func (s PostgresRouteStore) ListByUser(ctx context.Context, userID int64) ([]Route, error) {
 	rows, err := s.Pool.Query(ctx,
-		"SELECT id, created_at, duration, total_distance, avg_speed, status, name, notes FROM routes WHERE user_id = $1 ORDER BY created_at DESC",
+		"SELECT id, created_at, duration, total_distance, avg_speed, status, name, notes, is_favorite FROM routes WHERE user_id = $1 ORDER BY created_at DESC",
 		userID,
 	)
 	if err != nil {
@@ -129,7 +130,7 @@ func (s PostgresRouteStore) ListByUser(ctx context.Context, userID int64) ([]Rou
 	routeList := []Route{}
 	for rows.Next() {
 		var r Route
-		if err := rows.Scan(&r.ID, &r.CreatedAt, &r.Duration, &r.TotalDistance, &r.AvgSpeed, &r.Status, &r.Name, &r.Notes); err != nil {
+		if err := rows.Scan(&r.ID, &r.CreatedAt, &r.Duration, &r.TotalDistance, &r.AvgSpeed, &r.Status, &r.Name, &r.Notes, &r.IsFavorite); err != nil {
 			return nil, err
 		}
 		routeList = append(routeList, r)
@@ -145,9 +146,9 @@ func (s PostgresRouteStore) ListByUser(ctx context.Context, userID int64) ([]Rou
 func (s PostgresRouteStore) GetByIDForUser(ctx context.Context, userID int64, id string) (*Detail, error) {
 	var detail Detail
 	err := s.Pool.QueryRow(ctx,
-		"SELECT id, created_at, duration, total_distance, avg_speed, status, name, notes FROM routes WHERE id = $1 AND user_id = $2",
+		"SELECT id, created_at, duration, total_distance, avg_speed, status, name, notes, is_favorite FROM routes WHERE id = $1 AND user_id = $2",
 		id, userID,
-	).Scan(&detail.ID, &detail.CreatedAt, &detail.Duration, &detail.TotalDistance, &detail.AvgSpeed, &detail.Status, &detail.Name, &detail.Notes)
+	).Scan(&detail.ID, &detail.CreatedAt, &detail.Duration, &detail.TotalDistance, &detail.AvgSpeed, &detail.Status, &detail.Name, &detail.Notes, &detail.IsFavorite)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil

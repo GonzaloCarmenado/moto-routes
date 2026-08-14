@@ -28,6 +28,7 @@ export function cloudRouteDetailToLocal(detail: CloudRouteDetail): LocalizedClou
     previewPolyline: null,
     name: detail.name,
     notes: detail.notes,
+    isFavorite: detail.isFavorite,
   };
 
   const points: RoutePoint[] = detail.points.map((p) => ({

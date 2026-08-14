@@ -2,6 +2,7 @@ import styles from './route-list.element.css?inline';
 import type { IRouteRepository } from '../../shared/models/route.repository.js';
 import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
 import type { ISessionRepository } from '../../shared/models/session.repository.js';
+import type { Session } from '../../shared/models/session.types.js';
 import type { Route } from '../../shared/models/route.types.js';
 import { getApiBaseUrl } from '../../shared/http/api-config.js';
 import { formatDuration } from '../../shared/utils/format.js';
@@ -20,6 +21,7 @@ import { loadRouteListItems } from './route-list-sync.service.js';
 import type { RouteListItem, RouteSyncState } from './route-list-sync.transform.js';
 import { DEVICE_ICON, CLOUD_CHECK_ICON, CLOUD_ONLY_ICON } from '../../shared/icons/cloud-sync-icons.js';
 import { TRASH_ICON } from '../../shared/icons/action-icons.js';
+import { buildRouteCardFavoriteIcon, buildFavoritesFilterToggle } from './route-list-favorite.js';
 
 const THUMB_TRACE_SIZE = 72;
 
@@ -40,7 +42,9 @@ class RouteList extends BaseElement {
   private _sessionRepository: ISessionRepository | null = null;
   private _items: RouteListItem[] = [];
   private _hasSession = false;
+  private _session: Session | null = null;
   private _loading = false;
+  private _showFavoritesOnly = false;
   private photoRepo: IPhotoRepository | null = null;
 
   private async getPhotoRepo(): Promise<IPhotoRepository> {
@@ -87,6 +91,7 @@ class RouteList extends BaseElement {
     if (!this._repository) return;
     this._loading = true;
     this.render();
+    this._session = (await this._sessionRepository?.get()) ?? null;
     const result = await loadRouteListItems(getApiBaseUrl(), this._repository, this._sessionRepository);
     this._items = result.items;
     this._hasSession = result.hasSession;
@@ -129,24 +134,45 @@ class RouteList extends BaseElement {
     subtitle.textContent = `${String(items.length)} rutas guardadas · ${totalKm.toFixed(1)} km recorridos`;
     fragment.appendChild(subtitle);
 
+    if (items.length > 0) {
+      fragment.appendChild(buildFavoritesFilterToggle(this._showFavoritesOnly, () => {
+        this._showFavoritesOnly = !this._showFavoritesOnly;
+        this.render();
+      }));
+    }
+
     return fragment;
   }
 
   private buildBody(items: RouteListItem[]): HTMLElement {
-    if (items.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'route-list__empty';
-      empty.setAttribute('data-cy', 'route-list-empty');
-      empty.textContent = 'No hay rutas guardadas todavía';
-      return empty;
+    const visible = this._showFavoritesOnly ? items.filter((i) => i.route.isFavorite) : items;
+
+    if (visible.length === 0) {
+      return this._showFavoritesOnly ? this.buildEmptyFavoritesState() : this.buildEmptyState();
     }
 
     const list = document.createElement('div');
     list.className = 'route-list__cards';
-    for (const item of items) {
+    for (const item of visible) {
       list.appendChild(this.buildCard(item));
     }
     return list;
+  }
+
+  private buildEmptyState(): HTMLElement {
+    const empty = document.createElement('div');
+    empty.className = 'route-list__empty';
+    empty.setAttribute('data-cy', 'route-list-empty');
+    empty.textContent = 'No hay rutas guardadas todavía';
+    return empty;
+  }
+
+  private buildEmptyFavoritesState(): HTMLElement {
+    const empty = document.createElement('div');
+    empty.className = 'route-list__empty';
+    empty.setAttribute('data-cy', 'route-list-empty-favoritas');
+    empty.textContent = 'No tienes rutas favoritas todavía';
+    return empty;
   }
 
   private buildCard(item: RouteListItem): HTMLElement {
@@ -161,6 +187,14 @@ class RouteList extends BaseElement {
 
     card.appendChild(this.buildThumbWithBadge(item, card));
     card.appendChild(this.buildInfo(item));
+    if (this._repository) {
+      card.appendChild(buildRouteCardFavoriteIcon({
+        repository: this._repository,
+        session: this._session,
+        item,
+        onToggled: () => { this.render(); },
+      }));
+    }
     const deleteBtn = this.buildDeleteButton(item);
     if (deleteBtn) card.appendChild(deleteBtn);
     return card;

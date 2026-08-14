@@ -914,6 +914,97 @@ describe('route-detail - subir a la nube', () => {
   });
 });
 
+describe('route-detail - favorito', () => {
+  let repo: IRouteRepository;
+  let savedRoute: Route;
+
+  function favoriteIcon(root: ShadowRoot): HTMLElement {
+    return root.querySelector('[data-cy="route-detail-btn-favorito"]') as HTMLElement;
+  }
+
+  beforeEach(async () => {
+    localStorage.clear();
+    vi.clearAllMocks();
+    vi.mocked(checkIfRouteIsSynced).mockResolvedValue(false);
+    document.body.querySelectorAll('[data-cy^="photo-toast"]').forEach((t) => { t.remove(); });
+    repo = new MemoryRouteRepository();
+    savedRoute = await repo.save(
+      { duration: 300, totalDistance: 46.2, avgSpeed: 55, status: 'completed', visibility: 'private', origin: 'local' },
+      [], [],
+    );
+  });
+
+  it('sin sesión activa, el indicador se muestra (localizable) pero sin acción táctil', async () => {
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, new MemorySessionRepository());
+    const icon = favoriteIcon(root);
+    expect(icon).not.toBeNull();
+    expect(icon.tagName).toBe('SPAN');
+    document.body.removeChild(el);
+  });
+
+  it('con sesión activa, marca la ruta como favorita al pulsar el icono', async () => {
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
+    const btn = root.querySelector('[data-cy="route-detail-btn-favorito"]') as HTMLButtonElement;
+    expect(btn.classList.contains('favorite-icon--active')).toBe(false);
+
+    btn.click();
+    await waitRender();
+
+    expect(root.querySelector('[data-cy="route-detail-btn-favorito"]')?.classList.contains('favorite-icon--active')).toBe(true);
+    const fetched = await repo.getById(savedRoute.id);
+    expect(fetched?.isFavorite).toBe(true);
+    document.body.removeChild(el);
+  });
+
+  it('con sesión activa, desmarca una ruta ya favorita al volver a pulsar', async () => {
+    await repo.updateFavorite(savedRoute.id, true);
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
+    (root.querySelector('[data-cy="route-detail-btn-favorito"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    const fetched = await repo.getById(savedRoute.id);
+    expect(fetched?.isFavorite).toBe(false);
+    document.body.removeChild(el);
+  });
+
+  it('marcar favorita una ruta ya sincronizada dispara una re-subida en segundo plano', async () => {
+    vi.mocked(checkIfRouteIsSynced).mockResolvedValue(true);
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
+    (root.querySelector('[data-cy="route-detail-btn-favorito"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    expect(autoResyncIfNeeded).toHaveBeenCalledWith(expect.objectContaining({
+      apiBaseUrl: 'http://localhost:8080',
+      session: { token: 'jwt-token', email: 'rider@example.com' },
+      repository: repo,
+      isSynced: true,
+    }));
+    document.body.removeChild(el);
+  });
+
+  it('marcar favorita una ruta puramente local (nunca subida) no dispara ninguna subida real (isSynced: false)', async () => {
+    vi.mocked(checkIfRouteIsSynced).mockResolvedValue(false);
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
+    (root.querySelector('[data-cy="route-detail-btn-favorito"]') as HTMLButtonElement).click();
+    await waitRender();
+
+    expect(autoResyncIfNeeded).toHaveBeenCalledWith(expect.objectContaining({ isSynced: false }));
+    document.body.removeChild(el);
+  });
+});
+
 describe('route-detail - ruta exclusiva de la nube', () => {
   let repo: IRouteRepository;
 
@@ -939,6 +1030,7 @@ describe('route-detail - ruta exclusiva de la nube', () => {
         previewPolyline: null,
         name: 'Ruta solo en la nube',
         notes: null,
+        isFavorite: false,
       },
       points: [{ id: 'p1', routeId: cloudId, timestamp: 1000, lat: 40.1, lng: -3.1, alt: 600, speed: 10 }],
       stops: [],

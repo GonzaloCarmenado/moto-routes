@@ -212,3 +212,72 @@ func TestPostgresRouteStore_GetByIDForUserReturnsNilWhenNotFound(t *testing.T) {
 		t.Fatalf("expected nil for a non-existent route, got %+v", got)
 	}
 }
+
+func TestPostgresRouteStore_UpsertDefaultsIsFavoriteToFalse(t *testing.T) {
+	store := testStore(t)
+	userID := seedUser(t, store.Pool, "fav1@example.com")
+	detail := sampleDetail("99999999-9999-9999-9999-999999999999")
+
+	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got, err := store.GetByIDForUser(context.Background(), userID, detail.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.IsFavorite {
+		t.Fatalf("expected IsFavorite to default to false, got true")
+	}
+}
+
+func TestPostgresRouteStore_UpsertPersistsIsFavorite(t *testing.T) {
+	store := testStore(t)
+	userID := seedUser(t, store.Pool, "fav2@example.com")
+	detail := sampleDetail("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	detail.IsFavorite = true
+
+	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got, err := store.GetByIDForUser(context.Background(), userID, detail.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !got.IsFavorite {
+		t.Fatal("expected IsFavorite to be true")
+	}
+
+	unfavorited := detail
+	unfavorited.IsFavorite = false
+	if err := store.Upsert(context.Background(), userID, unfavorited); err != nil {
+		t.Fatalf("unexpected error on second upsert: %v", err)
+	}
+	got, err = store.GetByIDForUser(context.Background(), userID, detail.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.IsFavorite {
+		t.Fatal("expected IsFavorite to be false after re-upserting with false")
+	}
+}
+
+func TestPostgresRouteStore_ListByUserIncludesIsFavorite(t *testing.T) {
+	store := testStore(t)
+	userID := seedUser(t, store.Pool, "fav3@example.com")
+	detail := sampleDetail("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+	detail.IsFavorite = true
+
+	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	list, err := store.ListByUser(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(list) != 1 || !list[0].IsFavorite {
+		t.Fatalf("expected the listed route to have IsFavorite true, got %+v", list)
+	}
+}

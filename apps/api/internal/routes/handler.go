@@ -60,6 +60,7 @@ type upsertRequest struct {
 	Status        string               `json:"status"`
 	Name          *string              `json:"name"`
 	Notes         *string              `json:"notes"`
+	IsFavorite    bool                 `json:"is_favorite"`
 	Points        []upsertPointRequest `json:"points"`
 	Stops         []upsertStopRequest  `json:"stops"`
 }
@@ -98,6 +99,7 @@ func UpsertHandler(store Store) http.Handler {
 				Status:        req.Status,
 				Name:          req.Name,
 				Notes:         req.Notes,
+				IsFavorite:    req.IsFavorite,
 			},
 			Points: make([]Point, len(req.Points)),
 			Stops:  make([]Stop, len(req.Stops)),

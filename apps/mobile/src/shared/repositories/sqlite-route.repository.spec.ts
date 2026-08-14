@@ -67,6 +67,14 @@ function updateNotes(rows: DbRow[], params: unknown[]): { rowsAffected: number }
   return { rowsAffected: 1 };
 }
 
+function updateFavorite(rows: DbRow[], params: unknown[]): { rowsAffected: number } {
+  const [isFavorite, id] = params;
+  const row = rows.find((r) => r.table === 'routes' && r.data['id'] === id);
+  if (!row) return { rowsAffected: 0 };
+  row.data = { ...row.data, is_favorite: isFavorite };
+  return { rowsAffected: 1 };
+}
+
 function updatePreviewPolyline(rows: DbRow[], params: unknown[]): { rowsAffected: number } {
   const [previewPolyline, id] = params;
   const row = rows.find((r) => r.table === 'routes' && r.data['id'] === id);
@@ -99,6 +107,9 @@ function queryMock(rows: DbRow[], orderState: { value: number }, sql: string, pa
   }
   if (upper.startsWith('UPDATE ROUTES SET NOTES') && params) {
     return Promise.resolve(updateNotes(rows, params));
+  }
+  if (upper.startsWith('UPDATE ROUTES SET IS_FAVORITE') && params) {
+    return Promise.resolve(updateFavorite(rows, params));
   }
   if (upper.startsWith('UPDATE ROUTES') && params) return Promise.resolve(updateRoute(rows, params));
   if (upper.startsWith('DELETE') && params) return Promise.resolve(deleteRows(rows, params[0] as string));
@@ -166,6 +177,9 @@ interface MigrationMockOptions {
    * migración de `route_stops` (ver describe dedicado más abajo) — sin esto,
    * cada test contaría también el ALTER TABLE de `stop_type_id`. */
   hasStopTypeIdColumn?: boolean;
+  /** Por defecto `true`, mismo criterio que `hasStopTypeIdColumn` — solo se
+   * pone a `false` en el describe dedicado a la migración de `is_favorite`. */
+  hasFavoriteColumn?: boolean;
 }
 
 function createMigrationMockDb(options: MigrationMockOptions = {}): {
@@ -174,6 +188,7 @@ function createMigrationMockDb(options: MigrationMockOptions = {}): {
 } {
   const {
     hasPreviewPolylineColumn = false, hasNameColumn = false, hasNotesColumn = false, hasStopTypeIdColumn = true,
+    hasFavoriteColumn = true,
   } = options;
   const alterTableCalls: string[] = [];
   const preexistingRow = {
@@ -198,6 +213,7 @@ function createMigrationMockDb(options: MigrationMockOptions = {}): {
     ...(hasPreviewPolylineColumn ? [{ name: 'preview_polyline' }] : []),
     ...(hasNameColumn ? [{ name: 'name' }] : []),
     ...(hasNotesColumn ? [{ name: 'notes' }] : []),
+    ...(hasFavoriteColumn ? [{ name: 'is_favorite' }] : []),
   ];
   const stopColumnInfo = [
     { name: 'id' },
@@ -290,6 +306,35 @@ describe('name/notes columns migration (AC-004, AC-007, AC-015)', () => {
   it('does not run ALTER TABLE for name/notes when both already exist', async () => {
     const { db, alterTableCalls } = createMigrationMockDb({
       hasPreviewPolylineColumn: true, hasNameColumn: true, hasNotesColumn: true,
+    });
+    const repo = new SqliteRouteRepository(db);
+
+    await repo.getAll();
+
+    expect(alterTableCalls).toHaveLength(0);
+  });
+});
+
+describe('is_favorite column migration (favoritos-rutas)', () => {
+  it('runs ALTER TABLE exactly once when is_favorite is missing from a preexisting routes table, keeping the existing row intact', async () => {
+    const { db, alterTableCalls } = createMigrationMockDb({
+      hasPreviewPolylineColumn: true, hasNameColumn: true, hasNotesColumn: true, hasFavoriteColumn: false,
+    });
+    const repo = new SqliteRouteRepository(db);
+
+    const all = await repo.getAll();
+
+    expect(alterTableCalls).toContain('ALTER TABLE routes ADD COLUMN is_favorite INTEGER;');
+    expect(alterTableCalls).toHaveLength(1);
+
+    expect(all).toHaveLength(1);
+    expect(all[0]!.id).toBe('legacy-route-1');
+    expect(all[0]!.isFavorite).toBe(false);
+  });
+
+  it('does not run ALTER TABLE when is_favorite already exists', async () => {
+    const { db, alterTableCalls } = createMigrationMockDb({
+      hasPreviewPolylineColumn: true, hasNameColumn: true, hasNotesColumn: true, hasFavoriteColumn: true,
     });
     const repo = new SqliteRouteRepository(db);
 

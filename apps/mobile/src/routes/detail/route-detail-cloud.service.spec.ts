@@ -109,6 +109,7 @@ describe('loadCloudRouteDetail', () => {
       status: 'completed',
       name: null,
       notes: null,
+      isFavorite: false,
       points: [{ timestamp: 1000, lat: 40.1, lng: -3.1, alt: 600, speed: 10 }],
       stops: [],
     });
@@ -136,7 +137,7 @@ describe('checkIfRouteIsSynced', () => {
 
   it('devuelve true si el id de la ruta aparece en el resumen de la nube', async () => {
     vi.mocked(fetchCloudRoutes).mockResolvedValue([
-      { id: 'route-1', createdAt: '2026-08-01T10:00:00.000Z', duration: 1, totalDistance: 1, avgSpeed: 1, status: 'completed', name: null, notes: null },
+      { id: 'route-1', createdAt: '2026-08-01T10:00:00.000Z', duration: 1, totalDistance: 1, avgSpeed: 1, status: 'completed', name: null, notes: null, isFavorite: false },
     ]);
 
     await expect(checkIfRouteIsSynced(BASE_URL, SESSION, 'route-1')).resolves.toBe(true);

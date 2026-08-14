@@ -23,6 +23,7 @@ const sampleRoute: Route = {
   previewPolyline: null,
   name: 'Ruta de prueba',
   notes: null,
+  isFavorite: true,
 };
 
 const samplePoints: RoutePoint[] = [
@@ -49,6 +50,7 @@ describe('uploadRoute', () => {
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body['id']).toBe('route-1');
     expect(body['total_distance']).toBe(10);
+    expect(body['is_favorite']).toBe(true);
     expect((body['points'] as unknown[])[0]).toMatchObject({ timestamp: 1000, lat: 40.1 });
     expect((body['stops'] as unknown[])[0]).toMatchObject({ start_time: 1500, stop_category_id: 1 });
   });
@@ -90,14 +92,14 @@ describe('fetchCloudRoutes', () => {
       status: 200,
       json: () =>
         Promise.resolve([
-          { id: 'route-1', created_at: '2026-08-07T10:00:00.000Z', duration: 60, total_distance: 10, avg_speed: 30, status: 'completed', name: null, notes: null },
+          { id: 'route-1', created_at: '2026-08-07T10:00:00.000Z', duration: 60, total_distance: 10, avg_speed: 30, status: 'completed', name: null, notes: null, is_favorite: true },
         ]),
     });
 
     const result = await fetchCloudRoutes(BASE_URL, TOKEN);
 
     expect(result).toEqual([
-      { id: 'route-1', createdAt: '2026-08-07T10:00:00.000Z', duration: 60, totalDistance: 10, avgSpeed: 30, status: 'completed', name: null, notes: null },
+      { id: 'route-1', createdAt: '2026-08-07T10:00:00.000Z', duration: 60, totalDistance: 10, avgSpeed: 30, status: 'completed', name: null, notes: null, isFavorite: true },
     ]);
   });
 
@@ -129,6 +131,7 @@ describe('fetchCloudRouteDetail', () => {
           status: 'completed',
           name: null,
           notes: null,
+          is_favorite: true,
           points: [{ timestamp: 1000, lat: 40.1, lng: -3.1, alt: 600, speed: 10 }],
           stops: [{ start_time: 1500, end_time: 1600, lat: 40.15, lng: -3.15, type: 'manual', stop_category_id: 1 }],
         }),
@@ -138,6 +141,7 @@ describe('fetchCloudRouteDetail', () => {
 
     expect(result.points).toEqual([{ timestamp: 1000, lat: 40.1, lng: -3.1, alt: 600, speed: 10 }]);
     expect(result.stops).toEqual([{ startTime: 1500, endTime: 1600, lat: 40.15, lng: -3.15, type: 'manual', stopCategoryId: 1 }]);
+    expect(result.isFavorite).toBe(true);
   });
 
   it('lanza RouteCloudApiError en 404 (no existe o es de otra cuenta)', async () => {

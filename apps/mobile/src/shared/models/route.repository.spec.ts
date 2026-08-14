@@ -195,6 +195,45 @@ function registerNameAndNotesTests(getRepo: () => IRouteRepository): void {
   });
 }
 
+function registerFavoriteTests(getRepo: () => IRouteRepository): void {
+  it('should default isFavorite to false on a freshly saved route', async () => {
+    const saved = await getRepo().save(sampleRoute, [], []);
+    expect(saved.isFavorite).toBe(false);
+  });
+
+  it('should persist and retrieve isFavorite via updateFavorite', async () => {
+    const saved = await getRepo().save(sampleRoute, [], []);
+    await getRepo().updateFavorite(saved.id, true);
+
+    const fetched = await getRepo().getById(saved.id);
+    expect(fetched!.isFavorite).toBe(true);
+  });
+
+  it('should toggle isFavorite back to false via updateFavorite', async () => {
+    const saved = await getRepo().save(sampleRoute, [], []);
+    await getRepo().updateFavorite(saved.id, true);
+    await getRepo().updateFavorite(saved.id, false);
+
+    const fetched = await getRepo().getById(saved.id);
+    expect(fetched!.isFavorite).toBe(false);
+  });
+
+  it('should not throw when updateFavorite targets a non-existent route id (no-op, same as updateNotes)', async () => {
+    await expect(getRepo().updateFavorite('nonexistent', true)).resolves.not.toThrow();
+  });
+
+  it('should NOT wipe isFavorite on a subsequent save() call for the same id (same carry-forward pattern as previewPolyline/notes)', async () => {
+    const routeId = crypto.randomUUID();
+    await getRepo().save({ ...sampleRoute, id: routeId, status: 'active' }, [], []);
+    await getRepo().updateFavorite(routeId, true);
+
+    await getRepo().save({ ...sampleRoute, id: routeId, status: 'completed' }, [], []);
+
+    const fetched = await getRepo().getById(routeId);
+    expect(fetched!.isFavorite).toBe(true);
+  });
+}
+
 function registerQueryTests(getRepo: () => IRouteRepository): void {
   it('should return all routes ordered by date descending', async () => {
     const r1 = await getRepo().save({ ...sampleRoute, duration: 100 }, [], []);
@@ -264,5 +303,6 @@ export function createRouteSuite(name: string, factory: () => IRouteRepository):
     registerDeletionAndEmptyStateTests(getRepo);
     registerPreviewPolylineTests(getRepo);
     registerNameAndNotesTests(getRepo);
+    registerFavoriteTests(getRepo);
   });
 }

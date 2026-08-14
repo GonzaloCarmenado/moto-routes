@@ -11,6 +11,7 @@ const detail: CloudRouteDetail = {
   status: 'completed',
   name: 'Ruta de la nube',
   notes: null,
+  isFavorite: true,
   points: [{ timestamp: 1000, lat: 40.1, lng: -3.1, alt: 600, speed: 10 }],
   stops: [{ startTime: 1200, endTime: 1300, lat: 40.15, lng: -3.15, type: 'manual', stopCategoryId: 2 }],
 };
@@ -25,6 +26,7 @@ describe('cloudRouteDetailToLocal', () => {
       origin: 'remote',
       previewPolyline: null,
       visibility: 'private',
+      isFavorite: true,
     });
   });
 

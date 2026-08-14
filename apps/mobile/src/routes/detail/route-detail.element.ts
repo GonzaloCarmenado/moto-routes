@@ -9,12 +9,9 @@ import type { IStopTypesCacheRepository } from '../../shared/models/stop-types-c
 import { getApiBaseUrl } from '../../shared/http/api-config.js';
 import { loadCloudRouteDetail, checkIfRouteIsSynced } from './route-detail-cloud.service.js';
 import { triggerAutoResync, triggerPhotoUpload, triggerPhotoDelete, type SyncTriggerContext } from './route-detail-sync-triggers.js';
-import { buildSyncIconButton } from './route-detail-cloud-upload.js';
 import { buildLoadingState, buildEmptyMessage, buildLoadErrorMessage } from './route-detail-states.js';
 import type { StopCategory } from '../../shared/stop-types/stop-types.types.js';
 import { formatDuration } from '../../shared/utils/format.js';
-import { formatRouteDate } from '../../shared/utils/date.js';
-import { buildRouteDisplayName } from '../../shared/utils/route-naming.js';
 import '../../shared/route-map/route-map.element.js';
 import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from '../../shared/route-map/route-map.element.js';
 import type { MapPhoto } from '../../shared/route-map/route-map-photos.js';
@@ -35,6 +32,7 @@ import { openPhotoViewer } from '../../shared/photo-viewer/photo-viewer.element.
 import '../../shared/tab-bar/tab-bar.element.js';
 import type { PhotoWithUrl, TabBarElement } from './route-detail.types.js';
 import { buildNotasPanel, saveRouteNote } from './route-detail-notes.js';
+import { buildDetailHeader } from './route-detail-header.js';
 import { buildTimelinePanel } from './route-detail-timeline.js';
 import type { TimelinePhotoInput, TimelineStopInput } from './route-timeline.types.js';
 
@@ -250,30 +248,24 @@ class RouteDetail extends BaseElement {
   private buildContent(route: Route): HTMLElement {
     const content = document.createElement('div');
     content.className = 'detail-content';
-    content.appendChild(this.buildHeader(route));
-    content.appendChild(this.buildStatGrid(route));
-    content.appendChild(this.buildTabBar(route));
-    return content;
-  }
-
-  /**
-   * "Subir a la nube" / "Ya sincronizada": solo con sesión activa y ruta de
-   * origen local (AC de la spec `route-cloud-sync`) — sin sesión, o para una
-   * ruta ya cargada desde la nube, la acción no tiene sentido y no se muestra.
-   */
-  private buildSyncIcon(route: Route): HTMLButtonElement | null {
-    if (!this._session || !this._isLocalRoute || !this._repository) return null;
-    return buildSyncIconButton({
-      apiBaseUrl: getApiBaseUrl(),
-      session: this._session,
-      repository: this._repository,
+    content.appendChild(buildDetailHeader({
       route,
+      repository: this._repository,
+      session: this._session,
+      isLocalRoute: this._isLocalRoute,
       isSynced: this._isSynced,
+      onFavoriteToggled: () => {
+        triggerAutoResync(this.syncContext(), route);
+        this.render();
+      },
       onUploaded: () => {
         this._isSynced = true;
         this.render();
       },
-    });
+    }));
+    content.appendChild(this.buildStatGrid(route));
+    content.appendChild(this.buildTabBar(route));
+    return content;
   }
 
   /**
@@ -316,31 +308,6 @@ class RouteDetail extends BaseElement {
     const chart = this.buildChart();
     chart.setAttribute('slot', 'estadisticas');
     return chart;
-  }
-
-  private buildHeader(route: Route): DocumentFragment {
-    const fragment = document.createDocumentFragment();
-
-    const titleRow = document.createElement('div');
-    titleRow.className = 'detail-title-row';
-
-    const title = document.createElement('h1');
-    title.className = 'detail-title';
-    title.setAttribute('data-cy', 'route-detail-title');
-    title.textContent = buildRouteDisplayName(route.name, route.createdAt);
-    titleRow.appendChild(title);
-
-    const syncIcon = this.buildSyncIcon(route);
-    if (syncIcon) titleRow.appendChild(syncIcon);
-
-    fragment.appendChild(titleRow);
-
-    const date = document.createElement('p');
-    date.className = 'detail-date';
-    date.textContent = formatRouteDate(route.createdAt);
-    fragment.appendChild(date);
-
-    return fragment;
   }
 
   private buildStatGrid(route: Route): HTMLElement {

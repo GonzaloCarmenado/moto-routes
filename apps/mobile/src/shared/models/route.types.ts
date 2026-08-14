@@ -37,6 +37,8 @@ export interface Route {
   name: string | null;
   /** Notas de texto libre editadas desde el detalle de ruta — null si no se ha guardado ninguna. */
   notes: string | null;
+  /** Marcada como favorita por el usuario, ligada a su cuenta — false por defecto. */
+  isFavorite: boolean;
 }
 
 /** Punto GPS individual de una ruta (entidad de lectura). */

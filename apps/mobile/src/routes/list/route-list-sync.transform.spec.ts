@@ -16,6 +16,7 @@ function makeLocalRoute(id: string): Route {
     previewPolyline: null,
     name: null,
     notes: null,
+    isFavorite: false,
   };
 }
 
@@ -29,6 +30,7 @@ function makeCloudSummary(id: string, overrides: Partial<CloudRouteSummary> = {}
     status: 'completed',
     name: null,
     notes: null,
+    isFavorite: false,
     ...overrides,
   };
 }

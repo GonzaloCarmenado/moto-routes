@@ -16,6 +16,7 @@ function buildRoute(overrides: Partial<Route> = {}): Route {
     previewPolyline: null,
     name: null,
     notes: null,
+    isFavorite: false,
     ...overrides,
   };
 }
@@ -34,6 +35,7 @@ function buildMockRepo(points: RoutePoint[]): IRouteRepository {
     delete: vi.fn(),
     updatePreviewPolyline: vi.fn().mockResolvedValue(undefined),
     updateNotes: vi.fn().mockResolvedValue(undefined),
+    updateFavorite: vi.fn().mockResolvedValue(undefined),
   };
 }
 
