@@ -66,7 +66,7 @@ func TestAcceptHandler_ClonesMetadataPointsStopsAndPhotosAsNewIndependentRoute(t
 	routeStore := newFakeRouteStore()
 	routeStore.byUser[1] = map[string]*routes.Detail{
 		"route-1": {
-			Route: routes.Route{ID: "route-1", Name: &name, IsFavorite: true, Duration: 60, TotalDistance: 10, AvgSpeed: 20, Status: "completed"},
+			Route:  routes.Route{ID: "route-1", Name: &name, IsFavorite: true, Duration: 60, TotalDistance: 10, AvgSpeed: 20, Status: "completed"},
 			Points: []routes.Point{{Timestamp: 1000, Lat: 40.1, Lng: -3.1}},
 			Stops:  []routes.Stop{{StartTime: 1000, Lat: 40.1, Lng: -3.1, Type: "manual"}},
 		},
