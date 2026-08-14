@@ -87,6 +87,31 @@ function uploadRouteViaApi(token: string, route: Route, points: RoutePoint[] = [
   });
 }
 
+/**
+ * Comprueba un campo de una ruta contra el servidor real, reintentando la
+ * petición HTTP de verdad (no solo releyendo la misma respuesta) hasta que
+ * el valor esperado llega o se agota el presupuesto de tiempo — necesario
+ * porque la re-subida que dispara este campo es fire-and-forget en segundo
+ * plano (design.md D3 de favoritos-rutas): un `cy.request(...).its(...)`
+ * encadenado no reintenta la llamada de red en cada retry de `.should()`,
+ * solo relee la respuesta ya resuelta la primera vez, así que puede fallar
+ * por pura carrera aunque la re-subida sí termine a tiempo.
+ */
+function expectSyncedField(routeId: string, token: string, field: 'notes' | 'is_favorite', expected: unknown, attempt = 0): void {
+  cy.request({
+    url: `${API_BASE_URL}/api/routes/${routeId}`,
+    headers: { Authorization: `Bearer ${token}` },
+  }).then((response) => {
+    const actual = (response.body as Record<string, unknown>)[field];
+    if (actual === expected || attempt >= 20) {
+      expect(actual).to.eq(expected);
+      return;
+    }
+    cy.wait(200);
+    expectSyncedField(routeId, token, field, expected, attempt + 1);
+  });
+}
+
 function loginViaUi(email: string): void {
   cy.get('[data-cy="nav-perfil"]').click();
   cy.get('[data-cy="auth-btn-abrir-login"]').click();
@@ -151,10 +176,7 @@ describe('Rutas en la nube - subida, listado combinado, detalle y aislamiento en
 
         // La re-subida es en segundo plano y sin toast propio — se comprueba
         // contra el servidor real, no contra ningún indicador visual nuevo.
-        cy.request({
-          url: `http://localhost:8080/api/routes/${route.id}`,
-          headers: { Authorization: `Bearer ${token}` },
-        }).its('body.notes').should('eq', 'Nota real de verificación');
+        expectSyncedField(route.id, token, 'notes', 'Nota real de verificación');
       });
     });
   });
@@ -177,10 +199,7 @@ describe('Rutas en la nube - subida, listado combinado, detalle y aislamiento en
 
         // La re-subida es en segundo plano, sin toast propio (favoritos-rutas, design.md D3) —
         // se comprueba contra el servidor real, mismo criterio que la re-subida de notas.
-        cy.request({
-          url: `http://localhost:8080/api/routes/${route.id}`,
-          headers: { Authorization: `Bearer ${token}` },
-        }).its('body.is_favorite').should('eq', true);
+        expectSyncedField(route.id, token, 'is_favorite', true);
 
         cy.get('[data-cy="route-detail-btn-favorito"]').click();
         cy.get('[data-cy="route-detail-btn-favorito"]').should('not.have.class', 'favorite-icon--active');
@@ -209,10 +228,7 @@ describe('Rutas en la nube - subida, listado combinado, detalle y aislamiento en
         // La card no navega al detalle al pulsar el icono de favorito (stopPropagation).
         cy.get('[data-cy="route-detail-title"]').should('not.exist');
 
-        cy.request({
-          url: `http://localhost:8080/api/routes/${route.id}`,
-          headers: { Authorization: `Bearer ${token}` },
-        }).its('body.is_favorite').should('eq', true);
+        expectSyncedField(route.id, token, 'is_favorite', true);
       });
     });
   });
