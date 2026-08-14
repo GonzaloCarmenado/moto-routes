@@ -2,6 +2,7 @@ import '../cockpit/cockpit.element.js';
 import '../shared/nav-bar/nav-bar.element.js';
 import '../routes/list/route-list.element.js';
 import '../routes/detail/route-detail.element.js';
+import '../routes/sharing/route-sharing.element.js';
 import '../profile/profile.element.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { IProfileRepository } from '../shared/models/profile.repository.js';
@@ -27,16 +28,16 @@ import { isTauri } from '../shared/services/photo-capture-adapter.service.js';
 import { applyCypressSeed } from './app-seed.service.js';
 import type { NavBarActiveView } from '../shared/nav-bar/nav-bar.element.js';
 
-/** Vista interna de `app-root` (4 vistas — `nav-bar` solo entiende 3, ver `navViewFor`). */
-type AppView = 'cockpit' | 'routes' | 'detail' | 'profile';
+/** Vista interna de `app-root` (5 vistas — `nav-bar` solo entiende 3, ver `navViewFor`). */
+type AppView = 'cockpit' | 'routes' | 'detail' | 'profile' | 'sharing';
 
 /**
- * Traduce las 4 vistas internas de `app-root` a las 3 que entiende `<nav-bar>`
- * (AC-036): el detalle de ruta es una sub-vista de "Rutas", así que se marca
- * "Rutas" como activo mientras se visualiza un detalle.
+ * Traduce las 5 vistas internas de `app-root` a las 3 que entiende `<nav-bar>`
+ * (AC-036): el detalle de ruta y la pantalla de invitaciones son sub-vistas
+ * de "Rutas", así que se marca "Rutas" como activo mientras se visualizan.
  */
 function navViewFor(view: AppView): NavBarActiveView {
-  return view === 'detail' ? 'routes' : view;
+  return view === 'detail' || view === 'sharing' ? 'routes' : view;
 }
 
 class AppRoot extends BaseElement {
@@ -48,6 +49,7 @@ class AppRoot extends BaseElement {
   private routeListEl: HTMLElement | null = null;
   private routeDetailEl: HTMLElement | null = null;
   private profileEl: HTMLElement | null = null;
+  private sharingEl: HTMLElement | null = null;
   private navBarEl: HTMLElement | null = null;
 
   private readonly onGrabar = (): void => { this.showView('cockpit'); };
@@ -60,6 +62,7 @@ class AppRoot extends BaseElement {
       this.showView('detail');
     }
   };
+  private readonly onViewSharing = (): void => { this.showView('sharing'); };
   private readonly onBackToList = (): void => { this.showView('routes'); };
 
   connectedCallback(): void {
@@ -67,6 +70,7 @@ class AppRoot extends BaseElement {
     window.addEventListener(APP_EVENTS.NAV_RUTAS, this.onRutas);
     window.addEventListener(APP_EVENTS.NAV_PERFIL, this.onPerfil);
     window.addEventListener(APP_EVENTS.VIEW_ROUTE, this.onViewRoute);
+    window.addEventListener(APP_EVENTS.VIEW_SHARING, this.onViewSharing);
     window.addEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
     void this.init();
   }
@@ -76,7 +80,32 @@ class AppRoot extends BaseElement {
     window.removeEventListener(APP_EVENTS.NAV_RUTAS, this.onRutas);
     window.removeEventListener(APP_EVENTS.NAV_PERFIL, this.onPerfil);
     window.removeEventListener(APP_EVENTS.VIEW_ROUTE, this.onViewRoute);
+    window.removeEventListener(APP_EVENTS.VIEW_SHARING, this.onViewSharing);
     window.removeEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
+  }
+
+  /** Extraído de `render()` para no superar el límite de statements de la función (ESLint `max-statements`). */
+  private buildCockpitView(): HTMLElement {
+    const cockpit = document.createElement('cockpit-view') as HTMLElement & {
+      repository: IRouteRepository;
+      stopTypesCacheRepository: IStopTypesCacheRepository;
+    };
+    cockpit.repository = this.repo;
+    cockpit.stopTypesCacheRepository = this.stopTypesCacheRepo;
+    cockpit.className = 'app-view';
+    return cockpit;
+  }
+
+  /** Extraído de `render()` por el mismo motivo que `buildCockpitView()`. */
+  private buildRouteListView(): HTMLElement {
+    const routeList = document.createElement('route-list') as HTMLElement & {
+      repository: IRouteRepository;
+      sessionRepository: ISessionRepository;
+    };
+    routeList.sessionRepository = this.sessionRepo;
+    routeList.repository = this.repo;
+    routeList.className = 'app-view';
+    return routeList;
   }
 
   /** Extraído de `render()` para no superar el límite de statements de la función (ESLint `max-statements`). */
@@ -92,6 +121,14 @@ class AppRoot extends BaseElement {
     routeDetail.stopTypesCacheRepository = this.stopTypesCacheRepo;
     routeDetail.className = 'app-view';
     return routeDetail;
+  }
+
+  /** Extraído de `render()` por el mismo motivo que `buildRouteDetailView()`. */
+  private buildRouteSharingView(): HTMLElement {
+    const sharing = document.createElement('route-sharing') as HTMLElement & { sessionRepository: ISessionRepository };
+    sharing.sessionRepository = this.sessionRepo;
+    sharing.className = 'app-view';
+    return sharing;
   }
 
   // Decide primero por isTauri() (en vez de por éxito/fracaso del intento de SQLite)
@@ -141,23 +178,11 @@ class AppRoot extends BaseElement {
   // (posición y visibilidad de las vistas) vive en index.css: `app-root`,
   // `app-root > .app-view` y `app-root > nav-bar`.
   protected render(): void {
-    const cockpit = document.createElement('cockpit-view') as HTMLElement & {
-      repository: IRouteRepository;
-      stopTypesCacheRepository: IStopTypesCacheRepository;
-    };
-    cockpit.repository = this.repo;
-    cockpit.stopTypesCacheRepository = this.stopTypesCacheRepo;
-    cockpit.className = 'app-view';
+    const cockpit = this.buildCockpitView();
     this.cockpitEl = cockpit;
     this.appendChild(cockpit);
 
-    const routeList = document.createElement('route-list') as HTMLElement & {
-      repository: IRouteRepository;
-      sessionRepository: ISessionRepository;
-    };
-    routeList.sessionRepository = this.sessionRepo;
-    routeList.repository = this.repo;
-    routeList.className = 'app-view';
+    const routeList = this.buildRouteListView();
     this.routeListEl = routeList;
     this.appendChild(routeList);
 
@@ -177,6 +202,10 @@ class AppRoot extends BaseElement {
     this.profileEl = profile;
     this.appendChild(profile);
 
+    const sharing = this.buildRouteSharingView();
+    this.sharingEl = sharing;
+    this.appendChild(sharing);
+
     this.navBarEl = document.createElement('nav-bar');
     this.appendChild(this.navBarEl);
 
@@ -191,6 +220,7 @@ class AppRoot extends BaseElement {
     if (this.routeListEl) this.routeListEl.style.display = view === 'routes' ? '' : 'none';
     if (this.routeDetailEl) this.routeDetailEl.style.display = view === 'detail' ? '' : 'none';
     if (this.profileEl) this.profileEl.style.display = view === 'profile' ? '' : 'none';
+    if (this.sharingEl) this.sharingEl.style.display = view === 'sharing' ? '' : 'none';
     if (this.navBarEl) {
       (this.navBarEl as HTMLElement & { activeView: NavBarActiveView }).activeView = navViewFor(view);
     }

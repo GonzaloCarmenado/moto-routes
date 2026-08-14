@@ -48,6 +48,7 @@ export default defineConfig({
         'src/shared/models/stop-types-cache.repository.ts',
         'src/shared/models/session.types.ts',
         'src/shared/models/session.repository.ts',
+        'src/shared/models/route-sharing.types.ts',
         'src/shared/stop-types/stop-types.types.ts',
         'src/routes/route-detail.types.ts',
         'src/routes/route-timeline.types.ts',

@@ -18,6 +18,7 @@ import (
 	"github.com/crzverde/moto-routes/apps/api/internal/photos"
 	"github.com/crzverde/moto-routes/apps/api/internal/ping"
 	"github.com/crzverde/moto-routes/apps/api/internal/routes"
+	"github.com/crzverde/moto-routes/apps/api/internal/routesharing"
 	"github.com/crzverde/moto-routes/apps/api/internal/stoptypes"
 )
 
@@ -47,6 +48,12 @@ const (
 const (
 	passwordResetRateLimitMaxAttempts = 3
 	passwordResetRateLimitWindow      = 15 * time.Minute
+)
+
+// Límite de invitaciones de compartir ruta por email destino: 5 cada 15 minutos.
+const (
+	routeShareRateLimitMaxAttempts = 5
+	routeShareRateLimitWindow      = 15 * time.Minute
 )
 
 // dbConnectTimeout acota cuánto espera cada intento de conexión a PostgreSQL
@@ -144,6 +151,23 @@ func main() {
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/routes/{id}/photos/{photoId}", photos.DownloadHandler(photoStore, blobStore, cfg.PhotoEncryptionKey).ServeHTTP)
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Delete("/api/routes/{id}/photos/{photoId}", photos.DeleteHandler(photoStore, blobStore).ServeHTTP)
 	router.With(httpmw.PublicCORS).Options("/api/routes/{id}/photos/{photoId}", func(http.ResponseWriter, *http.Request) {})
+
+	shareStore := routesharing.PostgresRouteShareStore{Pool: pool}
+	routeShareRateLimiter := auth.NewLoginRateLimiter(routeShareRateLimitMaxAttempts, routeShareRateLimitWindow)
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/route-shares",
+		routesharing.RateLimitedCreateInvitationHandler(shareStore, routeStore, userStore, routeShareRateLimiter).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/route-shares", func(http.ResponseWriter, *http.Request) {})
+
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/route-shares/received", routesharing.ListReceivedHandler(shareStore).ServeHTTP)
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/route-shares/sent", routesharing.ListSentHandler(shareStore).ServeHTTP)
+
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/route-shares/{id}/accept",
+		routesharing.AcceptHandler(shareStore, routeStore, photoStore, blobStore).ServeHTTP)
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/route-shares/{id}/decline", routesharing.DeclineHandler(shareStore).ServeHTTP)
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/route-shares/{id}/revoke", routesharing.RevokeHandler(shareStore).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/route-shares/{id}/accept", func(http.ResponseWriter, *http.Request) {})
+	router.With(httpmw.PublicCORS).Options("/api/route-shares/{id}/decline", func(http.ResponseWriter, *http.Request) {})
+	router.With(httpmw.PublicCORS).Options("/api/route-shares/{id}/revoke", func(http.ResponseWriter, *http.Request) {})
 
 	log.Printf("listening on %s", cfg.ServerAddress)
 	if err := http.ListenAndServe(cfg.ServerAddress, router); err != nil {

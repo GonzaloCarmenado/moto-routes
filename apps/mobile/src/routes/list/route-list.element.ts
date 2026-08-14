@@ -22,6 +22,7 @@ import type { RouteListItem, RouteSyncState } from './route-list-sync.transform.
 import { DEVICE_ICON, CLOUD_CHECK_ICON, CLOUD_ONLY_ICON } from '../../shared/icons/cloud-sync-icons.js';
 import { TRASH_ICON } from '../../shared/icons/action-icons.js';
 import { buildRouteCardFavoriteIcon, buildFavoritesFilterToggle } from './route-list-favorite.js';
+import { buildSharingButton, hasPendingReceivedInvitations } from './route-list-sharing.js';
 
 const THUMB_TRACE_SIZE = 72;
 
@@ -45,6 +46,7 @@ class RouteList extends BaseElement {
   private _session: Session | null = null;
   private _loading = false;
   private _showFavoritesOnly = false;
+  private _hasPendingShares = false;
   private photoRepo: IPhotoRepository | null = null;
 
   private async getPhotoRepo(): Promise<IPhotoRepository> {
@@ -87,14 +89,31 @@ class RouteList extends BaseElement {
     window.removeEventListener(APP_EVENTS.NAV_RUTAS, this.onNavRutas);
   }
 
+  /**
+   * `fetchAndRender` puede dispararse varias veces solapadas (el setter de
+   * `repository` y `connectedCallback` ya lo hacían los dos al arrancar la
+   * app, antes de que exista sesión; `onNavRutas` añade una más después del
+   * login) — sin guardarlas, la más lenta puede resolver la última y
+   * sobrescribir con datos obsoletos (p. ej. "sin invitaciones pendientes")
+   * el resultado ya correcto de una llamada posterior más rápida. Bug real
+   * encontrado en Cypress (condición de carrera, no solo lentitud del test).
+   */
+  private _fetchToken = 0;
+
   private async fetchAndRender(): Promise<void> {
     if (!this._repository) return;
+    const token = ++this._fetchToken;
     this._loading = true;
     this.render();
     this._session = (await this._sessionRepository?.get()) ?? null;
-    const result = await loadRouteListItems(getApiBaseUrl(), this._repository, this._sessionRepository);
+    const [result, hasPendingShares] = await Promise.all([
+      loadRouteListItems(getApiBaseUrl(), this._repository, this._sessionRepository),
+      hasPendingReceivedInvitations(getApiBaseUrl(), this._session),
+    ]);
+    if (token !== this._fetchToken) return;
     this._items = result.items;
     this._hasSession = result.hasSession;
+    this._hasPendingShares = hasPendingShares;
     this._loading = false;
     this.render();
   }
@@ -133,6 +152,10 @@ class RouteList extends BaseElement {
     subtitle.className = 'route-list__subtitle';
     subtitle.textContent = `${String(items.length)} rutas guardadas · ${totalKm.toFixed(1)} km recorridos`;
     fragment.appendChild(subtitle);
+
+    if (this._hasSession) {
+      fragment.appendChild(buildSharingButton(this._hasPendingShares));
+    }
 
     if (items.length > 0) {
       fragment.appendChild(buildFavoritesFilterToggle(this._showFavoritesOnly, () => {

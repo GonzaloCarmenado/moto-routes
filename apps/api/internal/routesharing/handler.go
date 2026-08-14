@@ -1,0 +1,227 @@
+package routesharing
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"log"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/crzverde/moto-routes/apps/api/internal/auth"
+	"github.com/crzverde/moto-routes/apps/api/internal/routes"
+)
+
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
+func writeError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(errorResponse{Error: message})
+}
+
+func writeJSON(w http.ResponseWriter, status int, body any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
+}
+
+func requireUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "missing or invalid token")
+		return 0, false
+	}
+	return userID, true
+}
+
+type createInvitationRequest struct {
+	RouteID string `json:"route_id"`
+	Email   string `json:"email"`
+}
+
+type genericMessageResponse struct {
+	Message string `json:"message"`
+}
+
+const invitationCreatedMessage = "if the route is eligible and the account exists, an invitation has been sent"
+
+// CreateInvitationHandler crea una invitación de compartir. Responde siempre
+// el mismo mensaje genérico, exista o no la cuenta destino, sea o no
+// elegible la ruta — nunca revela en la respuesta cuál de los casos fue
+// (ver design.md D2, mismo criterio que RequestPasswordResetHandler).
+func CreateInvitationHandler(shareStore Store, routeStore routes.Store, userStore auth.UserStore) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := requireUserID(w, r)
+		if !ok {
+			return
+		}
+
+		var req createInvitationRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		if req.RouteID == "" || req.Email == "" {
+			writeError(w, http.StatusBadRequest, "route_id and email are required")
+			return
+		}
+
+		tryCreateInvitation(r.Context(), shareStore, routeStore, userStore, userID, req.RouteID, req.Email)
+
+		writeJSON(w, http.StatusOK, genericMessageResponse{Message: invitationCreatedMessage})
+	})
+}
+
+// tryCreateInvitation intenta crear la invitación, pero nunca comunica al
+// llamador si lo consiguió — cualquier fallo (ruta no elegible, cuenta
+// inexistente o no verificada, invitando al propio email) resulta
+// silenciosamente en no crear nada, sin distinguir el motivo.
+func tryCreateInvitation(ctx context.Context, shareStore Store, routeStore routes.Store, userStore auth.UserStore, fromUserID int64, routeID, email string) {
+	route, err := routeStore.GetByIDForUser(ctx, fromUserID, routeID)
+	if err != nil {
+		log.Printf("route sharing: failed to look up route %s: %v", routeID, err)
+		return
+	}
+	if route == nil {
+		return
+	}
+
+	toUser, err := userStore.FindUserByEmail(ctx, email)
+	if err != nil {
+		return
+	}
+	if !toUser.EmailVerified {
+		return
+	}
+
+	if _, err := shareStore.Create(ctx, routeID, fromUserID, toUser.ID); err != nil {
+		if !errors.Is(err, ErrCannotShareWithSelf) {
+			log.Printf("route sharing: failed to create invitation for route %s: %v", routeID, err)
+		}
+	}
+}
+
+// RateLimitedCreateInvitationHandler envuelve CreateInvitationHandler
+// limitando invitaciones repetidas al mismo email en poco tiempo — mismo
+// patrón que RateLimitedRequestPasswordResetHandler.
+func RateLimitedCreateInvitationHandler(shareStore Store, routeStore routes.Store, userStore auth.UserStore, limiter *auth.LoginRateLimiter) http.Handler {
+	inner := CreateInvitationHandler(shareStore, routeStore, userStore)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rawBody, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(rawBody))
+
+		var req createInvitationRequest
+		_ = json.Unmarshal(rawBody, &req)
+
+		if req.Email != "" && !limiter.Allowed(req.Email) {
+			writeError(w, http.StatusTooManyRequests, "too many invitations sent to this email, try again later")
+			return
+		}
+		if req.Email != "" {
+			limiter.RecordFailure(req.Email)
+		}
+
+		inner.ServeHTTP(w, r)
+	})
+}
+
+// ListReceivedHandler devuelve las invitaciones pendientes recibidas por el
+// usuario autenticado.
+func ListReceivedHandler(shareStore Store) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := requireUserID(w, r)
+		if !ok {
+			return
+		}
+
+		received, err := shareStore.ListReceivedPending(r.Context(), userID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "could not process the request")
+			return
+		}
+		if received == nil {
+			received = []ReceivedInvitation{}
+		}
+
+		writeJSON(w, http.StatusOK, received)
+	})
+}
+
+// ListSentHandler devuelve las invitaciones enviadas por el usuario autenticado.
+func ListSentHandler(shareStore Store) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := requireUserID(w, r)
+		if !ok {
+			return
+		}
+
+		sent, err := shareStore.ListSentByUser(r.Context(), userID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "could not process the request")
+			return
+		}
+		if sent == nil {
+			sent = []SentInvitation{}
+		}
+
+		writeJSON(w, http.StatusOK, sent)
+	})
+}
+
+// DeclineHandler rechaza una invitación pendiente del usuario autenticado.
+// Responde 404 tanto si no existe como si no le pertenece o ya no está
+// pendiente — nunca revela cuál de los casos es (ver design.md D6).
+func DeclineHandler(shareStore Store) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := requireUserID(w, r)
+		if !ok {
+			return
+		}
+		invitationID := chi.URLParam(r, "id")
+
+		if err := shareStore.MarkDeclined(r.Context(), userID, invitationID); err != nil {
+			writeShareStoreError(w, err)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+// RevokeHandler revoca una invitación pendiente enviada por el usuario
+// autenticado. Mismo criterio 404 que DeclineHandler.
+func RevokeHandler(shareStore Store) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := requireUserID(w, r)
+		if !ok {
+			return
+		}
+		invitationID := chi.URLParam(r, "id")
+
+		if err := shareStore.MarkRevoked(r.Context(), userID, invitationID); err != nil {
+			writeShareStoreError(w, err)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+func writeShareStoreError(w http.ResponseWriter, err error) {
+	if errors.Is(err, ErrInvitationNotFound) {
+		writeError(w, http.StatusNotFound, "invitation not found")
+		return
+	}
+	writeError(w, http.StatusInternalServerError, "could not process the request")
+}

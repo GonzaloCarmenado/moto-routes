@@ -27,3 +27,9 @@ export type {
 } from './profile.types.js';
 
 export type { IProfileRepository } from './profile.repository.js';
+
+export type {
+  RouteShareStatus,
+  ReceivedRouteShareInvitation,
+  SentRouteShareInvitation,
+} from './route-sharing.types.js';

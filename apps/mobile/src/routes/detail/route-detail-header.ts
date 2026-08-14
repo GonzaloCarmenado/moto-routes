@@ -12,6 +12,7 @@ import { formatRouteDate } from '../../shared/utils/date.js';
 import { buildRouteDisplayName } from '../../shared/utils/route-naming.js';
 import { buildSyncIconButton } from './route-detail-cloud-upload.js';
 import { buildRouteDetailFavoriteIcon } from './route-detail-favorite.js';
+import { buildShareButton } from './route-detail-share.js';
 
 export interface DetailHeaderOptions {
   route: Route;
@@ -20,13 +21,17 @@ export interface DetailHeaderOptions {
   /** "Subir a la nube" solo tiene sentido para una ruta de origen local (AC de la spec `route-cloud-sync`). */
   isLocalRoute: boolean;
   isSynced: boolean;
+  /** "Compartir" solo tiene sentido si la ruta ya existe en el servidor —
+   * `isSynced` (ruta local ya subida) o una ruta exclusiva de la nube (nunca
+   * local, ver design.md D2 de `compartir-ruta`). */
+  existsOnServer: boolean;
   onFavoriteToggled: () => void;
   onUploaded: () => void;
 }
 
 /** Construye la cabecera de `<route-detail>` (ver JSDoc del módulo). */
 export function buildDetailHeader(options: DetailHeaderOptions): DocumentFragment {
-  const { route, repository, session, isLocalRoute, isSynced, onFavoriteToggled, onUploaded } = options;
+  const { route, repository, session, isLocalRoute, isSynced, existsOnServer, onFavoriteToggled, onUploaded } = options;
   const fragment = document.createDocumentFragment();
 
   const titleRow = document.createElement('div');
@@ -46,6 +51,10 @@ export function buildDetailHeader(options: DetailHeaderOptions): DocumentFragmen
     titleRow.appendChild(buildSyncIconButton({
       apiBaseUrl: getApiBaseUrl(), session, repository, route, isSynced, onUploaded,
     }));
+  }
+
+  if (session && existsOnServer) {
+    titleRow.appendChild(buildShareButton({ apiBaseUrl: getApiBaseUrl(), session, routeId: route.id }));
   }
 
   fragment.appendChild(titleRow);
