@@ -142,6 +142,34 @@ span.favorite-icon {
   fill: currentColor;
 }
 
+/* Badge de favorito sobre la miniatura (esquina superior, mismo patrón que
+   el badge de sincronización en la esquina inferior) — el hitbox real sigue
+   siendo 56x56 (var(--hitbox-min), regla del proyecto para todo elemento
+   interactivo), pero centrado sobre la esquina vía transform para que solo
+   el círculo visual de 24px quede aparente, igual que el badge de sync. */
+.favorite-icon--badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translate(50%, -50%);
+}
+
+.favorite-icon--badge::before {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid var(--bg-top);
+  z-index: -1;
+}
+
+.favorite-icon--badge svg {
+  width: 14px;
+  height: 14px;
+}
+
 .thumb-wrapper {
   position: relative;
   flex-shrink: 0;

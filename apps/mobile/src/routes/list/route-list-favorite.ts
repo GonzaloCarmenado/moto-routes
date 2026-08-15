@@ -28,6 +28,13 @@ export function buildRouteCardFavoriteIcon(options: FavoriteCardIconOptions): HT
   });
 }
 
+/** Variante del icono de favorito posicionada como badge sobre la miniatura (ver JSDoc del módulo). */
+export function buildRouteCardFavoriteBadge(options: FavoriteCardIconOptions): HTMLElement {
+  const icon = buildRouteCardFavoriteIcon(options);
+  icon.classList.add('favorite-icon--badge');
+  return icon;
+}
+
 async function handleToggleFavorite(
   repository: IRouteRepository,
   session: Session | null,
