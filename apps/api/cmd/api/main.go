@@ -159,7 +159,9 @@ func main() {
 	router.With(httpmw.PublicCORS).Options("/api/route-shares", func(http.ResponseWriter, *http.Request) {})
 
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/route-shares/received", routesharing.ListReceivedHandler(shareStore).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/route-shares/received", func(http.ResponseWriter, *http.Request) {})
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/route-shares/sent", routesharing.ListSentHandler(shareStore).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/route-shares/sent", func(http.ResponseWriter, *http.Request) {})
 
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/route-shares/{id}/accept",
 		routesharing.AcceptHandler(shareStore, routeStore, photoStore, blobStore).ServeHTTP)
