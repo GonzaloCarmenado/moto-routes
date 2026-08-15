@@ -21,7 +21,7 @@ import { loadRouteListItems } from './route-list-sync.service.js';
 import type { RouteListItem, RouteSyncState } from './route-list-sync.transform.js';
 import { DEVICE_ICON, CLOUD_CHECK_ICON, CLOUD_ONLY_ICON } from '../../shared/icons/cloud-sync-icons.js';
 import { TRASH_ICON } from '../../shared/icons/action-icons.js';
-import { buildRouteCardFavoriteIcon, buildFavoritesFilterToggle } from './route-list-favorite.js';
+import { buildRouteCardFavoriteBadge, buildFavoritesFilterToggle } from './route-list-favorite.js';
 import { buildSharingButton, hasPendingReceivedInvitations } from './route-list-sharing.js';
 
 const THUMB_TRACE_SIZE = 72;
@@ -210,14 +210,6 @@ class RouteList extends BaseElement {
 
     card.appendChild(this.buildThumbWithBadge(item, card));
     card.appendChild(this.buildInfo(item));
-    if (this._repository) {
-      card.appendChild(buildRouteCardFavoriteIcon({
-        repository: this._repository,
-        session: this._session,
-        item,
-        onToggled: () => { this.render(); },
-      }));
-    }
     const deleteBtn = this.buildDeleteButton(item);
     if (deleteBtn) card.appendChild(deleteBtn);
     return card;
@@ -225,15 +217,24 @@ class RouteList extends BaseElement {
 
   /**
    * Envuelve la miniatura en un contenedor relativo con el icono de estado
-   * de sincronización superpuesto en su esquina (solo con sesión activa —
-   * sin sesión no hay ningún concepto de nube, AC de la spec
-   * `route-cloud-sync`) — mismo patrón que el badge de "sincronizado" de
-   * apps como Google Fotos, en vez de una columna de acciones aparte.
+   * de sincronización superpuesto en su esquina inferior (solo con sesión
+   * activa — sin sesión no hay ningún concepto de nube, AC de la spec
+   * `route-cloud-sync`) y el de favorito en la esquina superior — mismo
+   * patrón que el badge de "sincronizado" de apps como Google Fotos, en vez
+   * de una columna de acciones aparte compitiendo con el botón de borrar.
    */
   private buildThumbWithBadge(item: RouteListItem, card: HTMLElement): HTMLElement {
     const wrapper = document.createElement('div');
     wrapper.className = 'thumb-wrapper';
     wrapper.appendChild(this.buildThumb(item, card));
+    if (this._repository) {
+      wrapper.appendChild(buildRouteCardFavoriteBadge({
+        repository: this._repository,
+        session: this._session,
+        item,
+        onToggled: () => { this.render(); },
+      }));
+    }
     if (this._hasSession) wrapper.appendChild(this.buildSyncIcon(item.syncState));
     return wrapper;
   }
