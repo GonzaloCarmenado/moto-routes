@@ -9,6 +9,7 @@ import styles from './achievement-list.element.css?inline';
 import { BaseElement } from '../shared/base-element.js';
 import { APP_EVENTS, dispatchAppEvent } from '../shared/app-events.js';
 import { getApiBaseUrl } from '../shared/http/api-config.js';
+import { buildBackButton } from '../shared/back-button.js';
 import { formatRouteDate } from '../shared/utils/date.js';
 import { fetchAchievements } from '../shared/http/achievement-api.service.js';
 import { formatAchievementProgress } from './achievement-list.transform.js';
@@ -68,16 +69,6 @@ class AchievementList extends BaseElement {
     this._progress = progress;
     this._loading = false;
     this.render();
-  }
-
-  private buildBackButton(): HTMLButtonElement {
-    const backBtn = document.createElement('button');
-    backBtn.type = 'button';
-    backBtn.className = 'back-btn';
-    backBtn.setAttribute('data-cy', 'achievement-list-btn-volver');
-    backBtn.innerHTML = '<span>&larr;</span> Volver';
-    backBtn.addEventListener('click', () => { dispatchAppEvent(APP_EVENTS.NAV_PERFIL); });
-    return backBtn;
   }
 
   private buildLoginRequired(): HTMLElement {
@@ -159,7 +150,7 @@ class AchievementList extends BaseElement {
   protected render(): void {
     const screen = document.createElement('div');
     screen.setAttribute('data-cy', 'achievement-list-screen');
-    screen.appendChild(this.buildBackButton());
+    screen.appendChild(buildBackButton('achievement-list-btn-volver', () => { dispatchAppEvent(APP_EVENTS.NAV_PERFIL); }));
 
     const title = document.createElement('h1');
     title.className = 'title';

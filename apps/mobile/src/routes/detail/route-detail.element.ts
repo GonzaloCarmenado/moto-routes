@@ -27,6 +27,7 @@ import { toErrorMessage } from '../../shared/utils/errors.js';
 import { showToast } from '../../shared/feedback/toast.js';
 import { BaseElement } from '../../shared/base-element.js';
 import { APP_EVENTS, dispatchAppEvent } from '../../shared/app-events.js';
+import { buildBackButton } from '../../shared/back-button.js';
 import { buildPhotosSection, toGalleryPhotos } from './route-detail-photos-panel.js';
 import { openPhotoViewer } from '../../shared/photo-viewer/photo-viewer.element.js';
 import '../../shared/tab-bar/tab-bar.element.js';
@@ -208,21 +209,11 @@ class RouteDetail extends BaseElement {
 
     const detail = document.createElement('div');
     detail.className = 'route-detail';
-    detail.appendChild(this.buildBackButton());
+    detail.appendChild(buildBackButton('route-detail-btn-volver', () => { dispatchAppEvent(APP_EVENTS.BACK_TO_LIST); }));
     detail.appendChild(this.buildMap(this._points));
     detail.appendChild(this.buildContent(this._route));
 
     this.renderShadow(styles, detail);
-  }
-
-  private buildBackButton(): HTMLElement {
-    const backBtn = document.createElement('button');
-    backBtn.className = 'back-btn';
-    backBtn.innerHTML = '<span class="back-btn__arrow">&larr;</span> Volver';
-    backBtn.addEventListener('click', () => {
-      dispatchAppEvent(APP_EVENTS.BACK_TO_LIST);
-    });
-    return backBtn;
   }
 
   private buildMap(points: { lat: number; lng: number }[]): HTMLElement {

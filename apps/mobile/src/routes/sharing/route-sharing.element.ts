@@ -12,6 +12,7 @@ import styles from './route-sharing.element.css?inline';
 import { BaseElement } from '../../shared/base-element.js';
 import { APP_EVENTS, dispatchAppEvent } from '../../shared/app-events.js';
 import { getApiBaseUrl } from '../../shared/http/api-config.js';
+import { buildBackButton } from '../../shared/back-button.js';
 import { formatRouteDate } from '../../shared/utils/date.js';
 import { toErrorMessage } from '../../shared/utils/errors.js';
 import { showToast } from '../../shared/feedback/toast.js';
@@ -180,16 +181,6 @@ class RouteSharing extends BaseElement {
     }
   }
 
-  private buildBackButton(): HTMLButtonElement {
-    const backBtn = document.createElement('button');
-    backBtn.type = 'button';
-    backBtn.className = 'back-btn';
-    backBtn.setAttribute('data-cy', 'route-sharing-btn-volver');
-    backBtn.innerHTML = '<span>&larr;</span> Volver';
-    backBtn.addEventListener('click', () => { dispatchAppEvent(APP_EVENTS.NAV_RUTAS); });
-    return backBtn;
-  }
-
   private buildReceivedPanel(): HTMLElement {
     const panel = document.createElement('div');
     panel.className = 'panel';
@@ -284,7 +275,7 @@ class RouteSharing extends BaseElement {
   protected render(): void {
     const screen = document.createElement('div');
     screen.setAttribute('data-cy', 'route-sharing-screen');
-    screen.appendChild(this.buildBackButton());
+    screen.appendChild(buildBackButton('route-sharing-btn-volver', () => { dispatchAppEvent(APP_EVENTS.NAV_RUTAS); }));
 
     const title = document.createElement('h1');
     title.className = 'title';
