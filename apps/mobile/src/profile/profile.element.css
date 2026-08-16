@@ -198,3 +198,65 @@
 .edit-btn:hover {
   background: var(--amber-soft);
 }
+
+.achievements-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--hitbox-min);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--amber-border);
+  background: var(--amber-soft);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.achievements-link:hover {
+  background: var(--amber-border);
+}
+
+.achievements-link__icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--amber);
+  background: var(--panel);
+  border-radius: var(--r-pill);
+  padding: var(--space-2);
+}
+
+.achievements-link__icon svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.achievements-link__label {
+  flex: 1;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.achievements-link__chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--ink-faint);
+}
+
+.achievements-link__chevron svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

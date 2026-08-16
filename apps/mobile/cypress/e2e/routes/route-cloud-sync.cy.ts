@@ -44,7 +44,11 @@ function buildSeedRoute(overrides: Partial<Route> = {}): Route {
   return {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
-    duration: 3600,
+    // 1800s (30min), no 3600 (1h): igual o por encima del umbral del logro
+    // "Ruta larga" (sistema-logros) — con 3600 exactos, subir esta ruta vía
+    // UI desbloquearía el logro y su animación cubriría el siguiente click
+    // de estos tests (hallazgo real de un fallo intermitente en CI).
+    duration: 1800,
     totalDistance: 12.5,
     avgSpeed: 42,
     status: 'completed',

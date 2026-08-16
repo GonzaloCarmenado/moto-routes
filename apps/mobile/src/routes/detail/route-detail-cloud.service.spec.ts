@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import {
   uploadRouteToCloud, loadCloudRouteDetail, checkIfRouteIsSynced, autoResyncIfNeeded, uploadPhotoToCloud, deletePhotoFromCloud,
 } from './route-detail-cloud.service.js';
@@ -6,12 +6,15 @@ import { uploadRoute, fetchCloudRouteDetail, fetchCloudRoutes, RouteCloudApiErro
 import type * as RouteCloudApiService from '../../shared/http/route-cloud-api.service.js';
 import { uploadRoutePhoto, deleteRoutePhoto, PhotoCloudApiError } from '../../shared/http/photo-cloud-api.service.js';
 import type * as PhotoCloudApiService from '../../shared/http/photo-cloud-api.service.js';
+import { checkAchievements } from '../../shared/http/achievement-api.service.js';
 import { readPhotoBlob } from '../../shared/services/photo-storage.service.js';
 import type * as PhotoStorageService from '../../shared/services/photo-storage.service.js';
 import { showToast } from '../../shared/feedback/toast.js';
+import { enqueueAchievementUnlock } from '../../shared/feedback/achievement-unlock-overlay.element.js';
 import { MemoryRouteRepository } from '../../shared/repositories/memory-route.repository.js';
 import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
 import type { Photo } from '../../shared/models/photo.types.js';
+import type { Achievement } from '../../shared/models/achievement.types.js';
 
 vi.mock('../../shared/http/route-cloud-api.service.js', async (importOriginal) => {
   const actual = await importOriginal<typeof RouteCloudApiService>();
@@ -23,15 +26,24 @@ vi.mock('../../shared/http/photo-cloud-api.service.js', async (importOriginal) =
   return { ...actual, uploadRoutePhoto: vi.fn(), deleteRoutePhoto: vi.fn() };
 });
 
+vi.mock('../../shared/http/achievement-api.service.js', () => ({ checkAchievements: vi.fn() }));
+
 vi.mock('../../shared/services/photo-storage.service.js', async (importOriginal) => {
   const actual = await importOriginal<typeof PhotoStorageService>();
   return { ...actual, readPhotoBlob: vi.fn() };
 });
 
 vi.mock('../../shared/feedback/toast.js', () => ({ showToast: vi.fn((): (() => void) => (): void => undefined) }));
+vi.mock('../../shared/feedback/achievement-unlock-overlay.element.js', () => ({ enqueueAchievementUnlock: vi.fn() }));
 
 const BASE_URL = 'http://localhost:8080';
 const SESSION = { token: 'jwt-token', email: 'rider@example.com' };
+
+// Por defecto, ninguna comprobación de logros devuelve nada nuevo — los
+// tests que sí quieren ejercitar el hook lo sobrescriben explícitamente.
+beforeEach(() => {
+  vi.mocked(checkAchievements).mockResolvedValue([]);
+});
 
 function makePhoto(overrides?: Partial<Photo>): Photo {
   return {
@@ -91,6 +103,61 @@ describe('uploadRouteToCloud', () => {
     vi.mocked(uploadRoute).mockRejectedValue(new Error('network down'));
 
     await expect(uploadRouteToCloud(BASE_URL, SESSION, repository, route)).rejects.toThrow('network down');
+    expect(checkAchievements).not.toHaveBeenCalled();
+  });
+
+  it('tras subir con éxito, comprueba si se han desbloqueado logros nuevos y los encola', async () => {
+    const repository = new MemoryRouteRepository();
+    const route = await repository.save(
+      { duration: 100, totalDistance: 10, avgSpeed: 40, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+    const unlocked: Achievement = {
+      id: 1, key: 'total_km_100', requirementType: 'total_distance_km', threshold: 100,
+      title: '100 km recorridos', description: 'Has superado los 100 km acumulados en tus rutas.', icon: 'default',
+    };
+    vi.mocked(uploadRoute).mockResolvedValue(undefined);
+    vi.mocked(checkAchievements).mockResolvedValue([unlocked]);
+
+    await uploadRouteToCloud(BASE_URL, SESSION, repository, route);
+
+    expect(checkAchievements).toHaveBeenCalledWith(BASE_URL, SESSION.token);
+    await vi.waitFor(() => {
+      expect(enqueueAchievementUnlock).toHaveBeenCalledWith(unlocked);
+    });
+  });
+
+  it('sin logros nuevos, no se encola ninguna animación', async () => {
+    const repository = new MemoryRouteRepository();
+    const route = await repository.save(
+      { duration: 100, totalDistance: 10, avgSpeed: 40, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+    vi.mocked(uploadRoute).mockResolvedValue(undefined);
+    vi.mocked(checkAchievements).mockResolvedValue([]);
+
+    await uploadRouteToCloud(BASE_URL, SESSION, repository, route);
+
+    await vi.waitFor(() => {
+      expect(checkAchievements).toHaveBeenCalledWith(BASE_URL, SESSION.token);
+    });
+    expect(enqueueAchievementUnlock).not.toHaveBeenCalled();
+  });
+
+  it('si la comprobación de logros falla, la subida de la ruta sigue considerándose exitosa', async () => {
+    const repository = new MemoryRouteRepository();
+    const route = await repository.save(
+      { duration: 100, totalDistance: 10, avgSpeed: 40, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      [],
+    );
+    vi.mocked(uploadRoute).mockResolvedValue(undefined);
+    vi.mocked(checkAchievements).mockRejectedValue(new Error('network down'));
+
+    await expect(uploadRouteToCloud(BASE_URL, SESSION, repository, route)).resolves.toBeUndefined();
+    expect(enqueueAchievementUnlock).not.toHaveBeenCalled();
   });
 });
 

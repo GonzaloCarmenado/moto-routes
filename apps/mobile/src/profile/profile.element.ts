@@ -31,6 +31,7 @@ import { buildAuthSection } from '../auth/auth-section.js';
 import { openLoginDialog } from '../auth/auth-login-dialog.element.js';
 import { openRegisterDialog } from '../auth/auth-register-dialog.element.js';
 import { openForgotPasswordDialog } from '../auth/auth-forgot-password-dialog.element.js';
+import { buildAchievementsLink } from './profile-achievements-link.js';
 import styles from './profile.element.css?inline';
 
 const EMPTY_AUTH_STATE: AuthSectionState = { status: 'logged-out' };
@@ -175,6 +176,7 @@ class ProfileView extends BaseElement {
       screen.appendChild(this.buildLoadingState());
     } else {
       screen.appendChild(this.buildIdentityCard());
+      screen.appendChild(buildAchievementsLink());
       screen.appendChild(this.buildVehicleSection());
       screen.appendChild(this.buildStatsSection());
     }
