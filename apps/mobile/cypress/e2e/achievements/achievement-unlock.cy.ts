@@ -3,31 +3,25 @@
 /**
  * E2E de `sistema-logros`: backend real (`docker compose up` en
  * `infra/docker/`), sin mockear `apps/api` — mismo criterio que
- * `route-sharing.cy.ts`/`route-cloud-sync.cy.ts`. El catálogo real (10 filas
- * sembradas por la migración 0009) tiene umbrales demasiado altos para un
- * test E2E (100km, 5 rutas...), así que se siembra un logro de test propio
- * con umbral 1 ruta directamente en la BBDD, limpiado al final.
+ * `route-sharing.cy.ts`/`route-cloud-sync.cy.ts`. Usa directamente el logro
+ * real del catálogo "Ruta larga" (>=3600s en una sola ruta, ver migración
+ * 0009) ajustando solo la duración de la ruta sembrada — deliberadamente NO
+ * siembra ningún logro de test en la tabla compartida `achievements`: un
+ * primer intento con un logro de test propio de umbral mínimo (route_count
+ * >= 1) causó un fallo intermitente real en CI (achievement-unlock-overlay
+ * cubriendo un click de OTRO test, `route-cloud-sync.cy.ts`, que subía una
+ * ruta de exactamente 3600s de duración — el mismo valor por defecto usado
+ * como "ruta larga de prueba" en varios fixtures de este repo). Usar el
+ * catálogo real, sin mutar `achievements`, elimina esa clase de riesgo.
  */
 
 import type { Route } from '../../../src/shared/models/route.types.js';
 
 const TEST_EMAIL_PREFIX = 'cypress-achievements';
 const TEST_PASSWORD = 'correct-horse-battery';
-const TEST_ACHIEVEMENT_KEY = 'e2e_test_primera_ruta';
 const API_BASE_URL = 'http://localhost:8080';
-
-function psql(sql: string): Cypress.Chainable {
-  return cy.exec(`docker exec docker-postgres-1 psql -U motoroutes -d motoroutes -c "${sql}"`, { failOnNonZeroExit: false });
-}
-
-function seedTestAchievement(): Cypress.Chainable {
-  return psql(`DELETE FROM achievements WHERE key = '${TEST_ACHIEVEMENT_KEY}';`).then(() =>
-    psql(
-      `INSERT INTO achievements (key, requirement_type, threshold, title, description, icon) VALUES ` +
-        `('${TEST_ACHIEVEMENT_KEY}', 'route_count', 1, 'Primera ruta E2E', 'Logro de test sembrado por Cypress.', 'default');`,
-    ),
-  );
-}
+/** Umbral real de "Ruta larga" (migración 0009) + margen, para no depender del valor límite exacto. */
+const LONG_ROUTE_DURATION_SECONDS = 3700;
 
 function uniqueTestEmail(suffix: string): string {
   return `${TEST_EMAIL_PREFIX}-${String(Date.now())}-${suffix}@example.com`;
@@ -51,7 +45,7 @@ function buildSeedRoute(overrides: Partial<Route> = {}): Route {
   return {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
-    duration: 3600,
+    duration: LONG_ROUTE_DURATION_SECONDS,
     totalDistance: 12.5,
     avgSpeed: 42,
     status: 'completed',
@@ -75,16 +69,14 @@ function loginViaUi(email: string): void {
 }
 
 describe('Sistema de logros - desbloqueo tras sincronizar y pantalla "Mis logros"', () => {
-  before(() => {
-    seedTestAchievement();
-  });
-
   after(() => {
-    psql(`DELETE FROM achievements WHERE key = '${TEST_ACHIEVEMENT_KEY}';`);
-    psql(`DELETE FROM users WHERE email LIKE '${TEST_EMAIL_PREFIX}-%';`);
+    cy.exec(
+      `docker exec docker-postgres-1 psql -U motoroutes -d motoroutes -c "DELETE FROM users WHERE email LIKE '${TEST_EMAIL_PREFIX}-%';"`,
+      { failOnNonZeroExit: false },
+    );
   });
 
-  it('subir la primera ruta a la nube desbloquea el logro de test y muestra la animación con su título/descripción', () => {
+  it('subir una ruta de más de 1 hora desbloquea "Ruta larga" y muestra la animación con su título/descripción', () => {
     const email = uniqueTestEmail('desbloqueo');
     const route = buildSeedRoute({ name: `Ruta a subir ${String(Date.now())}` });
 
@@ -98,8 +90,8 @@ describe('Sistema de logros - desbloqueo tras sincronizar y pantalla "Mis logros
       cy.get('[data-cy="photo-toast"]').should('contain', 'subida a la nube');
 
       cy.get('[data-cy="achievement-unlock-overlay"]', { timeout: 10000 }).should('be.visible');
-      cy.get('[data-cy="achievement-unlock-title"]').should('contain', 'Primera ruta E2E');
-      cy.get('[data-cy="achievement-unlock-description"]').should('contain', 'Logro de test sembrado por Cypress');
+      cy.get('[data-cy="achievement-unlock-title"]').should('contain', 'Ruta larga');
+      cy.get('[data-cy="achievement-unlock-description"]').should('contain', 'Has completado una ruta de mas de 1 hora');
       cy.get('[data-cy="achievement-unlock-dismiss"]').click();
       cy.get('[data-cy="achievement-unlock-overlay"]').should('not.exist');
     });
@@ -127,7 +119,7 @@ describe('Sistema de logros - desbloqueo tras sincronizar y pantalla "Mis logros
         cy.get('[data-cy="nav-perfil"]').click();
         cy.get('[data-cy="profile-btn-mis-logros"]').click();
 
-        cy.contains('[data-cy="achievement-list-card-conseguido"]', 'Primera ruta E2E')
+        cy.contains('[data-cy="achievement-list-card-conseguido"]', 'Ruta larga')
           .find('[data-cy="achievement-list-status"]')
           .should('contain', 'Conseguido el');
       });
