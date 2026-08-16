@@ -13,7 +13,7 @@ import { buildBackButton } from '../shared/back-button.js';
 import { formatRouteDate } from '../shared/utils/date.js';
 import { fetchAchievements } from '../shared/http/achievement-api.service.js';
 import { formatAchievementProgress } from './achievement-list.transform.js';
-import { ACHIEVEMENT_PLACEHOLDER_ICON } from '../shared/icons/achievement-icons.js';
+import { achievementIconFor } from '../shared/icons/achievement-icons.js';
 import type { ISessionRepository } from '../shared/models/session.repository.js';
 import type { Session } from '../shared/models/session.types.js';
 import type { AchievementProgress } from '../shared/models/achievement.types.js';
@@ -97,7 +97,7 @@ class AchievementList extends BaseElement {
 
     const icon = document.createElement('div');
     icon.className = 'card-icon';
-    icon.innerHTML = ACHIEVEMENT_PLACEHOLDER_ICON;
+    icon.innerHTML = achievementIconFor(progress.achievement.requirementType);
     card.appendChild(icon);
 
     const body = document.createElement('div');

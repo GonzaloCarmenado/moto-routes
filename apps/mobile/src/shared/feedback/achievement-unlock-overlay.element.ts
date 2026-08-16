@@ -9,7 +9,7 @@
  */
 import { BaseElement } from '../base-element.js';
 import type { Achievement } from '../models/achievement.types.js';
-import { ACHIEVEMENT_PLACEHOLDER_ICON } from '../icons/achievement-icons.js';
+import { achievementIconFor } from '../icons/achievement-icons.js';
 import styles from './achievement-unlock-overlay.element.css?inline';
 
 /** Tiempo que se muestra cada logro antes de pasar al siguiente de la cola. */
@@ -81,11 +81,11 @@ class AchievementUnlockOverlayElement extends BaseElement {
     advanceQueue();
   }
 
-  private buildIcon(): HTMLElement {
+  private buildIcon(achievement: Achievement): HTMLElement {
     const icon = document.createElement('div');
     icon.className = 'icon';
     icon.setAttribute('data-cy', 'achievement-unlock-icon');
-    icon.innerHTML = ACHIEVEMENT_PLACEHOLDER_ICON;
+    icon.innerHTML = achievementIconFor(achievement.requirementType);
     return icon;
   }
 
@@ -125,7 +125,7 @@ class AchievementUnlockOverlayElement extends BaseElement {
     card.addEventListener('click', (event) => {
       event.stopPropagation();
     });
-    card.append(this.buildIcon(), ...this.buildText(achievement), this.buildDismissButton());
+    card.append(this.buildIcon(achievement), ...this.buildText(achievement), this.buildDismissButton());
     return card;
   }
 
