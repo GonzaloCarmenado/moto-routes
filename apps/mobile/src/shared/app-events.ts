@@ -14,6 +14,7 @@ export const APP_EVENTS = {
   NAV_PERFIL: 'nav-perfil',
   VIEW_ROUTE: 'view-route',
   VIEW_SHARING: 'view-sharing',
+  VIEW_ACHIEVEMENTS: 'view-achievements',
   BACK_TO_LIST: 'back-to-list',
 } as const;
 
@@ -24,6 +25,7 @@ export interface AppEventDetailMap {
   'nav-perfil': undefined;
   'view-route': { routeId: string };
   'view-sharing': undefined;
+  'view-achievements': undefined;
   'back-to-list': undefined;
 }
 

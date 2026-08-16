@@ -76,7 +76,11 @@ describe('Perfil - Navegación, avatar/nombre, vehículo (vPIC) y estadísticas'
     cy.get('[data-cy="profile-avatar-placeholder"]').should('exist');
     cy.get('[data-cy="profile-name"]').should('be.visible').and('contain', 'Motorista sin nombre');
     cy.get('[data-cy="profile-vehicle-empty"]').should('be.visible').and('contain', 'Sin vehículo configurado');
-    cy.get('[data-cy="profile-stats-empty"]').should('be.visible').and('contain', 'Todavía no hay rutas completadas');
+    // La fila nueva "Mis logros" (sistema-logros) empuja las Estadísticas
+    // fuera del viewport inicial en el tamaño móvil de este test — scroll
+    // explícito, `should('be.visible')` no desplaza el contenedor con scroll
+    // por sí solo.
+    cy.get('[data-cy="profile-stats-empty"]').scrollIntoView().should('be.visible').and('contain', 'Todavía no hay rutas completadas');
   });
 
   it('edits the profile (photo + live preview + name) and persists both together (AC-004, AC-005, AC-009)', () => {

@@ -1,0 +1,125 @@
+@import '../shared/styles/tokens.css';
+
+:host {
+  display: block;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--bg-top);
+}
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-3) 22px;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--ink);
+  margin: 0 22px var(--space-4);
+}
+
+.login-required {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+  padding: var(--space-5) 22px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0 22px var(--space-5);
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--ink);
+  margin: 0;
+}
+
+.empty {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+  padding: var(--space-3) 0;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.card--pending {
+  opacity: 0.75;
+}
+
+.card-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--amber);
+  background: var(--amber-soft);
+  border-radius: var(--r-pill);
+  padding: var(--space-3);
+}
+
+.card-icon svg {
+  width: 24px;
+  height: 24px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.card-title {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+.card-description {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.card-status {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--amber);
+  margin: 4px 0 0;
+}
+
+.card--pending .card-status {
+  color: var(--ink-faint);
+}

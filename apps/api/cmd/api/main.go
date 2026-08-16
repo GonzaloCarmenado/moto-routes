@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/crzverde/moto-routes/apps/api/internal/achievements"
 	"github.com/crzverde/moto-routes/apps/api/internal/auth"
 	"github.com/crzverde/moto-routes/apps/api/internal/config"
 	"github.com/crzverde/moto-routes/apps/api/internal/email"
@@ -170,6 +171,12 @@ func main() {
 	router.With(httpmw.PublicCORS).Options("/api/route-shares/{id}/accept", func(http.ResponseWriter, *http.Request) {})
 	router.With(httpmw.PublicCORS).Options("/api/route-shares/{id}/decline", func(http.ResponseWriter, *http.Request) {})
 	router.With(httpmw.PublicCORS).Options("/api/route-shares/{id}/revoke", func(http.ResponseWriter, *http.Request) {})
+
+	achievementStore := achievements.PostgresAchievementStore{Pool: pool}
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/achievements/check", achievements.CheckHandler(achievementStore).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/achievements/check", func(http.ResponseWriter, *http.Request) {})
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/achievements", achievements.ListHandler(achievementStore).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/achievements", func(http.ResponseWriter, *http.Request) {})
 
 	log.Printf("listening on %s", cfg.ServerAddress)
 	if err := http.ListenAndServe(cfg.ServerAddress, router); err != nil {

@@ -3,6 +3,7 @@ import '../shared/nav-bar/nav-bar.element.js';
 import '../routes/list/route-list.element.js';
 import '../routes/detail/route-detail.element.js';
 import '../routes/sharing/route-sharing.element.js';
+import '../achievements/achievement-list.element.js';
 import '../profile/profile.element.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { IProfileRepository } from '../shared/models/profile.repository.js';
@@ -28,16 +29,18 @@ import { isTauri } from '../shared/services/photo-capture-adapter.service.js';
 import { applyCypressSeed } from './app-seed.service.js';
 import type { NavBarActiveView } from '../shared/nav-bar/nav-bar.element.js';
 
-/** Vista interna de `app-root` (5 vistas — `nav-bar` solo entiende 3, ver `navViewFor`). */
-type AppView = 'cockpit' | 'routes' | 'detail' | 'profile' | 'sharing';
+/** Vista interna de `app-root` (6 vistas — `nav-bar` solo entiende 3, ver `navViewFor`). */
+type AppView = 'cockpit' | 'routes' | 'detail' | 'profile' | 'sharing' | 'achievements';
 
 /**
- * Traduce las 5 vistas internas de `app-root` a las 3 que entiende `<nav-bar>`
+ * Traduce las 6 vistas internas de `app-root` a las 3 que entiende `<nav-bar>`
  * (AC-036): el detalle de ruta y la pantalla de invitaciones son sub-vistas
- * de "Rutas", así que se marca "Rutas" como activo mientras se visualizan.
+ * de "Rutas"; "Mis logros" es sub-vista de "Perfil" (se abre desde ahí).
  */
 function navViewFor(view: AppView): NavBarActiveView {
-  return view === 'detail' || view === 'sharing' ? 'routes' : view;
+  if (view === 'detail' || view === 'sharing') return 'routes';
+  if (view === 'achievements') return 'profile';
+  return view;
 }
 
 class AppRoot extends BaseElement {
@@ -50,6 +53,7 @@ class AppRoot extends BaseElement {
   private routeDetailEl: HTMLElement | null = null;
   private profileEl: HTMLElement | null = null;
   private sharingEl: HTMLElement | null = null;
+  private achievementsEl: HTMLElement | null = null;
   private navBarEl: HTMLElement | null = null;
 
   private readonly onGrabar = (): void => { this.showView('cockpit'); };
@@ -63,6 +67,7 @@ class AppRoot extends BaseElement {
     }
   };
   private readonly onViewSharing = (): void => { this.showView('sharing'); };
+  private readonly onViewAchievements = (): void => { this.showView('achievements'); };
   private readonly onBackToList = (): void => { this.showView('routes'); };
 
   connectedCallback(): void {
@@ -71,6 +76,7 @@ class AppRoot extends BaseElement {
     window.addEventListener(APP_EVENTS.NAV_PERFIL, this.onPerfil);
     window.addEventListener(APP_EVENTS.VIEW_ROUTE, this.onViewRoute);
     window.addEventListener(APP_EVENTS.VIEW_SHARING, this.onViewSharing);
+    window.addEventListener(APP_EVENTS.VIEW_ACHIEVEMENTS, this.onViewAchievements);
     window.addEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
     void this.init();
   }
@@ -81,6 +87,7 @@ class AppRoot extends BaseElement {
     window.removeEventListener(APP_EVENTS.NAV_PERFIL, this.onPerfil);
     window.removeEventListener(APP_EVENTS.VIEW_ROUTE, this.onViewRoute);
     window.removeEventListener(APP_EVENTS.VIEW_SHARING, this.onViewSharing);
+    window.removeEventListener(APP_EVENTS.VIEW_ACHIEVEMENTS, this.onViewAchievements);
     window.removeEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
   }
 
@@ -129,6 +136,14 @@ class AppRoot extends BaseElement {
     sharing.sessionRepository = this.sessionRepo;
     sharing.className = 'app-view';
     return sharing;
+  }
+
+  /** Extraído de `render()` por el mismo motivo que `buildRouteSharingView()`. */
+  private buildAchievementListView(): HTMLElement {
+    const achievements = document.createElement('achievement-list') as HTMLElement & { sessionRepository: ISessionRepository };
+    achievements.sessionRepository = this.sessionRepo;
+    achievements.className = 'app-view';
+    return achievements;
   }
 
   // Decide primero por isTauri() (en vez de por éxito/fracaso del intento de SQLite)
@@ -206,6 +221,10 @@ class AppRoot extends BaseElement {
     this.sharingEl = sharing;
     this.appendChild(sharing);
 
+    const achievements = this.buildAchievementListView();
+    this.achievementsEl = achievements;
+    this.appendChild(achievements);
+
     this.navBarEl = document.createElement('nav-bar');
     this.appendChild(this.navBarEl);
 
@@ -221,6 +240,7 @@ class AppRoot extends BaseElement {
     if (this.routeDetailEl) this.routeDetailEl.style.display = view === 'detail' ? '' : 'none';
     if (this.profileEl) this.profileEl.style.display = view === 'profile' ? '' : 'none';
     if (this.sharingEl) this.sharingEl.style.display = view === 'sharing' ? '' : 'none';
+    if (this.achievementsEl) this.achievementsEl.style.display = view === 'achievements' ? '' : 'none';
     if (this.navBarEl) {
       (this.navBarEl as HTMLElement & { activeView: NavBarActiveView }).activeView = navViewFor(view);
     }

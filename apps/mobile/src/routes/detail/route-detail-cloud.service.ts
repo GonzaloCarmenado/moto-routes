@@ -5,10 +5,33 @@ import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
 import type { Photo } from '../../shared/models/photo.types.js';
 import { uploadRoute, fetchCloudRouteDetail, fetchCloudRoutes } from '../../shared/http/route-cloud-api.service.js';
 import { uploadRoutePhoto, deleteRoutePhoto } from '../../shared/http/photo-cloud-api.service.js';
+import { checkAchievements } from '../../shared/http/achievement-api.service.js';
 import { readPhotoBlob } from '../../shared/services/photo-storage.service.js';
 import { toErrorMessage } from '../../shared/utils/errors.js';
 import { showToast } from '../../shared/feedback/toast.js';
+import { enqueueAchievementUnlock } from '../../shared/feedback/achievement-unlock-overlay.element.js';
 import { cloudRouteDetailToLocal } from './route-detail-cloud.transform.js';
+
+/**
+ * Comprueba si la sincronización que acaba de terminar desbloqueó algún
+ * logro nuevo y, si es así, lo encola para su animación — fire-and-forget,
+ * nunca afecta al resultado ya confirmado de la subida (ver design.md
+ * Decisión 7 de sistema-logros: único punto de "ruta recién sincronizada"
+ * del cliente, cubre tanto la subida manual como el auto-resync).
+ */
+function checkAchievementsAfterSync(apiBaseUrl: string, session: Session): void {
+  checkAchievements(apiBaseUrl, session.token)
+    .then((granted) => {
+      granted.forEach((achievement) => {
+        enqueueAchievementUnlock(achievement);
+      });
+    })
+    .catch(() => {
+      // Sin aviso al usuario: un logro no reconocido ahora se detecta en la
+      // siguiente sincronización (ver spec "Fallo al comprobar logros no
+      // bloquea la sincronización").
+    });
+}
 
 /**
  * Sube (o actualiza, upsert por id) una ruta local completa a la cuenta del
@@ -26,6 +49,7 @@ export async function uploadRouteToCloud(
     repository.getStopsByRouteId(route.id),
   ]);
   await uploadRoute(apiBaseUrl, session.token, { route, points, stops });
+  checkAchievementsAfterSync(apiBaseUrl, session);
 }
 
 /** Parámetros de {@link autoResyncIfNeeded}, agrupados por `max-params`. */
