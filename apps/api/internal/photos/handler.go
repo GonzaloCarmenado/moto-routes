@@ -1,7 +1,6 @@
 package photos
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
@@ -9,38 +8,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/crzverde/moto-routes/apps/api/internal/auth"
+	"github.com/crzverde/moto-routes/apps/api/internal/apihttp"
 )
 
 // maxMultipartMemory es cuánto del cuerpo multipart se mantiene en memoria
 // antes de que ParseMultipartForm derrame a ficheros temporales — no acota
 // el tamaño de la foto en sí, eso lo hace MaxPhotoSizeBytes más abajo.
 const maxMultipartMemory = 1 << 20 // 1MiB
-
-type errorResponse struct {
-	Error string `json:"error"`
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(errorResponse{Error: message})
-}
-
-func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
-}
-
-func requireUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	userID, ok := auth.UserIDFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "missing or invalid token")
-		return 0, false
-	}
-	return userID, true
-}
 
 // writeStoreError traduce los errores de dominio a la respuesta HTTP.
 // ErrRouteOwnedByAnotherUser responde 404 "route not found" tanto si la
@@ -49,13 +23,13 @@ func requireUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 func writeStoreError(w http.ResponseWriter, err error) {
 	switch err {
 	case ErrRouteOwnedByAnotherUser:
-		writeError(w, http.StatusNotFound, "route not found")
+		apihttp.WriteError(w, http.StatusNotFound, "route not found")
 	case ErrPhotoNotFound:
-		writeError(w, http.StatusNotFound, "photo not found")
+		apihttp.WriteError(w, http.StatusNotFound, "photo not found")
 	case ErrTooManyPhotos:
-		writeError(w, http.StatusBadRequest, "route already has the maximum number of photos")
+		apihttp.WriteError(w, http.StatusBadRequest, "route already has the maximum number of photos")
 	default:
-		writeError(w, http.StatusInternalServerError, "could not process the request")
+		apihttp.WriteError(w, http.StatusInternalServerError, "could not process the request")
 	}
 }
 
@@ -78,7 +52,7 @@ func parseOptionalFloat(value string) *float64 {
 // fila de metadatos sin bytes detrás (ver design.md, Risks).
 func UploadHandler(photoStore PhotoStore, blobStore BlobStore, encryptionKey []byte) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := requireUserID(w, r)
+		userID, ok := apihttp.RequireUserID(w, r)
 		if !ok {
 			return
 		}
@@ -86,25 +60,25 @@ func UploadHandler(photoStore PhotoStore, blobStore BlobStore, encryptionKey []b
 
 		r.Body = http.MaxBytesReader(w, r.Body, MaxPhotoSizeBytes+maxMultipartMemory)
 		if err := r.ParseMultipartForm(maxMultipartMemory); err != nil {
-			writeError(w, http.StatusBadRequest, "photo exceeds the maximum allowed size or the request body is invalid")
+			apihttp.WriteError(w, http.StatusBadRequest, "photo exceeds the maximum allowed size or the request body is invalid")
 			return
 		}
 
 		file, header, err := r.FormFile("photo")
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "a photo file is required")
+			apihttp.WriteError(w, http.StatusBadRequest, "a photo file is required")
 			return
 		}
 		defer file.Close()
 
 		if header.Size > MaxPhotoSizeBytes {
-			writeError(w, http.StatusBadRequest, "photo exceeds the maximum allowed size")
+			apihttp.WriteError(w, http.StatusBadRequest, "photo exceeds the maximum allowed size")
 			return
 		}
 
 		plaintext, err := io.ReadAll(file)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "could not read the uploaded photo")
+			apihttp.WriteError(w, http.StatusBadRequest, "could not read the uploaded photo")
 			return
 		}
 
@@ -125,12 +99,12 @@ func UploadHandler(photoStore PhotoStore, blobStore BlobStore, encryptionKey []b
 
 		ciphertext, err := Encrypt(encryptionKey, plaintext)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "could not process the request")
+			apihttp.WriteError(w, http.StatusInternalServerError, "could not process the request")
 			return
 		}
 
 		if err := blobStore.Put(r.Context(), photo.ObjectKey, ciphertext); err != nil {
-			writeError(w, http.StatusInternalServerError, "could not process the request")
+			apihttp.WriteError(w, http.StatusInternalServerError, "could not process the request")
 			return
 		}
 
@@ -140,14 +114,14 @@ func UploadHandler(photoStore PhotoStore, blobStore BlobStore, encryptionKey []b
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, created)
+		apihttp.WriteJSON(w, http.StatusCreated, created)
 	})
 }
 
 // ListHandler devuelve los metadatos (sin bytes) de las fotos de una ruta del usuario autenticado.
 func ListHandler(photoStore PhotoStore) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := requireUserID(w, r)
+		userID, ok := apihttp.RequireUserID(w, r)
 		if !ok {
 			return
 		}
@@ -162,7 +136,7 @@ func ListHandler(photoStore PhotoStore) http.Handler {
 			list = []Photo{}
 		}
 
-		writeJSON(w, http.StatusOK, list)
+		apihttp.WriteJSON(w, http.StatusOK, list)
 	})
 }
 
@@ -171,7 +145,7 @@ func ListHandler(photoStore PhotoStore) http.Handler {
 // almacenamiento subyacente (ver design.md, Decisión 3).
 func DownloadHandler(photoStore PhotoStore, blobStore BlobStore, encryptionKey []byte) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := requireUserID(w, r)
+		userID, ok := apihttp.RequireUserID(w, r)
 		if !ok {
 			return
 		}
@@ -186,13 +160,13 @@ func DownloadHandler(photoStore PhotoStore, blobStore BlobStore, encryptionKey [
 
 		ciphertext, err := blobStore.Get(r.Context(), photo.ObjectKey)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "could not process the request")
+			apihttp.WriteError(w, http.StatusInternalServerError, "could not process the request")
 			return
 		}
 
 		plaintext, err := Decrypt(encryptionKey, ciphertext)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "could not process the request")
+			apihttp.WriteError(w, http.StatusInternalServerError, "could not process the request")
 			return
 		}
 
@@ -208,7 +182,7 @@ func DownloadHandler(photoStore PhotoStore, blobStore BlobStore, encryptionKey [
 // (ver design.md, Risks).
 func DeleteHandler(photoStore PhotoStore, blobStore BlobStore) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := requireUserID(w, r)
+		userID, ok := apihttp.RequireUserID(w, r)
 		if !ok {
 			return
 		}
@@ -222,7 +196,7 @@ func DeleteHandler(photoStore PhotoStore, blobStore BlobStore) http.Handler {
 		}
 
 		if err := blobStore.Delete(r.Context(), photo.ObjectKey); err != nil {
-			writeError(w, http.StatusInternalServerError, "could not process the request")
+			apihttp.WriteError(w, http.StatusInternalServerError, "could not process the request")
 			return
 		}
 

@@ -6,33 +6,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/crzverde/moto-routes/apps/api/internal/auth"
+	"github.com/crzverde/moto-routes/apps/api/internal/apihttp"
 )
-
-type errorResponse struct {
-	Error string `json:"error"`
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(errorResponse{Error: message})
-}
-
-func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
-}
-
-func requireUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	userID, ok := auth.UserIDFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "missing or invalid token")
-		return 0, false
-	}
-	return userID, true
-}
 
 type upsertPointRequest struct {
 	Timestamp int64   `json:"timestamp"`
@@ -74,18 +49,18 @@ type upsertResponse struct {
 // (ver design.md, Decisión 1) — nunca se sobrescribe una ruta de otro usuario.
 func UpsertHandler(store Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := requireUserID(w, r)
+		userID, ok := apihttp.RequireUserID(w, r)
 		if !ok {
 			return
 		}
 
 		var req upsertRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			apihttp.WriteError(w, http.StatusBadRequest, "invalid request body")
 			return
 		}
 		if req.ID == "" {
-			writeError(w, http.StatusBadRequest, "id is required")
+			apihttp.WriteError(w, http.StatusBadRequest, "id is required")
 			return
 		}
 
@@ -114,37 +89,37 @@ func UpsertHandler(store Store) http.Handler {
 		if err := store.Upsert(r.Context(), userID, detail); err != nil {
 			switch err {
 			case ErrTooManyPoints:
-				writeError(w, http.StatusBadRequest, "route exceeds the maximum number of points")
+				apihttp.WriteError(w, http.StatusBadRequest, "route exceeds the maximum number of points")
 			case ErrRouteOwnedByAnotherUser:
-				writeError(w, http.StatusConflict, "route id already in use")
+				apihttp.WriteError(w, http.StatusConflict, "route id already in use")
 			default:
-				writeError(w, http.StatusInternalServerError, "could not process the request")
+				apihttp.WriteError(w, http.StatusInternalServerError, "could not process the request")
 			}
 			return
 		}
 
-		writeJSON(w, http.StatusOK, upsertResponse{ID: req.ID})
+		apihttp.WriteJSON(w, http.StatusOK, upsertResponse{ID: req.ID})
 	})
 }
 
 // ListHandler devuelve los resúmenes de las rutas del usuario autenticado.
 func ListHandler(store Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := requireUserID(w, r)
+		userID, ok := apihttp.RequireUserID(w, r)
 		if !ok {
 			return
 		}
 
 		list, err := store.ListByUser(r.Context(), userID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "could not process the request")
+			apihttp.WriteError(w, http.StatusInternalServerError, "could not process the request")
 			return
 		}
 		if list == nil {
 			list = []Route{}
 		}
 
-		writeJSON(w, http.StatusOK, list)
+		apihttp.WriteJSON(w, http.StatusOK, list)
 	})
 }
 
@@ -153,7 +128,7 @@ func ListHandler(store Store) http.Handler {
 // otro usuario — nunca revela cuál de los dos casos es.
 func DetailHandler(store Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := requireUserID(w, r)
+		userID, ok := apihttp.RequireUserID(w, r)
 		if !ok {
 			return
 		}
@@ -161,14 +136,14 @@ func DetailHandler(store Store) http.Handler {
 		id := chi.URLParam(r, "id")
 		detail, err := store.GetByIDForUser(r.Context(), userID, id)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "could not process the request")
+			apihttp.WriteError(w, http.StatusInternalServerError, "could not process the request")
 			return
 		}
 		if detail == nil {
-			writeError(w, http.StatusNotFound, "route not found")
+			apihttp.WriteError(w, http.StatusNotFound, "route not found")
 			return
 		}
 
-		writeJSON(w, http.StatusOK, detail)
+		apihttp.WriteJSON(w, http.StatusOK, detail)
 	})
 }

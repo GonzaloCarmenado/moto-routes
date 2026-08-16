@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/crzverde/moto-routes/apps/api/internal/apihttp"
 	"github.com/crzverde/moto-routes/apps/api/internal/photos"
 	"github.com/crzverde/moto-routes/apps/api/internal/routes"
 )
@@ -32,7 +33,7 @@ type acceptResponse struct {
 // delegado en MarkAccepted).
 func AcceptHandler(shareStore Store, routeStore routes.Store, photoStore photos.PhotoStore, blobStore photos.BlobStore) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := requireUserID(w, r)
+		userID, ok := apihttp.RequireUserID(w, r)
 		if !ok {
 			return
 		}
@@ -47,11 +48,11 @@ func AcceptHandler(shareStore Store, routeStore routes.Store, photoStore photos.
 		newRouteID, err := cloneRoute(r.Context(), routeStore, photoStore, blobStore, inv)
 		if err != nil {
 			log.Printf("route sharing: failed to clone route %s for invitation %s: %v", inv.RouteID, inv.ID, err)
-			writeError(w, http.StatusInternalServerError, "could not process the request")
+			apihttp.WriteError(w, http.StatusInternalServerError, "could not process the request")
 			return
 		}
 
-		writeJSON(w, http.StatusOK, acceptResponse{RouteID: newRouteID})
+		apihttp.WriteJSON(w, http.StatusOK, acceptResponse{RouteID: newRouteID})
 	})
 }
 

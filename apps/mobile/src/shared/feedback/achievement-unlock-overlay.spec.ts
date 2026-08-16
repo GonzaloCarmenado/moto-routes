@@ -71,4 +71,25 @@ describe('enqueueAchievementUnlock', () => {
 
     expect(document.querySelectorAll('achievement-unlock-overlay')).toHaveLength(0);
   });
+
+  it('pulsar Escape cierra la animación visible y pasa a la siguiente de la cola', () => {
+    enqueueAchievementUnlock(makeAchievement({ id: 1, title: 'Primero' }));
+    enqueueAchievementUnlock(makeAchievement({ id: 2, title: 'Segundo' }));
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    expect(queryOverlay()?.querySelector('[data-cy="achievement-unlock-title"]')?.textContent).toBe('Segundo');
+  });
+
+  it('el foco queda atrapado dentro del overlay: Tab desde el botón Continuar vuelve al propio botón Continuar', () => {
+    enqueueAchievementUnlock(makeAchievement());
+
+    const dismissBtn = queryOverlay()?.querySelector<HTMLButtonElement>('[data-cy="achievement-unlock-dismiss"]');
+    expect(dismissBtn).toBe(document.querySelector('achievement-unlock-overlay')?.shadowRoot?.activeElement);
+
+    const tabEvent = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
+    document.dispatchEvent(tabEvent);
+
+    expect(tabEvent.defaultPrevented).toBe(true);
+  });
 });

@@ -11,34 +11,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/crzverde/moto-routes/apps/api/internal/apihttp"
 	"github.com/crzverde/moto-routes/apps/api/internal/auth"
 	"github.com/crzverde/moto-routes/apps/api/internal/routes"
 )
-
-type errorResponse struct {
-	Error string `json:"error"`
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(errorResponse{Error: message})
-}
-
-func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
-}
-
-func requireUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	userID, ok := auth.UserIDFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "missing or invalid token")
-		return 0, false
-	}
-	return userID, true
-}
 
 type createInvitationRequest struct {
 	RouteID string `json:"route_id"`
@@ -57,24 +33,24 @@ const invitationCreatedMessage = "if the route is eligible and the account exist
 // (ver design.md D2, mismo criterio que RequestPasswordResetHandler).
 func CreateInvitationHandler(shareStore Store, routeStore routes.Store, userStore auth.UserStore) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := requireUserID(w, r)
+		userID, ok := apihttp.RequireUserID(w, r)
 		if !ok {
 			return
 		}
 
 		var req createInvitationRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			apihttp.WriteError(w, http.StatusBadRequest, "invalid request body")
 			return
 		}
 		if req.RouteID == "" || req.Email == "" {
-			writeError(w, http.StatusBadRequest, "route_id and email are required")
+			apihttp.WriteError(w, http.StatusBadRequest, "route_id and email are required")
 			return
 		}
 
 		tryCreateInvitation(r.Context(), shareStore, routeStore, userStore, userID, req.RouteID, req.Email)
 
-		writeJSON(w, http.StatusOK, genericMessageResponse{Message: invitationCreatedMessage})
+		apihttp.WriteJSON(w, http.StatusOK, genericMessageResponse{Message: invitationCreatedMessage})
 	})
 }
 
@@ -116,7 +92,7 @@ func RateLimitedCreateInvitationHandler(shareStore Store, routeStore routes.Stor
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rawBody, err := io.ReadAll(r.Body)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			apihttp.WriteError(w, http.StatusBadRequest, "invalid request body")
 			return
 		}
 		r.Body = io.NopCloser(bytes.NewReader(rawBody))
@@ -125,7 +101,7 @@ func RateLimitedCreateInvitationHandler(shareStore Store, routeStore routes.Stor
 		_ = json.Unmarshal(rawBody, &req)
 
 		if req.Email != "" && !limiter.Allowed(req.Email) {
-			writeError(w, http.StatusTooManyRequests, "too many invitations sent to this email, try again later")
+			apihttp.WriteError(w, http.StatusTooManyRequests, "too many invitations sent to this email, try again later")
 			return
 		}
 		if req.Email != "" {
@@ -140,42 +116,42 @@ func RateLimitedCreateInvitationHandler(shareStore Store, routeStore routes.Stor
 // usuario autenticado.
 func ListReceivedHandler(shareStore Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := requireUserID(w, r)
+		userID, ok := apihttp.RequireUserID(w, r)
 		if !ok {
 			return
 		}
 
 		received, err := shareStore.ListReceivedPending(r.Context(), userID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "could not process the request")
+			apihttp.WriteError(w, http.StatusInternalServerError, "could not process the request")
 			return
 		}
 		if received == nil {
 			received = []ReceivedInvitation{}
 		}
 
-		writeJSON(w, http.StatusOK, received)
+		apihttp.WriteJSON(w, http.StatusOK, received)
 	})
 }
 
 // ListSentHandler devuelve las invitaciones enviadas por el usuario autenticado.
 func ListSentHandler(shareStore Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := requireUserID(w, r)
+		userID, ok := apihttp.RequireUserID(w, r)
 		if !ok {
 			return
 		}
 
 		sent, err := shareStore.ListSentByUser(r.Context(), userID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "could not process the request")
+			apihttp.WriteError(w, http.StatusInternalServerError, "could not process the request")
 			return
 		}
 		if sent == nil {
 			sent = []SentInvitation{}
 		}
 
-		writeJSON(w, http.StatusOK, sent)
+		apihttp.WriteJSON(w, http.StatusOK, sent)
 	})
 }
 
@@ -184,7 +160,7 @@ func ListSentHandler(shareStore Store) http.Handler {
 // pendiente — nunca revela cuál de los casos es (ver design.md D6).
 func DeclineHandler(shareStore Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := requireUserID(w, r)
+		userID, ok := apihttp.RequireUserID(w, r)
 		if !ok {
 			return
 		}
@@ -203,7 +179,7 @@ func DeclineHandler(shareStore Store) http.Handler {
 // autenticado. Mismo criterio 404 que DeclineHandler.
 func RevokeHandler(shareStore Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := requireUserID(w, r)
+		userID, ok := apihttp.RequireUserID(w, r)
 		if !ok {
 			return
 		}
@@ -220,8 +196,8 @@ func RevokeHandler(shareStore Store) http.Handler {
 
 func writeShareStoreError(w http.ResponseWriter, err error) {
 	if errors.Is(err, ErrInvitationNotFound) {
-		writeError(w, http.StatusNotFound, "invitation not found")
+		apihttp.WriteError(w, http.StatusNotFound, "invitation not found")
 		return
 	}
-	writeError(w, http.StatusInternalServerError, "could not process the request")
+	apihttp.WriteError(w, http.StatusInternalServerError, "could not process the request")
 }
