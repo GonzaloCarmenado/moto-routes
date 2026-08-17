@@ -208,6 +208,7 @@ describe('Compartir rutas - invitación, aceptar, rechazar y revocar', () => {
             cy.get('[data-cy="nav-rutas"]').click();
             cy.wait('@received');
             cy.get('[data-cy="route-list-btn-invitaciones"]').should('have.class', 'favorite-icon--active');
+            cy.get('[data-cy="route-list-invitaciones-badge"]').should('have.text', '2');
             cy.get('[data-cy="route-list-btn-invitaciones"]').click();
             cy.get('[data-cy="route-sharing-card-recibida"]').should('have.length', 2);
 

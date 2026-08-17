@@ -7,11 +7,18 @@ import { fetchCloudRoutes } from '../../shared/http/route-cloud-api.service.js';
 import type * as RouteCloudApiService from '../../shared/http/route-cloud-api.service.js';
 import { autoResyncIfNeeded } from '../detail/route-detail-cloud.service.js';
 import type * as RouteDetailCloudService from '../detail/route-detail-cloud.service.js';
+import { fetchReceivedInvitations } from '../../shared/http/route-sharing-api.service.js';
+import type * as RouteSharingApiService from '../../shared/http/route-sharing-api.service.js';
 import './route-list.element.js';
 
 vi.mock('../../shared/http/route-cloud-api.service.js', async (importOriginal) => {
   const actual = await importOriginal<typeof RouteCloudApiService>();
   return { ...actual, fetchCloudRoutes: vi.fn() };
+});
+
+vi.mock('../../shared/http/route-sharing-api.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof RouteSharingApiService>();
+  return { ...actual, fetchReceivedInvitations: vi.fn() };
 });
 
 vi.mock('../detail/route-detail-cloud.service.js', async (importOriginal) => {
@@ -893,6 +900,43 @@ describe('route-list - orden fecha/nombre', () => {
 
     const names = Array.from(root.querySelectorAll('.name')).map((n) => n.textContent);
     expect(names).toEqual(['Alfa favorita', 'Zeta favorita']);
+    document.body.removeChild(list);
+  });
+});
+
+describe('route-list - badge numérico de invitaciones pendientes', () => {
+  let repo: IRouteRepository;
+
+  beforeEach(() => {
+    repo = new MemoryRouteRepository();
+    vi.clearAllMocks();
+  });
+
+  async function createListWithSession(): Promise<HTMLElement> {
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+    const list = document.createElement('route-list') as HTMLElement & {
+      repository: IRouteRepository;
+      sessionRepository: ISessionRepository;
+    };
+    list.sessionRepository = sessionRepository;
+    list.repository = repo;
+    document.body.appendChild(list);
+    await waitRender();
+    return list;
+  }
+
+  it('muestra el número real de invitaciones pendientes en el botón de invitaciones', async () => {
+    vi.mocked(fetchCloudRoutes).mockResolvedValue([]);
+    vi.mocked(fetchReceivedInvitations).mockResolvedValue([
+      { id: 'inv-1', routeId: 'route-1', routeName: null, routeCreatedAt: '2026-08-14T10:00:00.000Z', fromEmail: 'a@example.com', createdAt: '2026-08-14T10:00:00.000Z' },
+      { id: 'inv-2', routeId: 'route-2', routeName: null, routeCreatedAt: '2026-08-14T10:00:00.000Z', fromEmail: 'b@example.com', createdAt: '2026-08-14T10:00:00.000Z' },
+    ]);
+
+    const list = await createListWithSession();
+    const badge = list.shadowRoot!.querySelector('[data-cy="route-list-invitaciones-badge"]');
+
+    expect(badge?.textContent).toBe('2');
     document.body.removeChild(list);
   });
 });
