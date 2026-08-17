@@ -50,7 +50,7 @@ class RouteList extends BaseElement {
   private _showCloudOnly = false;
   private _searchQuery = '';
   private _sortBy: ListSortBy = 'date';
-  private _hasPendingShares = false;
+  private _hasPendingShares = 0;
   private photoRepo: IPhotoRepository | null = null;
 
   private async getPhotoRepo(): Promise<IPhotoRepository> {

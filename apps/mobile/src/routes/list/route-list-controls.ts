@@ -13,7 +13,8 @@ import type { ListSortBy } from './route-list-filters.transform.js';
 export interface ControlsRowOptions {
   hasSession: boolean;
   hasItems: boolean;
-  hasPendingShares: boolean;
+  /** Número de invitaciones recibidas pendientes (contador-invitaciones-pendientes) — 0 si ninguna. */
+  hasPendingShares: number;
   showFavoritesOnly: boolean;
   showLocalOnly: boolean;
   showCloudOnly: boolean;

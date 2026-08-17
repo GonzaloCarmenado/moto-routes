@@ -133,6 +133,7 @@
    `route-detail`, importado aquí porque un Shadow DOM no hereda CSS de otro
    componente aunque compartan la clase. */
 .favorite-icon {
+  position: relative;
   flex-shrink: 0;
   width: var(--hitbox-min);
   height: var(--hitbox-min);
@@ -200,6 +201,31 @@ span.favorite-icon {
 .favorite-icon--badge svg {
   width: 14px;
   height: 14px;
+}
+
+/* Badge numérico de invitaciones pendientes sobre el botón de invitaciones
+   (contador-invitaciones-pendientes) — mismo patrón de esquina que
+   .favorite-icon--badge, pero con texto en vez de icono. .favorite-icon ya
+   es position: relative-friendly (flex, sin position propio), así que este
+   badge se posiciona respecto al propio botón. */
+.invitaciones-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: var(--r-pill);
+  background: var(--amber);
+  color: var(--bg-top);
+  border: 2px solid var(--bg-top);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-data);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .thumb-wrapper {
