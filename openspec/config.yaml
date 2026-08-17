@@ -262,3 +262,9 @@ operations:
         ADR nueva únicamente si surgió de verdad durante apply — el criterio de qué merece
         ADR es el mismo de rules.design. Si una ADR ya aceptada resultó desmentida por la
         implementación, se anota la desviación en una ADR nueva, nunca editando la anterior.
+      - >-
+        Si durante la revisión se detecta desalineación entre código y artefactos (la
+        Regla fundamental de CLAUDE.md) o un gate que había fallado tras haberse dado por
+        bueno en algún momento del cambio, registrar el evento en
+        memory/metrics/events.jsonl (categoría spec-drift o gate-bypass según el caso, ver
+        memory/metrics/README.md) antes de cerrar el archivado.
