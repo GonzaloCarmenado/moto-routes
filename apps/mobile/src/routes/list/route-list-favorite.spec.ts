@@ -81,7 +81,7 @@ describe('buildFavoritesFilterToggle', () => {
     const btn = buildFavoritesFilterToggle(false, onToggle) as HTMLButtonElement;
 
     expect(btn.getAttribute('data-cy')).toBe('route-list-filtro-favoritas');
-    expect(btn.classList.contains('favorites-filter--active')).toBe(false);
+    expect(btn.classList.contains('favorite-icon--active')).toBe(false);
 
     btn.click();
     expect(onToggle).toHaveBeenCalledOnce();
@@ -89,7 +89,14 @@ describe('buildFavoritesFilterToggle', () => {
 
   it('marks itself active when active=true', () => {
     const btn = buildFavoritesFilterToggle(true, vi.fn()) as HTMLButtonElement;
-    expect(btn.classList.contains('favorites-filter--active')).toBe(true);
+    expect(btn.classList.contains('favorite-icon--active')).toBe(true);
     expect(btn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('is icon-only (no text label), with an aria-label for accessibility', () => {
+    const btn = buildFavoritesFilterToggle(false, vi.fn()) as HTMLButtonElement;
+    expect(btn.textContent?.trim()).toBe('');
+    expect(btn.getAttribute('aria-label')).toBe('Solo favoritas');
+    expect(btn.querySelector('svg')).not.toBeNull();
   });
 });
