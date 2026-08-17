@@ -17,8 +17,11 @@ export interface ControlsRowOptions {
   showFavoritesOnly: boolean;
   showLocalOnly: boolean;
   showCloudOnly: boolean;
+  /** Invocado al pulsar el icono de favoritas — el llamador decide cómo re-renderizar. */
   onToggleFavorites: () => void;
+  /** Invocado al pulsar el icono "Solo locales". */
   onToggleLocal: () => void;
+  /** Invocado al pulsar el icono "Solo en la nube". */
   onToggleCloud: () => void;
 }
 
@@ -51,7 +54,9 @@ export function buildControlsRow(options: ControlsRowOptions): HTMLElement | nul
 export interface SearchSortRowOptions {
   searchQuery: string;
   sortBy: ListSortBy;
+  /** Invocado en cada tecla escrita en el buscador, con el valor actual del campo. */
   onSearchInput: (value: string) => void;
+  /** Invocado al pulsar el control de orden, para alternar entre fecha y nombre. */
   onToggleSort: () => void;
 }
 
