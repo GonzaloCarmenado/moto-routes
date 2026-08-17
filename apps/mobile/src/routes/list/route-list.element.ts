@@ -15,16 +15,16 @@ import { deleteRouteAndPhotos } from '../../shared/services/route-deletion.servi
 import { confirmDialog } from '../../shared/feedback/confirm-dialog.element.js';
 import { showToast } from '../../shared/feedback/toast.js';
 import { toErrorMessage } from '../../shared/utils/errors.js';
-import { buildPolylineSvgPath } from './route-list.transform.js';
-import { ensurePreviewPolyline } from './route-list-polyline.service.js';
 import { loadRouteListItems } from './route-list-sync.service.js';
 import type { RouteListItem, RouteSyncState } from './route-list-sync.transform.js';
 import { DEVICE_ICON, CLOUD_CHECK_ICON, CLOUD_ONLY_ICON } from '../../shared/icons/cloud-sync-icons.js';
 import { TRASH_ICON } from '../../shared/icons/action-icons.js';
-import { buildRouteCardFavoriteBadge, buildFavoritesFilterToggle } from './route-list-favorite.js';
-import { buildSharingButton, hasPendingReceivedInvitations } from './route-list-sharing.js';
-
-const THUMB_TRACE_SIZE = 72;
+import { buildRouteCardFavoriteBadge } from './route-list-favorite.js';
+import { hasPendingReceivedInvitations } from './route-list-sharing.js';
+import { buildControlsRow, buildSearchSortRow } from './route-list-controls.js';
+import { buildListBody } from './route-list-body.js';
+import { buildThumb } from './route-list-thumb.js';
+import type { ListControls, ListSortBy } from './route-list-filters.transform.js';
 
 const SYNC_ICON_BY_STATE: Record<RouteSyncState, string> = {
   local: DEVICE_ICON,
@@ -46,6 +46,10 @@ class RouteList extends BaseElement {
   private _session: Session | null = null;
   private _loading = false;
   private _showFavoritesOnly = false;
+  private _showLocalOnly = false;
+  private _showCloudOnly = false;
+  private _searchQuery = '';
+  private _sortBy: ListSortBy = 'date';
   private _hasPendingShares = false;
   private photoRepo: IPhotoRepository | null = null;
 
@@ -139,6 +143,16 @@ class RouteList extends BaseElement {
     this.renderShadow(styles, screen);
   }
 
+  private get listControls(): ListControls {
+    return {
+      showFavoritesOnly: this._showFavoritesOnly,
+      showLocalOnly: this._showLocalOnly,
+      showCloudOnly: this._showCloudOnly,
+      searchQuery: this._searchQuery,
+      sortBy: this._sortBy,
+    };
+  }
+
   private buildHeader(items: RouteListItem[]): DocumentFragment {
     const fragment = document.createDocumentFragment();
 
@@ -153,49 +167,50 @@ class RouteList extends BaseElement {
     subtitle.textContent = `${String(items.length)} rutas guardadas · ${totalKm.toFixed(1)} km recorridos`;
     fragment.appendChild(subtitle);
 
-    if (this._hasSession) {
-      fragment.appendChild(buildSharingButton(this._hasPendingShares));
-    }
+    const controlsRow = buildControlsRow({
+      hasSession: this._hasSession,
+      hasItems: items.length > 0,
+      hasPendingShares: this._hasPendingShares,
+      showFavoritesOnly: this._showFavoritesOnly,
+      showLocalOnly: this._showLocalOnly,
+      showCloudOnly: this._showCloudOnly,
+      onToggleFavorites: () => { this._showFavoritesOnly = !this._showFavoritesOnly; this.render(); },
+      onToggleLocal: () => { this._showLocalOnly = !this._showLocalOnly; this.render(); },
+      onToggleCloud: () => { this._showCloudOnly = !this._showCloudOnly; this.render(); },
+    });
+    if (controlsRow) fragment.appendChild(controlsRow);
 
     if (items.length > 0) {
-      fragment.appendChild(buildFavoritesFilterToggle(this._showFavoritesOnly, () => {
-        this._showFavoritesOnly = !this._showFavoritesOnly;
-        this.render();
+      fragment.appendChild(buildSearchSortRow({
+        searchQuery: this._searchQuery,
+        sortBy: this._sortBy,
+        // Actualización parcial (no render() completo): ver JSDoc de
+        // updateBodyOnly — un render() completo destruiría y recrearía este
+        // <input> en cada tecla, perdiendo el foco. Gap real encontrado
+        // implementando, no anticipado en design.md.
+        onSearchInput: (value) => { this._searchQuery = value; this.updateBodyOnly(); },
+        onToggleSort: () => { this._sortBy = this._sortBy === 'date' ? 'name' : 'date'; this.render(); },
       }));
     }
 
     return fragment;
   }
 
+  /**
+   * Sustituye solo la sección de resultados (tarjetas o estado vacío), sin
+   * tocar el resto del Shadow DOM — necesario para que el buscador no pierda
+   * el foco en cada tecla (ver `onSearchInput` en `buildHeader`).
+   */
+  private updateBodyOnly(): void {
+    const root = this.shadowRoot;
+    if (!root) return;
+    const oldBody = root.querySelector('.route-list__cards, .route-list__empty');
+    const newBody = this.buildBody(this._items);
+    if (oldBody) oldBody.replaceWith(newBody);
+  }
+
   private buildBody(items: RouteListItem[]): HTMLElement {
-    const visible = this._showFavoritesOnly ? items.filter((i) => i.route.isFavorite) : items;
-
-    if (visible.length === 0) {
-      return this._showFavoritesOnly ? this.buildEmptyFavoritesState() : this.buildEmptyState();
-    }
-
-    const list = document.createElement('div');
-    list.className = 'route-list__cards';
-    for (const item of visible) {
-      list.appendChild(this.buildCard(item));
-    }
-    return list;
-  }
-
-  private buildEmptyState(): HTMLElement {
-    const empty = document.createElement('div');
-    empty.className = 'route-list__empty';
-    empty.setAttribute('data-cy', 'route-list-empty');
-    empty.textContent = 'No hay rutas guardadas todavía';
-    return empty;
-  }
-
-  private buildEmptyFavoritesState(): HTMLElement {
-    const empty = document.createElement('div');
-    empty.className = 'route-list__empty';
-    empty.setAttribute('data-cy', 'route-list-empty-favoritas');
-    empty.textContent = 'No tienes rutas favoritas todavía';
-    return empty;
+    return buildListBody(items, this.listControls, (item) => this.buildCard(item));
   }
 
   private buildCard(item: RouteListItem): HTMLElement {
@@ -226,7 +241,7 @@ class RouteList extends BaseElement {
   private buildThumbWithBadge(item: RouteListItem, card: HTMLElement): HTMLElement {
     const wrapper = document.createElement('div');
     wrapper.className = 'thumb-wrapper';
-    wrapper.appendChild(this.buildThumb(item, card));
+    wrapper.appendChild(buildThumb(item, card, this._repository));
     if (this._repository) {
       wrapper.appendChild(buildRouteCardFavoriteBadge({
         repository: this._repository,
@@ -274,76 +289,6 @@ class RouteList extends BaseElement {
     icon.dataset.syncState = syncState;
     icon.innerHTML = SYNC_ICON_BY_STATE[syncState];
     return icon;
-  }
-
-  /**
-   * Construye el `.thumb` de la tarjeta: la silueta SVG si `route` ya tiene
-   * `previewPolyline` disponible, o el placeholder de franjas existente. En
-   * este último caso, si la ruta aún no tiene el trazado calculado (`null`),
-   * dispara el backfill perezoso en segundo plano (sin bloquear el render).
-   */
-  private buildThumb(item: RouteListItem, card: HTMLElement): HTMLElement {
-    const { route, syncState } = item;
-    const svgPath = buildPolylineSvgPath(route.previewPolyline, THUMB_TRACE_SIZE, THUMB_TRACE_SIZE);
-    if (svgPath) return this.buildTraceThumb(svgPath);
-
-    // Una ruta exclusiva de la nube no tiene puntos locales de los que
-    // calcular el trazado — el backfill solo tiene sentido para rutas con
-    // datos en el repositorio local.
-    if (route.previewPolyline === null && syncState !== 'cloud-only') {
-      this.scheduleBackfill(route, card);
-    }
-    return this.buildPlaceholderThumb();
-  }
-
-  private buildPlaceholderThumb(): HTMLElement {
-    const thumb = document.createElement('div');
-    thumb.className = 'thumb media-placeholder';
-    return thumb;
-  }
-
-  private buildTraceThumb(pathD: string): HTMLElement {
-    const thumb = document.createElement('div');
-    thumb.className = 'thumb thumb--trace';
-
-    const svgNs = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(svgNs, 'svg');
-    svg.setAttribute('viewBox', `0 0 ${String(THUMB_TRACE_SIZE)} ${String(THUMB_TRACE_SIZE)}`);
-
-    const path = document.createElementNS(svgNs, 'path');
-    path.setAttribute('d', pathD);
-    path.setAttribute('data-cy', 'route-card-trace');
-    svg.appendChild(path);
-
-    thumb.appendChild(svg);
-    return thumb;
-  }
-
-  /**
-   * Lanza `ensurePreviewPolyline` sin `await` (el placeholder ya se ha
-   * pintado) y, si resuelve con un trazado, sustituye el `.thumb` de esa
-   * tarjeta concreta in-place y actualiza `route.previewPolyline` en memoria
-   * (mutando el objeto que ya vive en `this._routes`) para que una
-   * re-renderización posterior no vuelva a mostrar el placeholder.
-   */
-  private scheduleBackfill(route: Route, card: HTMLElement): void {
-    const repo = this._repository;
-    if (!repo) return;
-
-    void ensurePreviewPolyline(repo, route)
-      .then((polyline) => {
-        if (!polyline) return;
-        route.previewPolyline = polyline;
-
-        const svgPath = buildPolylineSvgPath(polyline, THUMB_TRACE_SIZE, THUMB_TRACE_SIZE);
-        if (!svgPath) return;
-        card.querySelector('.thumb')?.replaceWith(this.buildTraceThumb(svgPath));
-      })
-      .catch(() => {
-        // Backfill best-effort: si falla, la tarjeta sigue en placeholder
-        // hasta la próxima carga del listado — preview_polyline es un dato
-        // derivado y recalculable, nunca la fuente de verdad.
-      });
   }
 
   /**

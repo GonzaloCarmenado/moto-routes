@@ -8,6 +8,7 @@ import type { IRouteRepository } from '../../shared/models/route.repository.js';
 import type { Session } from '../../shared/models/session.types.js';
 import { buildFavoriteToggle } from '../../shared/favorite-toggle.js';
 import { triggerAutoResync } from '../detail/route-detail-sync-triggers.js';
+import { FAVORITE_ICON } from '../../shared/icons/favorite-icons.js';
 import type { RouteListItem } from './route-list-sync.transform.js';
 
 export interface FavoriteCardIconOptions {
@@ -49,15 +50,20 @@ async function handleToggleFavorite(
   onToggled();
 }
 
-/** Construye el botón del filtro "Solo favoritas" (design.md D7, ver JSDoc del módulo). */
+/**
+ * Construye el botón del filtro "Solo favoritas" — icono (estrella), mismo
+ * patrón visual `.favorite-icon` que el botón de invitaciones, para convivir
+ * en la misma fila de controles (mejoras-listado-rutas, design.md Decisión 7).
+ */
 export function buildFavoritesFilterToggle(active: boolean, onToggle: () => void): HTMLElement {
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'favorites-filter';
-  btn.classList.toggle('favorites-filter--active', active);
+  btn.className = 'favorite-icon';
+  btn.classList.toggle('favorite-icon--active', active);
   btn.setAttribute('data-cy', 'route-list-filtro-favoritas');
   btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-  btn.textContent = 'Solo favoritas';
+  btn.setAttribute('aria-label', 'Solo favoritas');
+  btn.innerHTML = FAVORITE_ICON;
   btn.addEventListener('click', onToggle);
   return btn;
 }

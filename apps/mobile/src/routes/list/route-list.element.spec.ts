@@ -666,3 +666,233 @@ describe('route-list - filtro "Solo favoritas"', () => {
     document.body.removeChild(list);
   });
 });
+
+describe('route-list - filtros "Solo locales" / "Solo en la nube"', () => {
+  let repo: IRouteRepository;
+
+  beforeEach(() => {
+    repo = new MemoryRouteRepository();
+    vi.clearAllMocks();
+  });
+
+  async function createListWithSession(): Promise<HTMLElement> {
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+    const list = document.createElement('route-list') as HTMLElement & {
+      repository: IRouteRepository;
+      sessionRepository: ISessionRepository;
+    };
+    list.sessionRepository = sessionRepository;
+    list.repository = repo;
+    document.body.appendChild(list);
+    await waitRender();
+    return list;
+  }
+
+  function localFilter(list: HTMLElement): HTMLButtonElement {
+    return list.shadowRoot!.querySelector('[data-cy="route-list-filtro-locales"]') as HTMLButtonElement;
+  }
+
+  function cloudFilter(list: HTMLElement): HTMLButtonElement {
+    return list.shadowRoot!.querySelector('[data-cy="route-list-filtro-nube"]') as HTMLButtonElement;
+  }
+
+  it('sin sesión activa, no se muestran los filtros de local/nube', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' }, [], []);
+    const list = await createList(repo);
+
+    expect(localFilter(list)).toBeNull();
+    expect(cloudFilter(list)).toBeNull();
+    document.body.removeChild(list);
+  });
+
+  it('activar "Solo locales" oculta las rutas sincronizadas y las exclusivas de la nube', async () => {
+    const local = await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Local' }, [], []);
+    const synced = await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Sincronizada' }, [], []);
+    vi.mocked(fetchCloudRoutes).mockResolvedValue([
+      { id: synced.id, createdAt: synced.createdAt, duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', name: 'Sincronizada', notes: null, isFavorite: false },
+      { id: 'cloud-only', createdAt: '2026-08-01T10:00:00.000Z', duration: 60, totalDistance: 5, avgSpeed: 20, status: 'completed', name: 'Solo nube', notes: null, isFavorite: false },
+    ]);
+
+    const list = await createListWithSession();
+    expect(list.shadowRoot!.querySelectorAll('.route-card')).toHaveLength(3);
+
+    localFilter(list).click();
+    await waitRender();
+
+    const root = list.shadowRoot!;
+    expect(root.querySelectorAll('.route-card')).toHaveLength(1);
+    expect(root.querySelector('.name')?.textContent).toBe(local.name);
+    document.body.removeChild(list);
+  });
+
+  it('activar "Solo en la nube" oculta las rutas puramente locales', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Local' }, [], []);
+    vi.mocked(fetchCloudRoutes).mockResolvedValue([
+      { id: 'cloud-only', createdAt: '2026-08-01T10:00:00.000Z', duration: 60, totalDistance: 5, avgSpeed: 20, status: 'completed', name: 'Solo nube', notes: null, isFavorite: false },
+    ]);
+
+    const list = await createListWithSession();
+    cloudFilter(list).click();
+    await waitRender();
+
+    const root = list.shadowRoot!;
+    expect(root.querySelectorAll('.route-card')).toHaveLength(1);
+    expect(root.querySelector('.name')?.textContent).toBe('Solo nube');
+    document.body.removeChild(list);
+  });
+
+  it('activar ambos filtros a la vez no deja ninguna ruta visible (estado vacío genérico, no el de favoritas)', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' }, [], []);
+    vi.mocked(fetchCloudRoutes).mockResolvedValue([]);
+
+    const list = await createListWithSession();
+    localFilter(list).click();
+    cloudFilter(list).click();
+    await waitRender();
+
+    const root = list.shadowRoot!;
+    expect(root.querySelectorAll('.route-card')).toHaveLength(0);
+    expect(root.querySelector('[data-cy="route-list-empty-favoritas"]')).toBeNull();
+    expect(root.querySelector('[data-cy="route-list-empty-filtrado"]')).not.toBeNull();
+    document.body.removeChild(list);
+  });
+});
+
+describe('route-list - buscador por nombre', () => {
+  let repo: IRouteRepository;
+
+  beforeEach(() => {
+    repo = new MemoryRouteRepository();
+  });
+
+  function searchInput(list: HTMLElement): HTMLInputElement {
+    return list.shadowRoot!.querySelector('[data-cy="route-list-buscador"]') as HTMLInputElement;
+  }
+
+  it('no se muestra cuando no hay ninguna ruta', async () => {
+    const list = await createList(repo);
+    expect(searchInput(list)).toBeNull();
+    document.body.removeChild(list);
+  });
+
+  it('escribir en el buscador filtra el listado en vivo, sin distinguir mayúsculas', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Ruta a Málaga' }, [], []);
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Otra ruta' }, [], []);
+
+    const list = await createList(repo);
+    const input = searchInput(list);
+    input.value = 'málaga';
+    input.dispatchEvent(new Event('input'));
+    await waitRender();
+
+    const root = list.shadowRoot!;
+    expect(root.querySelectorAll('.route-card')).toHaveLength(1);
+    expect(root.querySelector('.name')?.textContent).toBe('Ruta a Málaga');
+    document.body.removeChild(list);
+  });
+
+  it('no perder el foco del input al escribir varios caracteres seguidos (no se reconstruye el DOM del input)', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Ruta de prueba' }, [], []);
+
+    const list = await createList(repo);
+    const input = searchInput(list);
+    input.focus();
+
+    for (const char of ['r', 'u', 't', 'a']) {
+      input.value += char;
+      input.dispatchEvent(new Event('input'));
+      await waitRender();
+    }
+
+    expect(list.shadowRoot!.activeElement).toBe(searchInput(list));
+    expect(searchInput(list)).toBe(input);
+    document.body.removeChild(list);
+  });
+
+  it('una búsqueda sin coincidencias muestra el estado vacío genérico', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Ruta al norte' }, [], []);
+
+    const list = await createList(repo);
+    const input = searchInput(list);
+    input.value = 'inexistente';
+    input.dispatchEvent(new Event('input'));
+    await waitRender();
+
+    expect(list.shadowRoot!.querySelectorAll('.route-card')).toHaveLength(0);
+    expect(list.shadowRoot!.querySelector('[data-cy="route-list-empty-filtrado"]')).not.toBeNull();
+    document.body.removeChild(list);
+  });
+
+  it('vaciar el buscador restaura el listado completo', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Zeta' }, [], []);
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Kilo' }, [], []);
+
+    const list = await createList(repo);
+    const input = searchInput(list);
+    input.value = 'zeta';
+    input.dispatchEvent(new Event('input'));
+    await waitRender();
+    expect(list.shadowRoot!.querySelectorAll('.route-card')).toHaveLength(1);
+
+    searchInput(list).value = '';
+    searchInput(list).dispatchEvent(new Event('input'));
+    await waitRender();
+    expect(list.shadowRoot!.querySelectorAll('.route-card')).toHaveLength(2);
+    document.body.removeChild(list);
+  });
+});
+
+describe('route-list - orden fecha/nombre', () => {
+  let repo: IRouteRepository;
+
+  beforeEach(() => {
+    repo = new MemoryRouteRepository();
+  });
+
+  function sortToggle(list: HTMLElement): HTMLButtonElement {
+    return list.shadowRoot!.querySelector('[data-cy="route-list-orden"]') as HTMLButtonElement;
+  }
+
+  it('por defecto ordena por fecha, de más reciente a más antigua', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Vieja', createdAt: '2026-01-01T10:00:00.000Z' } as never, [], []);
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Nueva', createdAt: '2026-02-01T10:00:00.000Z' } as never, [], []);
+
+    const list = await createList(repo);
+    const names = Array.from(list.shadowRoot!.querySelectorAll('.name')).map((n) => n.textContent);
+    expect(names).toEqual(['Nueva', 'Vieja']);
+    document.body.removeChild(list);
+  });
+
+  it('cambiar a orden por nombre reordena alfabéticamente de la A a la Z', async () => {
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Zeta' }, [], []);
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Alfa' }, [], []);
+
+    const list = await createList(repo);
+    sortToggle(list).click();
+    await waitRender();
+
+    const names = Array.from(list.shadowRoot!.querySelectorAll('.name')).map((n) => n.textContent);
+    expect(names).toEqual(['Alfa', 'Zeta']);
+    document.body.removeChild(list);
+  });
+
+  it('el orden se aplica sobre el resultado ya filtrado, no sobre el listado completo', async () => {
+    const fav = await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Zeta favorita' }, [], []);
+    await repo.updateFavorite(fav.id, true);
+    const favB = await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'Alfa favorita' }, [], []);
+    await repo.updateFavorite(favB.id, true);
+    await repo.save({ duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local', name: 'AAA no favorita' }, [], []);
+
+    const list = await createList(repo);
+    const root = list.shadowRoot!;
+    root.querySelector<HTMLButtonElement>('[data-cy="route-list-filtro-favoritas"]')!.click();
+    await waitRender();
+    sortToggle(list).click();
+    await waitRender();
+
+    const names = Array.from(root.querySelectorAll('.name')).map((n) => n.textContent);
+    expect(names).toEqual(['Alfa favorita', 'Zeta favorita']);
+    document.body.removeChild(list);
+  });
+});
