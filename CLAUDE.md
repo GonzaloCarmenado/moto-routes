@@ -26,6 +26,12 @@ Detalle navegable en `docs/` (`pnpm run docs`). Histórico del SDD anterior en `
 - `memory/decisions.md` — ADRs. Consúltalo antes de revertir o cuestionar una decisión ya tomada; si tomas una nueva, añade el ADR aquí.
 - `memory/sessions/` — resúmenes de sesiones largas.
 
+## Métricas de fallos del SDLC
+
+`memory/metrics/events.jsonl` recoge fallos del propio proceso de trabajar con un agente en este repo — no de la app, no de tokens, no de productividad. Esquema y taxonomía completos en `memory/metrics/README.md`. Esta regla aplica **siempre**, no solo dentro de `/opsx:*` (a diferencia de las reglas de `openspec/config.yaml`, que solo se inyectan al escribir un artefacto): varios de los fallos a capturar ocurren fuera de ese flujo — un `git push` suelto, una PR fusionada sin pasar los gates, un fix puntual sin cambio abierto.
+
+Añade una línea a `events.jsonl` cuando detectes, tú mismo o porque el usuario lo señale, alguno de: no haber leído o aplicado bien `memory/context.md`/`memory/decisions.md` antes de actuar; haber lanzado un commit/push/merge/PR sin pasar los quality gates localmente y haber fallado después (pre-commit o CI); haber tocado algo de "Autorización explícita" sin avisar antes, o haber saltado rama+PR; código y artefactos OpenSpec desalineados al cerrar un cambio; el usuario corrigiendo tu enfoque técnico dentro de la misma tarea. Si el fallo es real pero no encaja en ninguna, se registra igual como `other` — no lo descartes por no encajar. No hay gate técnico que lo fuerce (mismo criterio que [[ADR-029]]/[[ADR-030]]): es responsabilidad de quien trabaja en el repo, agente o humano.
+
 ## Reglas de edición (aplican siempre, también en un fix suelto sin cambio abierto)
 
 - **`data-cy` obligatorio**: todo elemento interactivo o localizable por un test lleva `data-cy="<contexto>-<tipo>-<accion>"` único, añadido en su propio `.element.ts` al crearlo. Nunca selectores de clase, ID o posición DOM en tests.
