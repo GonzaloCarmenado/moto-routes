@@ -24,8 +24,11 @@ import { refreshStopTypesCache } from '../shared/stop-types/stop-types.service.j
 import { fetchStopTypesFromApi } from '../shared/stop-types/stop-types-api.service.js';
 import { getApiBaseUrl } from '../shared/http/api-config.js';
 import { BaseElement } from '../shared/base-element.js';
-import { APP_EVENTS, type AppEventDetailMap } from '../shared/app-events.js';
+import { APP_EVENTS, dispatchAppEvent, type AppEventDetailMap } from '../shared/app-events.js';
 import { isTauri } from '../shared/services/photo-capture-adapter.service.js';
+import { listenForNotificationTaps } from '../shared/services/notification-tap.service.js';
+import { reregisterDeviceTokenAfterRefresh } from '../shared/services/device-token.service.js';
+import { getPendingTapScreen, clearPendingTapScreen } from '../shared/tauri/commands.js';
 import { applyCypressSeed } from './app-seed.service.js';
 import type { NavBarActiveView } from '../shared/nav-bar/nav-bar.element.js';
 
@@ -69,6 +72,7 @@ class AppRoot extends BaseElement {
   private readonly onViewSharing = (): void => { this.showView('sharing'); };
   private readonly onViewAchievements = (): void => { this.showView('achievements'); };
   private readonly onBackToList = (): void => { this.showView('routes'); };
+  private unlistenNotificationTap: (() => void) | null = null;
 
   connectedCallback(): void {
     window.addEventListener(APP_EVENTS.NAV_GRABAR, this.onGrabar);
@@ -78,6 +82,15 @@ class AppRoot extends BaseElement {
     window.addEventListener(APP_EVENTS.VIEW_SHARING, this.onViewSharing);
     window.addEventListener(APP_EVENTS.VIEW_ACHIEVEMENTS, this.onViewAchievements);
     window.addEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
+    // Tocar una notificación push de invitación abre la app directamente en
+    // Invitaciones (notificaciones-push-fcm) — dispara el mismo evento
+    // `VIEW_SHARING` que el icono de invitaciones del listado (no basta con
+    // llamar a `onViewSharing()` directamente: `route-sharing.element.ts`
+    // también escucha este evento en `window` para refrescar sus datos, y
+    // esa segunda escucha se saltaba si no se redisparaba el evento real).
+    this.unlistenNotificationTap = listenForNotificationTaps(() => {
+      dispatchAppEvent(APP_EVENTS.VIEW_SHARING);
+    });
     void this.init();
   }
 
@@ -89,6 +102,7 @@ class AppRoot extends BaseElement {
     window.removeEventListener(APP_EVENTS.VIEW_SHARING, this.onViewSharing);
     window.removeEventListener(APP_EVENTS.VIEW_ACHIEVEMENTS, this.onViewAchievements);
     window.removeEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
+    this.unlistenNotificationTap?.();
   }
 
   /** Extraído de `render()` para no superar el límite de statements de la función (ESLint `max-statements`). */
@@ -178,6 +192,25 @@ class AppRoot extends BaseElement {
       this.profileRepo = memProfileRepo;
     }
     this.render();
+
+    // Cold start vía tap de notificación (ver MainActivity.kt::onCreate): el
+    // tap real pudo perderse porque `listenForNotificationTaps` aún no
+    // estaba escuchando cuando Android creó la Activity. Se consulta y
+    // consume aquí, una vez la vista de invitaciones (con su propio listener
+    // de VIEW_SHARING para refrescar datos) ya está montada por `render()`.
+    void getPendingTapScreen().then((screen) => {
+      if (screen === 'sharing') {
+        dispatchAppEvent(APP_EVENTS.VIEW_SHARING);
+        void clearPendingTapScreen();
+      }
+    });
+
+    // Re-registro del token FCM tras una rotación (design.md Decisión 6):
+    // solo tiene sentido con sesión activa — sin sesión no hay a qué
+    // usuario asociar el token nuevo en `device_tokens`.
+    void this.sessionRepo.get().then((session) => {
+      if (session) void reregisterDeviceTokenAfterRefresh(getApiBaseUrl(), session);
+    });
 
     // Best-effort, en segundo plano: no bloquea el arranque ni el primer render.
     // Si falla (sin red, apps/api no disponible), la caché existente se queda tal

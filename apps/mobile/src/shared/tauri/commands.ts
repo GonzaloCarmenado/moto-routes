@@ -45,6 +45,51 @@ export async function resumeRecordingLocation(): Promise<void> {
   }
 }
 
+/** Token de notificaciones push (FCM) del dispositivo actual, o `null` si no está disponible (web/desktop, sin permiso, sin Google Play Services). */
+export async function getNotificationToken(): Promise<string | null> {
+  try {
+    return await invoke<string | null>('get_notification_token');
+  } catch {
+    return null;
+  }
+}
+
+/** Pantalla pendiente de abrir tras un tap en notificación con la app cerrada del todo (cold start), o `null` si no hay ninguna. Consultar solo una vez registrado el listener de `notifications://tap` (ver notification-tap.service.ts). */
+export async function getPendingTapScreen(): Promise<string | null> {
+  try {
+    return await invoke<string | null>('get_pending_tap_screen');
+  } catch {
+    return null;
+  }
+}
+
+/** Borra la pantalla pendiente ya consumida — evita reabrirla en el próximo arranque sin un tap nuevo. */
+export async function clearPendingTapScreen(): Promise<void> {
+  try {
+    await invoke('clear_pending_tap_screen');
+  } catch {
+    // Ignorar error si no está disponible (web/desktop)
+  }
+}
+
+/** Token FCM pendiente de re-registrar tras una rotación (Firebase puede rotarlo en cualquier momento), o `null` si no hay ninguno pendiente. */
+export async function getPendingTokenRefresh(): Promise<string | null> {
+  try {
+    return await invoke<string | null>('get_pending_token_refresh');
+  } catch {
+    return null;
+  }
+}
+
+/** Borra el token pendiente ya re-registrado. */
+export async function clearPendingTokenRefresh(): Promise<void> {
+  try {
+    await invoke('clear_pending_token_refresh');
+  } catch {
+    // Ignorar error si no está disponible (web/desktop)
+  }
+}
+
 // Ejemplo: comando greet en Rust
 /** Argumentos del comando `greet` (ejemplo del backend Rust). */
 export interface GreetArgs {

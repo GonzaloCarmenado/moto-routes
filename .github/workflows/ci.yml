@@ -362,6 +362,20 @@ jobs:
           APP_VERSION="${GITHUB_REF_NAME#v}"
           sed -i "s|\"version\": \"[^\"]*\"|\"version\": \"${APP_VERSION}\"|" apps/mobile/src-tauri/tauri.conf.json
 
+      # Config del proyecto Firebase (notificaciones-push-fcm), no versionada (ver
+      # .gitignore — repo público). Falla explícitamente si el secret no está
+      # configurado, en vez de dejar que el plugin de Gradle falle más adelante
+      # con un error menos claro (mismo criterio que MOBILE_PROD_API_BASE_URL arriba).
+      - name: Configure google-services.json (release only, never committed)
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "El secret GOOGLE_SERVICES_JSON_BASE64 no esta configurado. Configuralo en Settings > Secrets and variables > Actions con el contenido de google-services.json en base64." >&2
+            exit 1
+          fi
+          echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 -d > apps/mobile/src-tauri/gen/android/app/google-services.json
+
       - name: Build APK (Tauri CLI — never a manual cargo build, see memory/context.md)
         working-directory: apps/mobile
         run: pnpm tauri android build --target aarch64

@@ -18,6 +18,10 @@ apps/mobile/src-tauri/gen/android/.gradle/
 apps/mobile/src-tauri/gen/android/local.properties
 apps/mobile/src-tauri/gen/android/app/build/
 apps/mobile/src-tauri/gen/android/app/src/main/jniLibs/
+# Config del proyecto Firebase (notificaciones-push-fcm) — no es un secreto según
+# Google, pero el repo es público y no aporta nada versionarla: cada dev pone su
+# copia local, CI la inyecta desde un secret (ver .github/workflows/ci.yml).
+apps/mobile/src-tauri/gen/android/app/google-services.json
 
 # IDE
 .vscode/

@@ -1,6 +1,7 @@
 use tracing::info;
 
 mod commands;
+mod notifications;
 mod recording_service;
 
 fn build_app() -> tauri::Builder<tauri::Wry> {
@@ -9,7 +10,9 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(recording_service::init())
+        .plugin(notifications::init())
         .invoke_handler(tauri::generate_handler![
             commands::greet,
             commands::save_file,
@@ -18,6 +21,11 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
             commands::stop_foreground_service,
             commands::pause_recording_location,
             commands::resume_recording_location,
+            commands::get_notification_token,
+            commands::get_pending_tap_screen,
+            commands::clear_pending_tap_screen,
+            commands::get_pending_token_refresh,
+            commands::clear_pending_token_refresh,
         ])
         .setup(|app| {
             info!("🚀 Moto Routes app started: {}", app.package_info().name);

@@ -39,6 +39,12 @@ type Config struct {
 	// internal/photos). Es un secreto: sin valor por defecto, nunca vive
 	// junto a los datos que cifra (MinIO).
 	PhotoEncryptionKey []byte
+	// FCMServiceAccountJSON es el JSON de la cuenta de servicio de Firebase
+	// usada para enviar notificaciones push. Opcional (a diferencia de
+	// ResendAPIKey): sin ella, el envío queda no-op — el badge in-app sigue
+	// siendo la fuente de verdad (ver design.md de notificaciones-push-fcm,
+	// Decisión 4). Es un secreto cuando está presente.
+	FCMServiceAccountJSON string
 }
 
 // Load lee la configuración desde variables de entorno. DATABASE_URL,
@@ -107,16 +113,17 @@ func Load() (Config, error) {
 	}
 
 	return Config{
-		DatabaseURL:        dbURL,
-		ServerAddress:      host + ":8080",
-		TokenSigningKey:    []byte(tokenSecret),
-		ResendAPIKey:       resendAPIKey,
-		ResendFromAddress:  resendFromAddress,
-		PublicAPIBaseURL:   publicAPIBaseURL,
-		MinioEndpoint:      minioEndpoint,
-		MinioAccessKey:     minioAccessKey,
-		MinioSecretKey:     minioSecretKey,
-		MinioBucket:        minioBucket,
-		PhotoEncryptionKey: photoEncryptionKey,
+		DatabaseURL:           dbURL,
+		ServerAddress:         host + ":8080",
+		TokenSigningKey:       []byte(tokenSecret),
+		ResendAPIKey:          resendAPIKey,
+		ResendFromAddress:     resendFromAddress,
+		PublicAPIBaseURL:      publicAPIBaseURL,
+		MinioEndpoint:         minioEndpoint,
+		MinioAccessKey:        minioAccessKey,
+		MinioSecretKey:        minioSecretKey,
+		MinioBucket:           minioBucket,
+		PhotoEncryptionKey:    photoEncryptionKey,
+		FCMServiceAccountJSON: os.Getenv("FCM_SERVICE_ACCOUNT_JSON"),
 	}, nil
 }

@@ -166,6 +166,91 @@ pub fn resume_recording_location(_app_handle: tauri::AppHandle) -> Result<(), St
     Ok(())
 }
 
+/// Token de notificaciones push (FCM) del dispositivo actual, o `None` si no
+/// está disponible (web/desktop, sin Google Play Services). No comprueba el
+/// permiso del sistema — eso lo hace el plugin oficial `plugin-notification`
+/// desde JS antes de llamar a este comando (ver device-token.service.ts).
+#[tauri::command]
+pub fn get_notification_token(_app_handle: tauri::AppHandle) -> Result<Option<String>, String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        if let Some(handle) =
+            _app_handle.try_state::<crate::notifications::NotificationsHandle<tauri::Wry>>()
+        {
+            return handle.get_token();
+        }
+    }
+    Ok(None)
+}
+
+/// Pantalla pendiente de abrir dejada por un tap en notificación con la app
+/// cerrada del todo (cold start, ver MainActivity.kt::onCreate), o `None` si
+/// no hay ninguna. El JS la consulta una vez tiene su propio listener de
+/// `notifications://tap` ya registrado, para no perder la señal en la
+/// carrera de arranque (ver design.md, gap encontrado tras la Decisión 5).
+#[tauri::command]
+pub fn get_pending_tap_screen(_app_handle: tauri::AppHandle) -> Result<Option<String>, String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        if let Some(handle) =
+            _app_handle.try_state::<crate::notifications::NotificationsHandle<tauri::Wry>>()
+        {
+            return handle.get_pending_tap_screen();
+        }
+    }
+    Ok(None)
+}
+
+/// Borra la pantalla pendiente ya consumida (evita reabrirla en el próximo
+/// arranque sin un tap nuevo).
+#[tauri::command]
+pub fn clear_pending_tap_screen(_app_handle: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        if let Some(handle) =
+            _app_handle.try_state::<crate::notifications::NotificationsHandle<tauri::Wry>>()
+        {
+            return handle.clear_pending_tap_screen();
+        }
+    }
+    Ok(())
+}
+
+/// Token FCM pendiente de re-registrar tras una rotación (design.md Decisión
+/// 6: Kotlin no tiene acceso a la sesión y deja el token nuevo en
+/// `SharedPreferences`), o `None` si no hay ninguno pendiente.
+#[tauri::command]
+pub fn get_pending_token_refresh(_app_handle: tauri::AppHandle) -> Result<Option<String>, String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        if let Some(handle) =
+            _app_handle.try_state::<crate::notifications::NotificationsHandle<tauri::Wry>>()
+        {
+            return handle.get_pending_token_refresh();
+        }
+    }
+    Ok(None)
+}
+
+/// Borra el token pendiente ya re-registrado.
+#[tauri::command]
+pub fn clear_pending_token_refresh(_app_handle: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        if let Some(handle) =
+            _app_handle.try_state::<crate::notifications::NotificationsHandle<tauri::Wry>>()
+        {
+            return handle.clear_pending_token_refresh();
+        }
+    }
+    Ok(())
+}
+
 // ─── Tests ──────────────────────────────────────────────
 // AC-008 de `specs/features/deuda-tecnica-auditoria.md`: cubre la lógica de
 // validación real de `save_file` (rechaza rutas absolutas, exige relativas

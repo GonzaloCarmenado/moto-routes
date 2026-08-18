@@ -16,6 +16,7 @@ import (
 	"github.com/crzverde/moto-routes/apps/api/internal/email"
 	"github.com/crzverde/moto-routes/apps/api/internal/httpmw"
 	"github.com/crzverde/moto-routes/apps/api/internal/migrate"
+	"github.com/crzverde/moto-routes/apps/api/internal/notifications"
 	"github.com/crzverde/moto-routes/apps/api/internal/photos"
 	"github.com/crzverde/moto-routes/apps/api/internal/ping"
 	"github.com/crzverde/moto-routes/apps/api/internal/routes"
@@ -92,6 +93,8 @@ func main() {
 	passwordResetTokenStore := auth.PostgresPasswordResetTokenStore{Pool: pool}
 	tokenIssuer := auth.TokenIssuer{Secret: cfg.TokenSigningKey, TTL: tokenTTL}
 	resendSender := email.ResendSender{APIKey: cfg.ResendAPIKey, From: cfg.ResendFromAddress}
+	deviceTokenStore := notifications.PostgresDeviceTokenStore{Pool: pool}
+	notifier := buildNotifier(ctx, cfg.FCMServiceAccountJSON, deviceTokenStore)
 
 	router := chi.NewRouter()
 	router.Use(httpmw.Recover)
@@ -156,7 +159,7 @@ func main() {
 	shareStore := routesharing.PostgresRouteShareStore{Pool: pool}
 	routeShareRateLimiter := auth.NewLoginRateLimiter(routeShareRateLimitMaxAttempts, routeShareRateLimitWindow)
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/route-shares",
-		routesharing.RateLimitedCreateInvitationHandler(shareStore, routeStore, userStore, routeShareRateLimiter).ServeHTTP)
+		routesharing.RateLimitedCreateInvitationHandler(shareStore, routeStore, userStore, notifier, routeShareRateLimiter).ServeHTTP)
 	router.With(httpmw.PublicCORS).Options("/api/route-shares", func(http.ResponseWriter, *http.Request) {})
 
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/route-shares/received", routesharing.ListReceivedHandler(shareStore).ServeHTTP)
@@ -178,8 +181,29 @@ func main() {
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/achievements", achievements.ListHandler(achievementStore).ServeHTTP)
 	router.With(httpmw.PublicCORS).Options("/api/achievements", func(http.ResponseWriter, *http.Request) {})
 
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/device-tokens", notifications.RegisterDeviceTokenHandler(deviceTokenStore).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/device-tokens", func(http.ResponseWriter, *http.Request) {})
+
 	log.Printf("listening on %s", cfg.ServerAddress)
 	if err := http.ListenAndServe(cfg.ServerAddress, router); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// buildNotifier construye el Notifier real si serviceAccountJSON está
+// configurada, o un NoopNotifier si no — las notificaciones push son
+// opcionales (ver design.md de notificaciones-push-fcm, Decisión 4), un
+// fallo al parsear la credencial no debe impedir arrancar el servidor.
+func buildNotifier(ctx context.Context, serviceAccountJSON string, tokenStore notifications.DeviceTokenStore) notifications.Notifier {
+	if serviceAccountJSON == "" {
+		log.Printf("FCM_SERVICE_ACCOUNT_JSON not set — push notifications disabled")
+		return notifications.NoopNotifier{}
+	}
+
+	notifier, err := notifications.NewFCMNotifier(ctx, serviceAccountJSON, tokenStore)
+	if err != nil {
+		log.Printf("failed to initialize FCM notifier, push notifications disabled: %v", err)
+		return notifications.NoopNotifier{}
+	}
+	return notifier
 }

@@ -13,8 +13,14 @@ import (
 
 	"github.com/crzverde/moto-routes/apps/api/internal/apihttp"
 	"github.com/crzverde/moto-routes/apps/api/internal/auth"
+	"github.com/crzverde/moto-routes/apps/api/internal/notifications"
 	"github.com/crzverde/moto-routes/apps/api/internal/routes"
 )
+
+// routeShareInviteEvent es el tipo de evento de notificaciones-push-fcm
+// disparado al crear una invitación — el payload transportado es opaco
+// (solo IDs), ver specs/notificaciones-push/spec.md.
+const routeShareInviteEvent = "route_share_invite"
 
 type createInvitationRequest struct {
 	RouteID string `json:"route_id"`
@@ -31,7 +37,7 @@ const invitationCreatedMessage = "if the route is eligible and the account exist
 // el mismo mensaje genérico, exista o no la cuenta destino, sea o no
 // elegible la ruta — nunca revela en la respuesta cuál de los casos fue
 // (ver design.md D2, mismo criterio que RequestPasswordResetHandler).
-func CreateInvitationHandler(shareStore Store, routeStore routes.Store, userStore auth.UserStore) http.Handler {
+func CreateInvitationHandler(shareStore Store, routeStore routes.Store, userStore auth.UserStore, notifier notifications.Notifier) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := apihttp.RequireUserID(w, r)
 		if !ok {
@@ -48,7 +54,7 @@ func CreateInvitationHandler(shareStore Store, routeStore routes.Store, userStor
 			return
 		}
 
-		tryCreateInvitation(r.Context(), shareStore, routeStore, userStore, userID, req.RouteID, req.Email)
+		tryCreateInvitation(r.Context(), shareStore, routeStore, userStore, notifier, userID, req.RouteID, req.Email)
 
 		apihttp.WriteJSON(w, http.StatusOK, genericMessageResponse{Message: invitationCreatedMessage})
 	})
@@ -58,7 +64,16 @@ func CreateInvitationHandler(shareStore Store, routeStore routes.Store, userStor
 // llamador si lo consiguió — cualquier fallo (ruta no elegible, cuenta
 // inexistente o no verificada, invitando al propio email) resulta
 // silenciosamente en no crear nada, sin distinguir el motivo.
-func tryCreateInvitation(ctx context.Context, shareStore Store, routeStore routes.Store, userStore auth.UserStore, fromUserID int64, routeID, email string) {
+//
+// El envío de la notificación push es best-effort *síncrono* (no en una
+// goroutine, a diferencia de lo previsto en tasks.md 3.2): la invitación ya
+// está creada en ese punto, así que un fallo de Send nunca la deshace ni
+// cambia la respuesta HTTP — solo se registra en el log. Se mantiene síncrono
+// por consistencia con el resto de la función (que ya hace 3 llamadas
+// bloqueantes) y porque así es determinísticamente testeable sin
+// sincronización adicional; el coste de latencia real es el de un POST HTTP
+// a FCM, aceptable para una acción de baja frecuencia como compartir una ruta.
+func tryCreateInvitation(ctx context.Context, shareStore Store, routeStore routes.Store, userStore auth.UserStore, notifier notifications.Notifier, fromUserID int64, routeID, email string) {
 	route, err := routeStore.GetByIDForUser(ctx, fromUserID, routeID)
 	if err != nil {
 		log.Printf("route sharing: failed to look up route %s: %v", routeID, err)
@@ -76,18 +91,29 @@ func tryCreateInvitation(ctx context.Context, shareStore Store, routeStore route
 		return
 	}
 
-	if _, err := shareStore.Create(ctx, routeID, fromUserID, toUser.ID); err != nil {
+	invitation, err := shareStore.Create(ctx, routeID, fromUserID, toUser.ID)
+	if err != nil {
 		if !errors.Is(err, ErrCannotShareWithSelf) {
 			log.Printf("route sharing: failed to create invitation for route %s: %v", routeID, err)
 		}
+		return
+	}
+
+	// Payload opaco: solo IDs, nunca el nombre de la ruta ni el email de
+	// ninguna cuenta (ver specs/notificaciones-push/spec.md).
+	if err := notifier.Send(ctx, toUser.ID, routeShareInviteEvent, map[string]string{
+		"invitation_id": invitation.ID,
+		"route_id":      routeID,
+	}); err != nil {
+		log.Printf("route sharing: failed to send push notification for invitation %s: %v", invitation.ID, err)
 	}
 }
 
 // RateLimitedCreateInvitationHandler envuelve CreateInvitationHandler
 // limitando invitaciones repetidas al mismo email en poco tiempo — mismo
 // patrón que RateLimitedRequestPasswordResetHandler.
-func RateLimitedCreateInvitationHandler(shareStore Store, routeStore routes.Store, userStore auth.UserStore, limiter *auth.LoginRateLimiter) http.Handler {
-	inner := CreateInvitationHandler(shareStore, routeStore, userStore)
+func RateLimitedCreateInvitationHandler(shareStore Store, routeStore routes.Store, userStore auth.UserStore, notifier notifications.Notifier, limiter *auth.LoginRateLimiter) http.Handler {
+	inner := CreateInvitationHandler(shareStore, routeStore, userStore, notifier)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rawBody, err := io.ReadAll(r.Body)
