@@ -1,6 +1,6 @@
 ## 0. Prerrequisito del usuario (bloqueante, no delegable)
 
-- [ ] 0.1 El usuario crea un proyecto Firebase (cuenta Google normal, gratis, sin cuenta de Play Developer), registra la app Android (`com.motoroutes.app`), descarga `google-services.json` y genera una clave de cuenta de servicio (JSON) para el envío desde el backend. Sin esto, los grupos 4 y 2.4 no se pueden completar de verdad — el resto del cambio (backend con `Notifier` opcional no configurado, frontend) puede avanzar en paralelo.
+- [x] 0.1 El usuario crea un proyecto Firebase (cuenta Google normal, gratis, sin cuenta de Play Developer), registra la app Android (`com.motoroutes.app`), descarga `google-services.json` y genera una clave de cuenta de servicio (JSON) para el envío desde el backend. Sin esto, los grupos 4 y 2.4 no se pueden completar de verdad — el resto del cambio (backend con `Notifier` opcional no configurado, frontend) puede avanzar en paralelo. Ambos ficheros entregados y en uso confirmado (2026-08-17 `google-services.json`, 2026-08-18 clave de cuenta de servicio, push real verificado en 7.2).
 
 ## 1. Backend: tabla `device_tokens` + endpoint de registro
 
@@ -54,6 +54,6 @@
 
 ## 8. Cierre
 
-- [ ] 8.1 Añadir ADR nueva a `memory/decisions.md` (siguiente número libre) recogiendo la Decisión 1 de `design.md` (FCM como transporte, backend propio como dueño de la lógica) y sus alternativas descartadas.
-- [ ] 8.2 Actualizar `memory/context.md` con el estado resultante de esta sesión.
+- [x] 8.1 Añadir ADR nueva a `memory/decisions.md` (siguiente número libre) recogiendo la Decisión 1 de `design.md` (FCM como transporte, backend propio como dueño de la lógica) y sus alternativas descartadas. ADR-050, 2026-08-18.
+- [x] 8.2 Actualizar `memory/context.md` con el estado resultante de esta sesión.
 - [x] 8.3 Commitear `NotificationsPlugin.kt`/`FcmService.kt` (nunca commiteados, `??` en `git status` desde la sesión anterior) y los cambios pendientes de `MainActivity.kt`/`Cargo.toml`/`lib.rs`/`capabilities/default.json`/`docker-compose.yml`/`commands/mod.rs`/`commands.ts`/`app.element.ts` de esta sesión. Hecho 2026-08-18 en dos commits (`ad337b4` feature completa, `96628d1` esquemas Tauri desktop/windows regenerados como efecto colateral) — pre-commit en verde ambas veces (audit, ESLint, Vitest, Clippy, rustfmt, `cargo test`, Cypress 75/75). Sin commits previos en esta rama: todo el trabajo de las dos sesiones anteriores (backend groups 1-3, frontend group 6) también entró aquí, nunca se había commiteado.
