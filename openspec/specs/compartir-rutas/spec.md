@@ -6,16 +6,28 @@ Permite a un usuario invitar a otra cuenta registrada a recibir una copia indepe
 
 ## Requirements
 
-### Requirement: Compartir una ruta requiere que esté sincronizada con la cuenta del emisor
-La app SHALL mostrar la acción de compartir únicamente en una ruta que ya está sincronizada con la nube — SHALL NOT mostrarla en una ruta puramente local, porque el clonado ocurre enteramente en el servidor.
+### Requirement: Compartir una ruta requiere que esté sincronizada con la cuenta del emisor, sin ninguna foto pendiente de subir
+La app SHALL mostrar la acción de compartir únicamente en una ruta que ya está sincronizada con la nube — SHALL NOT mostrarla en una ruta puramente local, porque el clonado ocurre enteramente en el servidor. Si la ruta está sincronizada pero tiene fotos añadidas localmente que todavía no se han subido a la nube, la app SHALL deshabilitar la acción de compartir en vez de permitirla — SHALL NOT compartir una ruta cuyas fotos locales no estén ya en el servidor, porque el clonado solo copia lo que el servidor ya tiene.
 
 #### Scenario: La acción de compartir no está disponible en una ruta puramente local
 - **WHEN** un usuario con sesión activa ve el detalle de una ruta que nunca se ha subido a la nube
 - **THEN** la app no muestra ninguna acción para compartirla
 
-#### Scenario: La acción de compartir está disponible en una ruta sincronizada
-- **WHEN** un usuario con sesión activa ve el detalle de una ruta ya sincronizada con la nube
-- **THEN** la app muestra la acción de compartir
+#### Scenario: La acción de compartir está disponible en una ruta sincronizada sin fotos pendientes
+- **WHEN** un usuario con sesión activa ve el detalle de una ruta ya sincronizada con la nube y sin ninguna foto pendiente de subir
+- **THEN** la app muestra la acción de compartir habilitada
+
+#### Scenario: Compartir se deshabilita mientras queda alguna foto sin subir
+- **WHEN** un usuario con sesión activa ve el detalle de una ruta sincronizada que tiene alguna foto local todavía sin subir a la nube (p. ej. la subida en segundo plano no ha terminado o falló)
+- **THEN** la app muestra la acción de compartir deshabilitada, con una indicación de que hay fotos subiéndose
+
+#### Scenario: Compartir se habilita en cuanto termina de subirse la última foto pendiente
+- **WHEN** la última foto pendiente de una ruta termina de subirse a la nube mientras el usuario sigue viendo su detalle
+- **THEN** la app habilita la acción de compartir sin necesidad de recargar la pantalla
+
+#### Scenario: Una foto que falló al subirse se reintenta al volver a abrir el detalle de la ruta
+- **WHEN** un usuario abre el detalle de una ruta sincronizada que tiene alguna foto local sin subir todavía
+- **THEN** la app reintenta la subida de esa foto en segundo plano, sin bloquear la visualización de la ruta
 
 ### Requirement: Invitar a otra cuenta por email a recibir una copia de la ruta
 La app SHALL permitir a un usuario con sesión activa invitar a otra cuenta registrada, identificada por su email, a recibir una copia de una ruta suya ya sincronizada.

@@ -25,6 +25,10 @@ export interface DetailHeaderOptions {
    * `isSynced` (ruta local ya subida) o una ruta exclusiva de la nube (nunca
    * local, ver design.md D2 de `compartir-ruta`). */
   existsOnServer: boolean;
+  /** true si queda alguna foto local sin subir todavía — deshabilita
+   * "Compartir" en vez de clonar la ruta sin sus fotos en silencio (ver
+   * JSDoc de route-detail-share.ts). */
+  hasPendingPhotos: boolean;
   onFavoriteToggled: () => void;
   onUploaded: () => void;
 }
@@ -40,7 +44,7 @@ function withLabel(btn: HTMLElement, label: string): HTMLElement {
 
 /** Construye la fila de acciones (favorito/nube/compartir), separada del título — ver JSDoc del módulo. */
 function buildActionsRow(options: DetailHeaderOptions): HTMLElement {
-  const { route, repository, session, isLocalRoute, isSynced, existsOnServer, onFavoriteToggled, onUploaded } = options;
+  const { route, repository, session, isLocalRoute, isSynced, existsOnServer, hasPendingPhotos, onFavoriteToggled, onUploaded } = options;
   const actionsRow = document.createElement('div');
   actionsRow.className = 'detail-actions-row';
 
@@ -57,8 +61,8 @@ function buildActionsRow(options: DetailHeaderOptions): HTMLElement {
   }
 
   if (session && existsOnServer) {
-    const shareBtn = buildShareButton({ apiBaseUrl: getApiBaseUrl(), session, routeId: route.id });
-    actionsRow.appendChild(withLabel(shareBtn, 'Compartir'));
+    const shareBtn = buildShareButton({ apiBaseUrl: getApiBaseUrl(), session, routeId: route.id, disabled: hasPendingPhotos });
+    actionsRow.appendChild(withLabel(shareBtn, hasPendingPhotos ? 'Subiendo fotos…' : 'Compartir'));
   }
 
   return actionsRow;
