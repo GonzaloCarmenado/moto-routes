@@ -30,6 +30,7 @@ const KNOWN_PERMISSIONS = [
   'core:window:allow-close',
   'core:window:allow-set-size',
   'core:window:allow-set-position',
+  'notification:default',
   'fs:allow-mkdir',
   'fs:allow-exists',
   'fs:allow-write-file',

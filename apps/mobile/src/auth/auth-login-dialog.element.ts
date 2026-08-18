@@ -9,6 +9,7 @@
  */
 import { BaseElement } from '../shared/base-element.js';
 import { loginAccount, requestEmailVerification, AuthApiError, type AuthApiErrorKind } from './auth-api.service.js';
+import { registerDeviceTokenAfterLogin } from '../shared/services/device-token.service.js';
 import type { ISessionRepository } from '../shared/models/session.repository.js';
 import styles from './auth-login-dialog.element.css?inline';
 
@@ -87,6 +88,10 @@ class AuthLoginDialogElement extends BaseElement {
     try {
       const { token } = await loginAccount(this.options.apiBaseUrl, email, password);
       await this.options.sessionRepository.save({ token, email });
+      // Fire-and-forget: el permiso/registro de notificaciones nunca debe
+      // retrasar el cierre del diálogo de login (best-effort, ver JSDoc del
+      // propio servicio).
+      void registerDeviceTokenAfterLogin(this.options.apiBaseUrl, { token, email });
       this.submitting = false;
       this.close('logged-in');
     } catch (err) {

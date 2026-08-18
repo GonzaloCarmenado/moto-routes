@@ -199,3 +199,31 @@ func TestLoad_DecodesValidPhotoEncryptionKey(t *testing.T) {
 		t.Fatalf("expected a 32-byte decoded key, got %d bytes", len(cfg.PhotoEncryptionKey))
 	}
 }
+
+func TestLoad_FCMServiceAccountJSONIsOptional(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("FCM_SERVICE_ACCOUNT_JSON", "")
+
+	cfg, err := Load()
+
+	if err != nil {
+		t.Fatalf("expected no error without FCM_SERVICE_ACCOUNT_JSON (push notifications are optional), got %v", err)
+	}
+	if cfg.FCMServiceAccountJSON != "" {
+		t.Fatalf("expected empty FCMServiceAccountJSON, got %q", cfg.FCMServiceAccountJSON)
+	}
+}
+
+func TestLoad_PassesThroughFCMServiceAccountJSONWhenSet(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("FCM_SERVICE_ACCOUNT_JSON", `{"project_id":"test-project"}`)
+
+	cfg, err := Load()
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.FCMServiceAccountJSON != `{"project_id":"test-project"}` {
+		t.Fatalf("expected FCMServiceAccountJSON to be passed through, got %q", cfg.FCMServiceAccountJSON)
+	}
+}

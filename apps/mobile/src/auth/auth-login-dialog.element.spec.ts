@@ -2,12 +2,15 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { openLoginDialog } from './auth-login-dialog.element.js';
 import { loginAccount, requestEmailVerification, AuthApiError } from './auth-api.service.js';
 import type * as AuthApiService from './auth-api.service.js';
+import { registerDeviceTokenAfterLogin } from '../shared/services/device-token.service.js';
 import { MemorySessionRepository } from '../shared/repositories/memory-session.repository.js';
 
 vi.mock('./auth-api.service.js', async (importOriginal) => {
   const actual = await importOriginal<typeof AuthApiService>();
   return { ...actual, loginAccount: vi.fn(), requestEmailVerification: vi.fn() };
 });
+
+vi.mock('../shared/services/device-token.service.js', () => ({ registerDeviceTokenAfterLogin: vi.fn().mockResolvedValue(undefined) }));
 
 function getDialog(): HTMLElement {
   const el = document.body.querySelector('auth-login-dialog');
@@ -54,6 +57,7 @@ describe('openLoginDialog', () => {
     expect(await resultPromise).toBe('logged-in');
     await expect(sessionRepository.get()).resolves.toEqual({ token: 'jwt-token', email: 'rider@example.com' });
     expect(document.body.querySelector('auth-login-dialog')).toBeNull();
+    expect(registerDeviceTokenAfterLogin).toHaveBeenCalledWith('http://localhost:8080', { token: 'jwt-token', email: 'rider@example.com' });
   });
 
   it('error invalid-credentials se muestra inline, sin guardar sesión, diálogo abierto', async () => {
