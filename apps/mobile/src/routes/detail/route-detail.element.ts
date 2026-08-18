@@ -20,7 +20,7 @@ import '../../shared/photo-capture/photo-capture.element.js';
 import type { PhotoCaptureElement } from '../../shared/photo-capture/photo-capture.element.js';
 import { createPhotoRepository } from '../../shared/services/photo-storage.service.js';
 import { captureFromCamera, pickFromGallery } from '../../shared/services/photo-capture-adapter.service.js';
-import { addPhotoToRoute, syncPhotoRemoteState } from './route-detail-photo.service.js';
+import { addPhotoToRoute, syncPhotoRemoteState, retryPendingPhotoUploads } from './route-detail-photo.service.js';
 import { deletePhotoWithConfirmation } from '../../shared/services/photo-delete.service.js';
 import { getPhotoUrl } from '../../shared/services/photo-storage.service.js';
 import { toErrorMessage } from '../../shared/utils/errors.js';
@@ -49,6 +49,7 @@ class RouteDetail extends BaseElement {
   private _stopTypesCache: IStopTypesCacheRepository | null = null;
   private _categoriesById = new Map<number, StopCategory>();
   private _photoCaptureEl: PhotoCaptureElement | null = null;
+  private _headerEl: HTMLElement | null = null;
   private _fotosPanelEl: HTMLElement | null = null;
   private _timelinePanelEl: HTMLElement | null = null;
   private _loading = false;
@@ -169,6 +170,13 @@ class RouteDetail extends BaseElement {
       ...p,
       objectUrl: await getPhotoUrl(p.filePath),
     })));
+
+    if (isSynced) {
+      retryPendingPhotoUploads(() => this._photos, this.syncContext(), photoRepo, (photos) => {
+        this._photos = photos;
+        this.rerenderHeader();
+      });
+    }
   }
 
   /**
@@ -239,13 +247,23 @@ class RouteDetail extends BaseElement {
   private buildContent(route: Route): HTMLElement {
     const content = document.createElement('div');
     content.className = 'detail-content';
-    content.appendChild(buildDetailHeader({
+    this._headerEl = this.buildHeader(route);
+    content.appendChild(this._headerEl);
+    content.appendChild(this.buildStatGrid(route));
+    content.appendChild(this.buildTabBar(route));
+    return content;
+  }
+
+  private buildHeader(route: Route): HTMLElement {
+    const header = document.createElement('div');
+    header.appendChild(buildDetailHeader({
       route,
       repository: this._repository,
       session: this._session,
       isLocalRoute: this._isLocalRoute,
       isSynced: this._isSynced,
       existsOnServer: this._isSynced || !this._isLocalRoute,
+      hasPendingPhotos: this._photos.some((p) => p.remotePhotoId === null),
       onFavoriteToggled: () => {
         triggerAutoResync(this.syncContext(), route);
         this.render();
@@ -255,9 +273,20 @@ class RouteDetail extends BaseElement {
         this.render();
       },
     }));
-    content.appendChild(this.buildStatGrid(route));
-    content.appendChild(this.buildTabBar(route));
-    return content;
+    return header;
+  }
+
+  /**
+   * Reconstruye solo la cabecera (favorito/nube/compartir) sin tocar el
+   * resto de la pantalla — para reflejar `hasPendingPhotos` nada más añadir
+   * una foto o al terminar de subirla, sin perder la pestaña activa del
+   * `<tab-bar>` (que un `render()` completo sí perdería).
+   */
+  private rerenderHeader(): void {
+    if (!this._headerEl || !this._route) return;
+    const newHeader = this.buildHeader(this._route);
+    this._headerEl.replaceWith(newHeader);
+    this._headerEl = newHeader;
   }
 
   /**
@@ -385,7 +414,10 @@ class RouteDetail extends BaseElement {
         if (this._route) triggerAutoResync(this.syncContext(), this._route);
         for (const photo of addedPhotos) {
           void triggerPhotoUpload(this.syncContext(), photoRepo, photo)
-            .then(async () => { this._photos = await syncPhotoRemoteState(this._photos, photoRepo, photo.id); });
+            .then(async () => {
+              this._photos = await syncPhotoRemoteState(this._photos, photoRepo, photo.id);
+              this.rerenderHeader();
+            });
         }
       }
     } finally {
@@ -436,10 +468,11 @@ class RouteDetail extends BaseElement {
     this._timelinePanelEl = newPanel;
   }
 
-  /** Refresca ambos paneles (Fotos y Timeline) al cambiar fotos. */
+  /** Refresca los paneles Fotos/Timeline y la cabecera (por `hasPendingPhotos`) al cambiar fotos. */
   private refreshAllPanels(): void {
     this.rerenderPhotosSection();
     this.rerenderTimelinePanel();
+    this.rerenderHeader();
   }
 
   /** Devuelve si se borró de verdad, para que `<photo-viewer>` sepa si debe quitarla de su vista. */

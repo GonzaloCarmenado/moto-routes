@@ -25,7 +25,7 @@ function render(fragment: DocumentFragment): HTMLDivElement {
 describe('buildDetailHeader', () => {
   it('renders the title and the date', () => {
     const container = render(buildDetailHeader({
-      route: createRoute(), repository: null, session: null, isLocalRoute: true, isSynced: false, existsOnServer: false,
+      route: createRoute(), repository: null, session: null, isLocalRoute: true, isSynced: false, existsOnServer: false, hasPendingPhotos: false,
       onFavoriteToggled: vi.fn(), onUploaded: vi.fn(),
     }));
 
@@ -35,7 +35,7 @@ describe('buildDetailHeader', () => {
 
   it('does not render the favorite icon without a repository', () => {
     const container = render(buildDetailHeader({
-      route: createRoute(), repository: null, session: createSession(), isLocalRoute: true, isSynced: false, existsOnServer: false,
+      route: createRoute(), repository: null, session: createSession(), isLocalRoute: true, isSynced: false, existsOnServer: false, hasPendingPhotos: false,
       onFavoriteToggled: vi.fn(), onUploaded: vi.fn(),
     }));
 
@@ -44,7 +44,7 @@ describe('buildDetailHeader', () => {
 
   it('renders the favorite icon when a repository is present, even without a session', () => {
     const container = render(buildDetailHeader({
-      route: createRoute(), repository: createRepository(), session: null, isLocalRoute: true, isSynced: false, existsOnServer: false,
+      route: createRoute(), repository: createRepository(), session: null, isLocalRoute: true, isSynced: false, existsOnServer: false, hasPendingPhotos: false,
       onFavoriteToggled: vi.fn(), onUploaded: vi.fn(),
     }));
 
@@ -53,13 +53,13 @@ describe('buildDetailHeader', () => {
 
   it('renders the sync icon only with session, local route and repository', () => {
     const withoutSync = render(buildDetailHeader({
-      route: createRoute(), repository: createRepository(), session: null, isLocalRoute: true, isSynced: false, existsOnServer: false,
+      route: createRoute(), repository: createRepository(), session: null, isLocalRoute: true, isSynced: false, existsOnServer: false, hasPendingPhotos: false,
       onFavoriteToggled: vi.fn(), onUploaded: vi.fn(),
     }));
     expect(withoutSync.querySelector('[data-cy="route-detail-btn-subir-nube"]')).toBeNull();
 
     const withSync = render(buildDetailHeader({
-      route: createRoute(), repository: createRepository(), session: createSession(), isLocalRoute: true, isSynced: false, existsOnServer: false,
+      route: createRoute(), repository: createRepository(), session: createSession(), isLocalRoute: true, isSynced: false, existsOnServer: false, hasPendingPhotos: false,
       onFavoriteToggled: vi.fn(), onUploaded: vi.fn(),
     }));
     expect(withSync.querySelector('[data-cy="route-detail-btn-subir-nube"]')).not.toBeNull();
@@ -67,7 +67,7 @@ describe('buildDetailHeader', () => {
 
   it('does not render the sync icon for a non-local (cloud-only) route', () => {
     const container = render(buildDetailHeader({
-      route: createRoute(), repository: createRepository(), session: createSession(), isLocalRoute: false, isSynced: false, existsOnServer: true,
+      route: createRoute(), repository: createRepository(), session: createSession(), isLocalRoute: false, isSynced: false, existsOnServer: true, hasPendingPhotos: false,
       onFavoriteToggled: vi.fn(), onUploaded: vi.fn(),
     }));
 
@@ -76,7 +76,7 @@ describe('buildDetailHeader', () => {
 
   it('does not render the share button without a session, even if the route exists on the server', () => {
     const container = render(buildDetailHeader({
-      route: createRoute(), repository: createRepository(), session: null, isLocalRoute: true, isSynced: true, existsOnServer: true,
+      route: createRoute(), repository: createRepository(), session: null, isLocalRoute: true, isSynced: true, existsOnServer: true, hasPendingPhotos: false,
       onFavoriteToggled: vi.fn(), onUploaded: vi.fn(),
     }));
 
@@ -85,7 +85,7 @@ describe('buildDetailHeader', () => {
 
   it('does not render the share button when the route does not exist on the server yet', () => {
     const container = render(buildDetailHeader({
-      route: createRoute(), repository: createRepository(), session: createSession(), isLocalRoute: true, isSynced: false, existsOnServer: false,
+      route: createRoute(), repository: createRepository(), session: createSession(), isLocalRoute: true, isSynced: false, existsOnServer: false, hasPendingPhotos: false,
       onFavoriteToggled: vi.fn(), onUploaded: vi.fn(),
     }));
 
@@ -94,7 +94,7 @@ describe('buildDetailHeader', () => {
 
   it('renders the share button with session and a route that exists on the server (synced local route)', () => {
     const container = render(buildDetailHeader({
-      route: createRoute(), repository: createRepository(), session: createSession(), isLocalRoute: true, isSynced: true, existsOnServer: true,
+      route: createRoute(), repository: createRepository(), session: createSession(), isLocalRoute: true, isSynced: true, existsOnServer: true, hasPendingPhotos: false,
       onFavoriteToggled: vi.fn(), onUploaded: vi.fn(),
     }));
 
@@ -103,10 +103,32 @@ describe('buildDetailHeader', () => {
 
   it('renders the share button for a cloud-only route (never local, but exists on the server)', () => {
     const container = render(buildDetailHeader({
-      route: createRoute(), repository: createRepository(), session: createSession(), isLocalRoute: false, isSynced: false, existsOnServer: true,
+      route: createRoute(), repository: createRepository(), session: createSession(), isLocalRoute: false, isSynced: false, existsOnServer: true, hasPendingPhotos: false,
       onFavoriteToggled: vi.fn(), onUploaded: vi.fn(),
     }));
 
     expect(container.querySelector('[data-cy="route-detail-btn-compartir"]')).not.toBeNull();
+  });
+
+  it('renders the share button disabled while photos are still pending upload', () => {
+    const container = render(buildDetailHeader({
+      route: createRoute(), repository: createRepository(), session: createSession(), isLocalRoute: true, isSynced: true, existsOnServer: true, hasPendingPhotos: true,
+      onFavoriteToggled: vi.fn(), onUploaded: vi.fn(),
+    }));
+
+    const shareBtn = container.querySelector('[data-cy="route-detail-btn-compartir"]') as HTMLButtonElement;
+    expect(shareBtn.disabled).toBe(true);
+    expect(container.textContent).toContain('Subiendo fotos…');
+  });
+
+  it('renders the share button enabled once no photos are pending', () => {
+    const container = render(buildDetailHeader({
+      route: createRoute(), repository: createRepository(), session: createSession(), isLocalRoute: true, isSynced: true, existsOnServer: true, hasPendingPhotos: false,
+      onFavoriteToggled: vi.fn(), onUploaded: vi.fn(),
+    }));
+
+    const shareBtn = container.querySelector('[data-cy="route-detail-btn-compartir"]') as HTMLButtonElement;
+    expect(shareBtn.disabled).toBe(false);
+    expect(container.textContent).toContain('Compartir');
   });
 });

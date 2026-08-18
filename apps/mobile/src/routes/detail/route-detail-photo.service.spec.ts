@@ -1,8 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { addPhotoToRoute, syncPhotoRemoteState } from './route-detail-photo.service.js';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { addPhotoToRoute, syncPhotoRemoteState, retryPendingPhotoUploads } from './route-detail-photo.service.js';
+import { triggerPhotoUpload } from './route-detail-sync-triggers.js';
 import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
 import type { CreatePhoto } from '../../shared/models/photo.types.js';
 import type { PhotoWithUrl } from './route-detail.types.js';
+
+vi.mock('./route-detail-sync-triggers.js', () => ({ triggerPhotoUpload: vi.fn() }));
 
 function createMockRepo(): IPhotoRepository {
   return {
@@ -115,5 +118,63 @@ describe('syncPhotoRemoteState', () => {
     const result = await syncPhotoRemoteState(photos, repo, 'photo-1');
 
     expect(result.find((p) => p.id === 'photo-2')?.remotePhotoId).toBeNull();
+  });
+});
+
+describe('retryPendingPhotoUploads', () => {
+  function makePhotoWithUrl(overrides?: Partial<PhotoWithUrl>): PhotoWithUrl {
+    return {
+      id: 'photo-1', routeId: 'route-1', filePath: 'a.jpg', latitude: null, longitude: null,
+      capturedAt: '2026-01-01T00:00:00.000Z', createdAt: '2026-01-01T00:00:00.000Z',
+      remotePhotoId: null, objectUrl: 'blob:x',
+      ...overrides,
+    };
+  }
+
+  const ctx = { session: { token: 'jwt-token', email: 'me@example.com' }, routeId: 'route-1', repository: null, isSynced: true };
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('retries only the photos still pending (remotePhotoId nulo), never the already-synced ones', () => {
+    vi.mocked(triggerPhotoUpload).mockReturnValue(new Promise(() => { /* nunca se resuelve en este test */ }));
+    const photos = [
+      makePhotoWithUrl({ id: 'pending-1', remotePhotoId: null }),
+      makePhotoWithUrl({ id: 'already-synced', remotePhotoId: 'remote-abc' }),
+      makePhotoWithUrl({ id: 'pending-2', remotePhotoId: null }),
+    ];
+    const photoRepo = {} as IPhotoRepository;
+
+    retryPendingPhotoUploads(() => photos, ctx, photoRepo, vi.fn());
+
+    expect(triggerPhotoUpload).toHaveBeenCalledTimes(2);
+    const retriedIds = vi.mocked(triggerPhotoUpload).mock.calls.map((call) => (call[2] as PhotoWithUrl).id);
+    expect(retriedIds).toEqual(['pending-1', 'pending-2']);
+  });
+
+  it('does nothing when no photo is pending', () => {
+    vi.mocked(triggerPhotoUpload).mockReturnValue(new Promise(() => { /* no debería invocarse */ }));
+    const photos = [makePhotoWithUrl({ remotePhotoId: 'remote-abc' })];
+    const onUpdated = vi.fn();
+
+    retryPendingPhotoUploads(() => photos, ctx, {} as IPhotoRepository, onUpdated);
+
+    expect(triggerPhotoUpload).not.toHaveBeenCalled();
+    expect(onUpdated).not.toHaveBeenCalled();
+  });
+
+  it('calls onUpdated with the refreshed list once a retried upload resolves', async () => {
+    vi.mocked(triggerPhotoUpload).mockResolvedValue(undefined);
+    const photos = [makePhotoWithUrl({ id: 'pending-1', remotePhotoId: null })];
+    const photoRepo = {
+      getById: vi.fn().mockResolvedValue({ ...makePhotoWithUrl({ id: 'pending-1' }), remotePhotoId: 'remote-new' }),
+    } as unknown as IPhotoRepository;
+    const onUpdated = vi.fn();
+
+    retryPendingPhotoUploads(() => photos, ctx, photoRepo, onUpdated);
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    expect(onUpdated).toHaveBeenCalledWith([expect.objectContaining({ id: 'pending-1', remotePhotoId: 'remote-new' })]);
   });
 });

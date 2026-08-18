@@ -10,6 +10,7 @@ import type { Photo } from '../../shared/models/photo.types.js';
 import type { CaptureResult } from '../../shared/services/photo-capture-adapter.service.js';
 import { isTauri } from '../../shared/services/photo-capture-adapter.service.js';
 import { persistCapturedPhoto } from '../../shared/services/photo-persist.service.js';
+import { triggerPhotoUpload, type SyncTriggerContext } from './route-detail-sync-triggers.js';
 import type { PhotoWithUrl } from './route-detail.types.js';
 
 /**
@@ -56,4 +57,31 @@ export async function syncPhotoRemoteState(
   const updated = await photoRepo.getById(photoId);
   if (!updated) return photos;
   return photos.map((p) => (p.id === photoId ? { ...p, remotePhotoId: updated.remotePhotoId } : p));
+}
+
+/**
+ * Reintenta en segundo plano la subida de las fotos con `remotePhotoId`
+ * nulo -- la subida al añadir una foto es de un solo intento
+ * (`triggerPhotoUpload`, disparada una vez desde `<route-detail>` al
+ * capturarla), así que sin este reintento una foto que falló una vez
+ * quedaría huérfana para siempre y bloquearía "Compartir" sin ninguna forma
+ * de recuperarse (ver route-detail-share.ts, gap real encontrado en
+ * producción). `getPhotos` se re-invoca en cada callback en vez de cerrar
+ * sobre un array capturado, para no pisar cambios en `_photos` ocurridos
+ * mientras otra foto de la misma tanda seguía subiendo. Fire-and-forget: no
+ * bloquea al llamador.
+ */
+export function retryPendingPhotoUploads(
+  getPhotos: () => PhotoWithUrl[],
+  ctx: SyncTriggerContext,
+  photoRepo: IPhotoRepository,
+  onUpdated: (photos: PhotoWithUrl[]) => void,
+): void {
+  const pending = getPhotos().filter((p) => p.remotePhotoId === null);
+  for (const photo of pending) {
+    void triggerPhotoUpload(ctx, photoRepo, photo)
+      .then(async () => {
+        onUpdated(await syncPhotoRemoteState(getPhotos(), photoRepo, photo.id));
+      });
+  }
 }
