@@ -305,7 +305,11 @@ describe('route-map', () => {
       document.body.removeChild(el);
     });
 
-    it('still calls map.flyTo and does not dispatch route-map:photo-select when a cluster marker is clicked (regression AC-017)', async () => {
+    // Sustituye la antigua regresión AC-017 ("cluster click → zoom, no visor"): con
+    // agrupación por proximidad en el visor (change agrupar-fotos-proximidad-mapa), ya
+    // no hace falta desagrupar con zoom para ver las fotos de una zona — pulsar el
+    // cluster abre directamente el visor con esas fotos, igual que un marcador individual.
+    it('dispatches route-map:photo-select and does not call map.flyTo when a cluster marker is clicked', async () => {
       const el = await mountRouteMap(MADRID_POINTS);
       el.photos = [
         makePhoto('p1', 40.4168, -3.7038, 'blob:thumb-1'),
@@ -320,8 +324,8 @@ describe('route-map', () => {
       const [cluster] = findMarkerElements('photo-cluster');
       cluster!.click();
 
-      expect(flyTo).toHaveBeenCalledOnce();
-      expect(handler).not.toHaveBeenCalled();
+      expect(handler).toHaveBeenCalledOnce();
+      expect(flyTo).not.toHaveBeenCalled();
 
       document.body.removeChild(el);
     });

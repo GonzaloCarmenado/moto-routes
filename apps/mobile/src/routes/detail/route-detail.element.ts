@@ -15,6 +15,7 @@ import { formatDuration } from '../../shared/utils/format.js';
 import '../../shared/route-map/route-map.element.js';
 import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from '../../shared/route-map/route-map.element.js';
 import type { MapPhoto } from '../../shared/route-map/route-map-photos.js';
+import { groupPhotosByProximity } from './route-detail-photo-proximity.js';
 import type { MapStop } from '../../shared/route-map/route-map-stops.js';
 import '../../shared/photo-capture/photo-capture.element.js';
 import type { PhotoCaptureElement } from '../../shared/photo-capture/photo-capture.element.js';
@@ -236,10 +237,11 @@ class RouteDetail extends BaseElement {
     // AC-7.1 a AC-7.3: mismos datos ya resueltos para la timeline (Grupo 6), reutilizados aquí.
     routeMap.stops = this._routeStops.map((s) => ({ lat: s.lat, lng: s.lng, stopCategoryId: s.stopCategoryId }));
     routeMap.stopCategoriesById = this._categoriesById;
-    // AC-015/AC-017: solo el marcador individual dispara este evento, nunca un cluster.
+    // Marcador individual o cluster: ambos abren el visor solo con las fotos GPS-cercanas
+    // a la foto pulsada (agrupar-fotos-proximidad-mapa), nunca la ruta completa.
     routeMap.addEventListener(ROUTE_MAP_PHOTO_SELECT_EVENT, ((event: CustomEvent<RouteMapPhotoSelectDetail>) => {
-      const index = toGalleryPhotos(this._photos).findIndex((p) => p.id === event.detail.photo.id);
-      if (index !== -1) this.openPhotoViewerAt(index);
+      const { photos, startIndex } = groupPhotosByProximity(this._photos, event.detail.photo.id);
+      openPhotoViewer({ photos: toGalleryPhotos(photos), startIndex, onDelete: (p) => this.handleDeletePhoto(p.id) });
     }) as EventListener);
     return routeMap;
   }
@@ -350,8 +352,9 @@ class RouteDetail extends BaseElement {
     return chart;
   }
 
-  /** Único punto de apertura del visor: galería en cuadrícula y popup del mapa
-   * comparten esta misma llamada (AC-011, AC-015). */
+  /** Punto de apertura del visor sobre la ruta completa: lo comparten la galería en
+   * cuadrícula y la línea de tiempo (AC-011). El mapa abre solo la zona GPS-cercana
+   * a la foto pulsada, ver `groupPhotosByProximity` en `buildMap`. */
   private openPhotoViewerAt(index: number): void {
     openPhotoViewer({ photos: toGalleryPhotos(this._photos), startIndex: index, onDelete: (photo) => this.handleDeletePhoto(photo.id) });
   }

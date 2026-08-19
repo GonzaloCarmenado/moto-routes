@@ -576,6 +576,82 @@ describe('route-detail - integración mapa → visor de fotos (AC-014 a AC-018, 
 
     document.body.removeChild(el);
   });
+
+  // agrupar-fotos-proximidad-mapa: pulsar un marcador del mapa ya no abre el visor sobre
+  // todas las fotos de la ruta, solo sobre las GPS-cercanas (<75m) a la foto pulsada.
+  const THREE_PHOTOS_TWO_ZONES = [
+    {
+      id: 'photo-1', filePath: 'photo-1.jpg',
+      latitude: 40.4168, longitude: -3.7038,
+      capturedAt: '2026-07-20T10:00:00.000Z', createdAt: '2026-07-20T10:00:00.000Z',
+    },
+    {
+      // ~34m de photo-1: misma zona (comida).
+      id: 'photo-2', filePath: 'photo-2.jpg',
+      latitude: 40.4170, longitude: -3.7035,
+      capturedAt: '2026-07-20T10:05:00.000Z', createdAt: '2026-07-20T10:05:00.000Z',
+    },
+    {
+      // ~500m de las anteriores: zona distinta (mirador).
+      id: 'photo-3', filePath: 'photo-3.jpg',
+      latitude: 40.4213, longitude: -3.7038,
+      capturedAt: '2026-07-20T11:00:00.000Z', createdAt: '2026-07-20T11:00:00.000Z',
+    },
+  ];
+
+  it('opens the viewer with only the GPS-nearby photos when a map marker is clicked, leaving out a distant photo (agrupar-fotos-proximidad-mapa)', async () => {
+    localStorage.setItem('moto-routes-photos', JSON.stringify(
+      THREE_PHOTOS_TWO_ZONES.map((p) => ({ ...p, routeId: savedRoute.id })),
+    ));
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const routeMap = getRouteMap(root);
+    // photo-2 es la más reciente de la zona cercana (mismo orden que la galería: más
+    // reciente primero, ver MemoryPhotoRepository.getByRouteId), así que su posición
+    // dentro del grupo de 2 fotos es la primera.
+    const photo2 = routeMap.photos.find((p) => p.id === 'photo-2')!;
+
+    dispatchPhotoSelect(routeMap, photo2);
+
+    const viewer = document.body.querySelector('photo-viewer')!;
+    expect(viewer.shadowRoot!.querySelector('.counter')?.textContent).toBe('1 de 2');
+
+    viewer.remove();
+    document.body.removeChild(el);
+  });
+
+  it('opens the viewer with just that photo when it has no other route photo within 75m (agrupar-fotos-proximidad-mapa)', async () => {
+    localStorage.setItem('moto-routes-photos', JSON.stringify(
+      THREE_PHOTOS_TWO_ZONES.map((p) => ({ ...p, routeId: savedRoute.id })),
+    ));
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    const routeMap = getRouteMap(root);
+    const isolated = routeMap.photos.find((p) => p.id === 'photo-3')!;
+
+    dispatchPhotoSelect(routeMap, isolated);
+
+    const viewer = document.body.querySelector('photo-viewer')!;
+    // Con un único elemento, <photo-viewer> no renderiza el contador "X de Y" (ver
+    // buildCounter en photo-viewer.element.ts) — se confirma con la imagen mostrada.
+    expect(viewer.shadowRoot!.querySelector('img')?.getAttribute('src')).toBe(isolated.objectUrl);
+    expect(viewer.shadowRoot!.querySelector('.counter')).toBeNull();
+
+    viewer.remove();
+    document.body.removeChild(el);
+  });
+
+  it('still opens the viewer with all route photos when selecting from the grid tab, regardless of GPS proximity (regression, agrupar-fotos-proximidad-mapa)', async () => {
+    localStorage.setItem('moto-routes-photos', JSON.stringify(
+      THREE_PHOTOS_TWO_ZONES.map((p) => ({ ...p, routeId: savedRoute.id })),
+    ));
+    const { el, root } = await mountRouteDetail(repo, savedRoute.id);
+    (galleryRoot(root).querySelector('[data-cy="photo-thumbnail"]') as HTMLElement).click();
+
+    const viewer = document.body.querySelector('photo-viewer')!;
+    expect(viewer.shadowRoot!.querySelector('.counter')?.textContent).toBe('1 de 3');
+
+    viewer.remove();
+    document.body.removeChild(el);
+  });
 });
 
 describe('route-detail - límite de 100 fotos por ruta (AC-041, AC-043 a AC-045)', () => {
