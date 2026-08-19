@@ -319,6 +319,14 @@ func TestPostgresRouteStore_UpsertFillsMatchedColumnsWhenMatcherSucceeds(t *test
 	if *lat != wantLat {
 		t.Fatalf("expected matched_lat %v, got %v", wantLat, *lat)
 	}
+
+	got, err := store.GetByIDForUser(context.Background(), userID, detail.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Points[0].Lat != detail.Points[0].Lat || got.Points[0].Lng != detail.Points[0].Lng {
+		t.Fatalf("expected the original GPS point to remain untouched by normalization, got %+v", got.Points[0])
+	}
 }
 
 func TestPostgresRouteStore_UpsertSucceedsWithRawPointsWhenMatcherFails(t *testing.T) {
