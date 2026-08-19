@@ -118,7 +118,7 @@ describe('buildDetailHeader', () => {
 
     const shareBtn = container.querySelector('[data-cy="route-detail-btn-compartir"]') as HTMLButtonElement;
     expect(shareBtn.disabled).toBe(true);
-    expect(container.textContent).toContain('Subiendo fotos…');
+    expect(shareBtn.getAttribute('aria-label')).toBe('Compartir ruta (subiendo fotos todavía)');
   });
 
   it('renders the share button enabled once no photos are pending', () => {
@@ -129,6 +129,6 @@ describe('buildDetailHeader', () => {
 
     const shareBtn = container.querySelector('[data-cy="route-detail-btn-compartir"]') as HTMLButtonElement;
     expect(shareBtn.disabled).toBe(false);
-    expect(container.textContent).toContain('Compartir');
+    expect(shareBtn.getAttribute('aria-label')).toBe('Compartir ruta');
   });
 });

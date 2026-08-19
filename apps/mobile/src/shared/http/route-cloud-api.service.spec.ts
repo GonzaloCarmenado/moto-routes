@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { uploadRoute, fetchCloudRoutes, fetchCloudRouteDetail, RouteCloudApiError } from './route-cloud-api.service.js';
+import { uploadRoute, fetchCloudRoutes, fetchCloudRouteDetail, exportRouteGPX, RouteCloudApiError } from './route-cloud-api.service.js';
 import type { Route, RoutePoint, RouteStop } from '../models/route.types.js';
 
 const BASE_URL = 'http://localhost:8080';
@@ -150,5 +150,53 @@ describe('fetchCloudRouteDetail', () => {
     const promise = fetchCloudRouteDetail(BASE_URL, TOKEN, 'unknown');
 
     await expect(promise).rejects.toMatchObject({ kind: 'not-found' });
+  });
+});
+
+describe('exportRouteGPX', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('descarga el GPX con el Bearer del token', async () => {
+    const gpxBlob = new Blob(['<gpx></gpx>'], { type: 'application/gpx+xml' });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, blob: () => Promise.resolve(gpxBlob) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await exportRouteGPX(BASE_URL, TOKEN, 'route-1');
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${BASE_URL}/api/routes/route-1/export.gpx`);
+    expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer jwt-token');
+    expect(result).toBe(gpxBlob);
+  });
+
+  it('lanza RouteCloudApiError kind "not-found" en 404', async () => {
+    stubFetch({ ok: false, status: 404, json: () => Promise.resolve({ error: 'route not found' }) });
+
+    const promise = exportRouteGPX(BASE_URL, TOKEN, 'unknown');
+
+    await expect(promise).rejects.toBeInstanceOf(RouteCloudApiError);
+    await expect(promise).rejects.toMatchObject({ kind: 'not-found' });
+  });
+
+  it('lanza RouteCloudApiError kind "network" sin conexión', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+
+    const promise = exportRouteGPX(BASE_URL, TOKEN, 'route-1');
+
+    await expect(promise).rejects.toMatchObject({ kind: 'network' });
+  });
+
+  it('lanza RouteCloudApiError con el mensaje del servidor si el body de error no es JSON', async () => {
+    stubFetch({
+      ok: false,
+      status: 400,
+      json: () => Promise.reject(new Error('not json')),
+    });
+
+    const promise = exportRouteGPX(BASE_URL, TOKEN, 'route-1');
+
+    await expect(promise).rejects.toMatchObject({ kind: 'unknown' });
   });
 });

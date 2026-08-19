@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -228,6 +230,163 @@ func TestDetailHandler_ReturnsNotFoundWhenMissingOrOtherUsers(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected status 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func floatPtr(v float64) *float64 { return &v }
+
+func TestGPXExportHandler_UsesMatchedPointsWhenNormalized(t *testing.T) {
+	store := newFakeStore()
+	store.byID["route-1"] = &Detail{
+		Route:  Route{ID: "route-1", Status: "completed"},
+		Points: []Point{{Timestamp: 1000, Lat: 40.1, Lng: -3.1, MatchedLat: floatPtr(40.1001), MatchedLng: floatPtr(-3.1001)}},
+		Stops:  []Stop{},
+	}
+	handler := auth.RequireAuth(testIssuer())(GPXExportHandler(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/routes/route-1/export.gpx", nil)
+	req = withURLParam(req, "id", "route-1")
+	req.Header.Set("Authorization", "Bearer "+bearerFor(t, 42))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var doc gpxDoc
+	if err := xml.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("expected well-formed GPX, got error: %v", err)
+	}
+	if len(doc.Track.Segments) != 1 || len(doc.Track.Segments[0].Points) != 1 {
+		t.Fatalf("expected exactly 1 track point, got %+v", doc.Track)
+	}
+	got := doc.Track.Segments[0].Points[0]
+	if got.Lat != 40.1001 || got.Lon != -3.1001 {
+		t.Fatalf("expected the matched (road-snapped) coordinates, got lat=%v lon=%v", got.Lat, got.Lon)
+	}
+}
+
+func TestGPXExportHandler_FallsBackToRawPointsWhenNotNormalized(t *testing.T) {
+	store := newFakeStore()
+	store.byID["route-1"] = &Detail{
+		Route:  Route{ID: "route-1", Status: "completed"},
+		Points: []Point{{Timestamp: 1000, Lat: 40.1, Lng: -3.1}},
+		Stops:  []Stop{},
+	}
+	handler := auth.RequireAuth(testIssuer())(GPXExportHandler(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/routes/route-1/export.gpx", nil)
+	req = withURLParam(req, "id", "route-1")
+	req.Header.Set("Authorization", "Bearer "+bearerFor(t, 42))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var doc gpxDoc
+	if err := xml.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("expected well-formed GPX, got error: %v", err)
+	}
+	got := doc.Track.Segments[0].Points[0]
+	if got.Lat != 40.1 || got.Lon != -3.1 {
+		t.Fatalf("expected the raw coordinates, got lat=%v lon=%v", got.Lat, got.Lon)
+	}
+}
+
+func TestGPXExportHandler_ReturnsNotFoundForMissingOrOtherUsersRoute(t *testing.T) {
+	store := newFakeStore()
+	handler := auth.RequireAuth(testIssuer())(GPXExportHandler(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/routes/unknown/export.gpx", nil)
+	req = withURLParam(req, "id", "unknown")
+	req.Header.Set("Authorization", "Bearer "+bearerFor(t, 42))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGPXExportHandler_ReturnsBadRequestForRouteWithoutPoints(t *testing.T) {
+	store := newFakeStore()
+	store.byID["route-1"] = &Detail{Route: Route{ID: "route-1", Status: "completed"}, Points: []Point{}, Stops: []Stop{}}
+	handler := auth.RequireAuth(testIssuer())(GPXExportHandler(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/routes/route-1/export.gpx", nil)
+	req = withURLParam(req, "id", "route-1")
+	req.Header.Set("Authorization", "Bearer "+bearerFor(t, 42))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGPXExportHandler_IncludesStopsAsWaypoints(t *testing.T) {
+	store := newFakeStore()
+	store.byID["route-1"] = &Detail{
+		Route:  Route{ID: "route-1", Status: "completed"},
+		Points: []Point{{Timestamp: 1000, Lat: 40.1, Lng: -3.1}},
+		Stops: []Stop{
+			{StartTime: 1200, Lat: 40.15, Lng: -3.15, Type: "manual"},
+			{StartTime: 1400, Lat: 40.16, Lng: -3.16, Type: "auto"},
+		},
+	}
+	handler := auth.RequireAuth(testIssuer())(GPXExportHandler(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/routes/route-1/export.gpx", nil)
+	req = withURLParam(req, "id", "route-1")
+	req.Header.Set("Authorization", "Bearer "+bearerFor(t, 42))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	var doc gpxDoc
+	if err := xml.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("expected well-formed GPX, got error: %v", err)
+	}
+	if len(doc.Waypoints) != 2 {
+		t.Fatalf("expected 2 waypoints (one per stop), got %d", len(doc.Waypoints))
+	}
+	if doc.Waypoints[0].Lat != 40.15 || doc.Waypoints[1].Lat != 40.16 {
+		t.Fatalf("expected each waypoint to carry its stop's position, got %+v", doc.Waypoints)
+	}
+}
+
+func TestGPXExportHandler_ProducesWellFormedGPX11Document(t *testing.T) {
+	store := newFakeStore()
+	store.byID["route-1"] = &Detail{
+		Route:  Route{ID: "route-1", Status: "completed"},
+		Points: []Point{{Timestamp: 1000, Lat: 40.1, Lng: -3.1}},
+		Stops:  []Stop{},
+	}
+	handler := auth.RequireAuth(testIssuer())(GPXExportHandler(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/routes/route-1/export.gpx", nil)
+	req = withURLParam(req, "id", "route-1")
+	req.Header.Set("Authorization", "Bearer "+bearerFor(t, 42))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if !strings.HasPrefix(body, xml.Header) {
+		t.Fatalf("expected the response to start with the XML declaration, got: %s", body[:min(len(body), 80)])
+	}
+	if !strings.Contains(body, `xmlns="http://www.topografix.com/GPX/1/1"`) || !strings.Contains(body, `version="1.1"`) {
+		t.Fatalf("expected a GPX 1.1 document, got: %s", body)
+	}
+
+	var doc gpxDoc
+	if err := xml.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("expected well-formed XML, got error: %v", err)
+	}
+	if doc.XMLName.Local != "gpx" {
+		t.Fatalf("expected the root element to be <gpx>, got <%s>", doc.XMLName.Local)
+	}
+	if rec.Header().Get("Content-Type") != "application/gpx+xml" {
+		t.Fatalf("expected Content-Type application/gpx+xml, got %q", rec.Header().Get("Content-Type"))
 	}
 }
 

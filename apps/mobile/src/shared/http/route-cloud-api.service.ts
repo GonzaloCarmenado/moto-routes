@@ -168,6 +168,39 @@ export async function fetchCloudRoutes(apiBaseUrl: string, token: string): Promi
   }
 }
 
+/**
+ * `GET /api/routes/{id}/export.gpx` — descarga el GPX de una ruta del
+ * usuario autenticado (puntos ajustados a carretera si ya se normalizó,
+ * crudos si no). No usa `fetchJson`: la respuesta es XML, no JSON.
+ */
+export async function exportRouteGPX(apiBaseUrl: string, token: string, id: string): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}/api/routes/${id}/export.gpx`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (err) {
+    throw new RouteCloudApiError('network', `Network error exporting route ${id}: ${String(err)}`);
+  }
+
+  if (!response.ok) {
+    let message = `GPX export failed with status ${String(response.status)}`;
+    try {
+      const body = (await response.json()) as ApiErrorBody;
+      if (body.error) message = body.error;
+    } catch {
+      // cuerpo de error no-JSON o vacío — se mantiene el mensaje genérico
+    }
+    // mapStatus no aplica aquí: su 400 -> "too-many-points" es específico del
+    // upsert. En la exportación un 400 significa "sin puntos GPS que exportar"
+    // (ver specs/exportacion-gpx/spec.md) — el mensaje del servidor ya lo explica.
+    const kind = response.status === 401 ? 'unauthorized' : response.status === 404 ? 'not-found' : 'unknown';
+    throw new RouteCloudApiError(kind, message);
+  }
+
+  return response.blob();
+}
+
 /** `GET /api/routes/{id}` — detalle completo (puntos+paradas) de una ruta del usuario autenticado. */
 export async function fetchCloudRouteDetail(apiBaseUrl: string, token: string, id: string): Promise<CloudRouteDetail> {
   try {

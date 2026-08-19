@@ -47,6 +47,26 @@ services:
       MC_HOST_local: http://${MINIO_ROOT_USER}:${MINIO_ROOT_PASSWORD}@minio:9000
     entrypoint: ["mc", "mb", "--ignore-existing", "local/${MINIO_BUCKET}"]
 
+  # Ajusta a carretera los puntos GPS de una ruta al sincronizarla (ver
+  # openspec/changes/normalizar-y-exportar-rutas). Sin puerto publicado al
+  # host: solo api lo alcanza, dentro de la red interna de Compose. Requiere
+  # el extracto de España ya procesado en ./osrm/data (ver ./osrm/README.md) —
+  # si no existe, este servicio simplemente no arranca y api sigue
+  # funcionando igual (normalización best-effort, ver design.md).
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend
+    command: osrm-routed --algorithm mld /data/spain-latest.osrm
+    volumes:
+      - ./osrm/data:/data:ro
+    healthcheck:
+      # La imagen oficial osrm-backend no trae wget/curl — comprobación a
+      # nivel de socket TCP con bash (sí incluido), suficiente como liveness
+      # check ya que la normalización es best-effort y no depende de esto.
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/5000'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   api:
     build:
       context: ../../apps/api
@@ -62,6 +82,7 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET}
       PHOTO_ENCRYPTION_KEY: ${PHOTO_ENCRYPTION_KEY}
       FCM_SERVICE_ACCOUNT_JSON: ${FCM_SERVICE_ACCOUNT_JSON}
+      MAPMATCH_OSRM_URL: ${MAPMATCH_OSRM_URL}
     depends_on:
       postgres:
         condition: service_healthy

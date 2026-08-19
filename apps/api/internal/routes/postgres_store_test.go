@@ -2,11 +2,13 @@ package routes
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/crzverde/moto-routes/apps/api/internal/dbtest"
+	"github.com/crzverde/moto-routes/apps/api/internal/mapmatch"
 	"github.com/crzverde/moto-routes/apps/api/internal/migrate"
 )
 
@@ -19,6 +21,42 @@ func testStore(t *testing.T) PostgresRouteStore {
 	}
 
 	return PostgresRouteStore{Pool: pool}
+}
+
+// fakeMatcher es un doble de mapmatch.Client para probar la normalización
+// best-effort del upsert sin depender de un servicio OSRM real.
+type fakeMatcher struct {
+	err    error
+	adjust func(points []mapmatch.Point) []*mapmatch.Point
+	calls  [][]mapmatch.Point
+}
+
+func (f *fakeMatcher) Match(_ context.Context, points []mapmatch.Point) ([]*mapmatch.Point, error) {
+	f.calls = append(f.calls, points)
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.adjust != nil {
+		return f.adjust(points), nil
+	}
+	adjusted := make([]*mapmatch.Point, len(points))
+	for i, p := range points {
+		adjusted[i] = &mapmatch.Point{Lat: p.Lat + 0.0001, Lng: p.Lng + 0.0001}
+	}
+	return adjusted, nil
+}
+
+func matchedColumns(t *testing.T, pool *pgxpool.Pool, routeID string, timestamp int64) (*float64, *float64) {
+	t.Helper()
+	var lat, lng *float64
+	err := pool.QueryRow(context.Background(),
+		"SELECT matched_lat, matched_lng FROM route_points WHERE route_id = $1 AND timestamp = $2",
+		routeID, timestamp,
+	).Scan(&lat, &lng)
+	if err != nil {
+		t.Fatalf("failed to read matched columns: %v", err)
+	}
+	return lat, lng
 }
 
 func seedUser(t *testing.T, pool *pgxpool.Pool, email string) int64 {
@@ -260,6 +298,76 @@ func TestPostgresRouteStore_UpsertPersistsIsFavorite(t *testing.T) {
 	}
 	if got.IsFavorite {
 		t.Fatal("expected IsFavorite to be false after re-upserting with false")
+	}
+}
+
+func TestPostgresRouteStore_UpsertFillsMatchedColumnsWhenMatcherSucceeds(t *testing.T) {
+	store := testStore(t)
+	store.Matcher = &fakeMatcher{}
+	userID := seedUser(t, store.Pool, "matcher1@example.com")
+	detail := sampleDetail("cccccccc-cccc-cccc-cccc-cccccccccccc")
+
+	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	lat, lng := matchedColumns(t, store.Pool, detail.ID, detail.Points[0].Timestamp)
+	if lat == nil || lng == nil {
+		t.Fatalf("expected matched_lat/matched_lng to be filled, got %v/%v", lat, lng)
+	}
+	wantLat := detail.Points[0].Lat + 0.0001
+	if *lat != wantLat {
+		t.Fatalf("expected matched_lat %v, got %v", wantLat, *lat)
+	}
+}
+
+func TestPostgresRouteStore_UpsertSucceedsWithRawPointsWhenMatcherFails(t *testing.T) {
+	store := testStore(t)
+	store.Matcher = &fakeMatcher{err: errors.New("osrm unavailable")}
+	userID := seedUser(t, store.Pool, "matcher2@example.com")
+	detail := sampleDetail("dddddddd-dddd-dddd-dddd-dddddddddddd")
+
+	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+		t.Fatalf("expected upsert to succeed even if the matcher fails, got: %v", err)
+	}
+
+	lat, lng := matchedColumns(t, store.Pool, detail.ID, detail.Points[0].Timestamp)
+	if lat != nil || lng != nil {
+		t.Fatalf("expected matched_lat/matched_lng to stay NULL when the matcher fails, got %v/%v", lat, lng)
+	}
+}
+
+func TestPostgresRouteStore_UpsertNormalizationDoesNotAlterStops(t *testing.T) {
+	store := testStore(t)
+	store.Matcher = &fakeMatcher{}
+	userID := seedUser(t, store.Pool, "matcher3@example.com")
+	detail := sampleDetail("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
+
+	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got, err := store.GetByIDForUser(context.Background(), userID, detail.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got.Stops) != 1 || got.Stops[0].Lat != detail.Stops[0].Lat || got.Stops[0].Lng != detail.Stops[0].Lng {
+		t.Fatalf("expected the stop position to remain untouched by normalization, got %+v", got.Stops)
+	}
+}
+
+func TestPostgresRouteStore_UpsertSkipsNormalizationWhenNoMatcherConfigured(t *testing.T) {
+	store := testStore(t) // sin Matcher — comportamiento por defecto
+	userID := seedUser(t, store.Pool, "matcher4@example.com")
+	detail := sampleDetail("ffffffff-ffff-ffff-ffff-ffffffffffff")
+
+	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	lat, lng := matchedColumns(t, store.Pool, detail.ID, detail.Points[0].Timestamp)
+	if lat != nil || lng != nil {
+		t.Fatalf("expected matched_lat/matched_lng to stay NULL without a configured matcher, got %v/%v", lat, lng)
 	}
 }
 

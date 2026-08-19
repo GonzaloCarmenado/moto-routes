@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/crzverde/moto-routes/apps/api/internal/mapmatch"
 )
 
 // insertChunkSize acota cuántas filas lleva cada INSERT multi-valor de
@@ -15,9 +18,21 @@ import (
 // PostgreSQL (65535) ni con MaxPoints en un único INSERT.
 const insertChunkSize = 500
 
+// Matcher ajusta un conjunto de puntos GPS a la carretera más probable
+// (implementado por mapmatch.Client contra un servicio OSRM real). Interfaz
+// local para poder sustituirlo por un doble en tests sin acoplar los tests de
+// este paquete al transporte HTTP real.
+type Matcher interface {
+	Match(ctx context.Context, points []mapmatch.Point) ([]*mapmatch.Point, error)
+}
+
 // PostgresRouteStore implementa Store contra las tablas routes/route_points/route_stops reales.
 type PostgresRouteStore struct {
 	Pool *pgxpool.Pool
+	// Matcher normaliza los puntos GPS de cada ruta al sincronizarla,
+	// best-effort (ver design.md de normalizar-y-exportar-rutas, Decisión 6).
+	// nil desactiva la normalización sin afectar al resto del upsert.
+	Matcher Matcher
 }
 
 // Upsert reemplaza la ruta completa (metadatos + puntos + paradas) del
@@ -71,7 +86,47 @@ func (s PostgresRouteStore) Upsert(ctx context.Context, userID int64, route Deta
 		return err
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	if s.Matcher != nil {
+		s.normalizePoints(ctx, route.ID, route.Points)
+	}
+	return nil
+}
+
+// normalizePoints ajusta los puntos ya guardados de una ruta a la carretera
+// más probable, best-effort: un fallo del Matcher (servicio OSRM caído,
+// timeout, sin coincidencia) se registra en el log y no se propaga — la ruta
+// ya está guardada con sus puntos originales (ver design.md, Decisión 6).
+func (s PostgresRouteStore) normalizePoints(ctx context.Context, routeID string, points []Point) {
+	if len(points) == 0 {
+		return
+	}
+
+	input := make([]mapmatch.Point, len(points))
+	for i, p := range points {
+		input[i] = mapmatch.Point{Lat: p.Lat, Lng: p.Lng}
+	}
+
+	adjusted, err := s.Matcher.Match(ctx, input)
+	if err != nil {
+		log.Printf("routes: map-matching failed for route %s: %v", routeID, err)
+		return
+	}
+
+	for i, a := range adjusted {
+		if a == nil {
+			continue
+		}
+		if _, err := s.Pool.Exec(ctx,
+			"UPDATE route_points SET matched_lat = $1, matched_lng = $2 WHERE route_id = $3 AND timestamp = $4",
+			a.Lat, a.Lng, routeID, points[i].Timestamp,
+		); err != nil {
+			log.Printf("routes: failed to persist matched point for route %s: %v", routeID, err)
+		}
+	}
 }
 
 func insertPoints(ctx context.Context, tx pgx.Tx, routeID string, points []Point) error {
@@ -172,7 +227,7 @@ func (s PostgresRouteStore) GetByIDForUser(ctx context.Context, userID int64, id
 
 func (s PostgresRouteStore) listPoints(ctx context.Context, routeID string) ([]Point, error) {
 	rows, err := s.Pool.Query(ctx,
-		"SELECT timestamp, lat, lng, alt, speed FROM route_points WHERE route_id = $1 ORDER BY timestamp ASC",
+		"SELECT timestamp, lat, lng, alt, speed, matched_lat, matched_lng FROM route_points WHERE route_id = $1 ORDER BY timestamp ASC",
 		routeID,
 	)
 	if err != nil {
@@ -183,7 +238,7 @@ func (s PostgresRouteStore) listPoints(ctx context.Context, routeID string) ([]P
 	points := []Point{}
 	for rows.Next() {
 		var p Point
-		if err := rows.Scan(&p.Timestamp, &p.Lat, &p.Lng, &p.Alt, &p.Speed); err != nil {
+		if err := rows.Scan(&p.Timestamp, &p.Lat, &p.Lng, &p.Alt, &p.Speed, &p.MatchedLat, &p.MatchedLng); err != nil {
 			return nil, err
 		}
 		points = append(points, p)

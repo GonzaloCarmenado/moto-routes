@@ -33,13 +33,17 @@ type Route struct {
 	IsFavorite    bool    `json:"is_favorite"`
 }
 
-// Point es un punto GPS individual de una ruta.
+// Point es un punto GPS individual de una ruta. MatchedLat/MatchedLng son la
+// versión ajustada a carretera (ver normalizar-y-exportar-rutas) — nil si el
+// punto todavía no se ha normalizado.
 type Point struct {
-	Timestamp int64   `json:"timestamp"`
-	Lat       float64 `json:"lat"`
-	Lng       float64 `json:"lng"`
-	Alt       float64 `json:"alt"`
-	Speed     float64 `json:"speed"`
+	Timestamp  int64    `json:"timestamp"`
+	Lat        float64  `json:"lat"`
+	Lng        float64  `json:"lng"`
+	Alt        float64  `json:"alt"`
+	Speed      float64  `json:"speed"`
+	MatchedLat *float64 `json:"matched_lat,omitempty"`
+	MatchedLng *float64 `json:"matched_lng,omitempty"`
 }
 
 // Stop es una parada detectada dentro de una ruta.
