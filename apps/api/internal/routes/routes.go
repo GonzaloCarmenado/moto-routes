@@ -33,13 +33,17 @@ type Route struct {
 	IsFavorite    bool    `json:"is_favorite"`
 }
 
-// Point es un punto GPS individual de una ruta.
+// Point es un punto GPS individual de una ruta. MatchedLat/MatchedLng son la
+// versión ajustada a carretera (ver normalizar-y-exportar-rutas) — nil si el
+// punto todavía no se ha normalizado.
 type Point struct {
-	Timestamp int64   `json:"timestamp"`
-	Lat       float64 `json:"lat"`
-	Lng       float64 `json:"lng"`
-	Alt       float64 `json:"alt"`
-	Speed     float64 `json:"speed"`
+	Timestamp  int64    `json:"timestamp"`
+	Lat        float64  `json:"lat"`
+	Lng        float64  `json:"lng"`
+	Alt        float64  `json:"alt"`
+	Speed      float64  `json:"speed"`
+	MatchedLat *float64 `json:"matched_lat,omitempty"`
+	MatchedLng *float64 `json:"matched_lng,omitempty"`
 }
 
 // Stop es una parada detectada dentro de una ruta.
@@ -62,9 +66,11 @@ type Detail struct {
 // Store persiste y consulta rutas, siempre acotadas al usuario propietario.
 type Store interface {
 	// Upsert inserta o actualiza (por Detail.ID) la ruta completa del usuario
-	// indicado. Devuelve ErrRouteOwnedByAnotherUser si el id ya existe
-	// asociado a otra cuenta, y ErrTooManyPoints si supera MaxPoints.
-	Upsert(ctx context.Context, userID int64, route Detail) error
+	// indicado, y devuelve los puntos resultantes (con MatchedLat/MatchedLng
+	// rellenos si se normalizaron, ver actualizar-mapa-tras-normalizacion).
+	// Devuelve ErrRouteOwnedByAnotherUser si el id ya existe asociado a otra
+	// cuenta, y ErrTooManyPoints si supera MaxPoints.
+	Upsert(ctx context.Context, userID int64, route Detail) ([]Point, error)
 	// ListByUser devuelve solo los resúmenes (sin puntos/paradas) de las
 	// rutas del usuario, en orden descendente de creación.
 	ListByUser(ctx context.Context, userID int64) ([]Route, error)

@@ -959,7 +959,7 @@ describe('route-detail - subir a la nube', () => {
   it('con sesión activa y ruta local, muestra la acción y sube la ruta al pulsarla', async () => {
     const sessionRepository = new MemorySessionRepository();
     await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
-    vi.mocked(uploadRouteToCloud).mockResolvedValue(undefined);
+    vi.mocked(uploadRouteToCloud).mockResolvedValue([]);
 
     const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
     const btn = root.querySelector('[data-cy="route-detail-btn-subir-nube"]') as HTMLButtonElement;
@@ -970,6 +970,27 @@ describe('route-detail - subir a la nube', () => {
 
     expect(uploadRouteToCloud).toHaveBeenCalledWith('http://localhost:8080', { token: 'jwt-token', email: 'rider@example.com' }, repo, savedRoute);
     expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('Ruta subida a la nube');
+    document.body.removeChild(el);
+  });
+
+  it('tras subir con éxito, repinta el mapa con los puntos devueltos por el servidor (normalizados), no con los locales originales', async () => {
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+    const routeWithPoints = await repo.save(
+      { duration: 100, totalDistance: 10, avgSpeed: 50, status: 'completed', visibility: 'private', origin: 'local' },
+      [{ routeId: '', timestamp: 1000, lat: 40.1, lng: -3.1, alt: 600, speed: 10 }],
+      [],
+    );
+    vi.mocked(uploadRouteToCloud).mockResolvedValue([{ timestamp: 1000, lat: 40.1001, lng: -3.1001, alt: 600, speed: 10 }]);
+
+    const { el, root } = await mountRouteDetailWithSession(repo, routeWithPoints.id, sessionRepository);
+    const btn = root.querySelector('[data-cy="route-detail-btn-subir-nube"]') as HTMLButtonElement;
+
+    btn.click();
+    await waitRender();
+
+    const routeMap = root.querySelector<HTMLElement & { points: { lat: number; lng: number }[] }>('route-map');
+    expect(routeMap?.points).toEqual([{ lat: 40.1001, lng: -3.1001 }]);
     document.body.removeChild(el);
   });
 
@@ -1190,7 +1211,7 @@ describe('route-detail - icono de estado y re-subida automática', () => {
   });
 
   it('tras subir manualmente con éxito una ruta que no estaba sincronizada, el icono pasa a "sincronizada" sin recargar', async () => {
-    vi.mocked(uploadRouteToCloud).mockResolvedValue(undefined);
+    vi.mocked(uploadRouteToCloud).mockResolvedValue([]);
 
     const { el, root } = await mountRouteDetailWithSession(repo, savedRoute.id, sessionRepository);
     expect(syncIcon(root).classList.contains('sync-icon-btn--synced')).toBe(false);

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,20 +19,27 @@ import (
 type fakeStore struct {
 	upsertErr error
 	upserted  []Detail
-	byUser    map[int64][]Route
-	byID      map[string]*Detail
+	// upsertPoints, si no es nil, es lo que Upsert devuelve en vez de
+	// simplemente devolver route.Points sin cambios — para simular una
+	// normalización que ajustó algún punto.
+	upsertPoints []Point
+	byUser       map[int64][]Route
+	byID         map[string]*Detail
 }
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{byUser: map[int64][]Route{}, byID: map[string]*Detail{}}
 }
 
-func (f *fakeStore) Upsert(_ context.Context, _ int64, route Detail) error {
+func (f *fakeStore) Upsert(_ context.Context, _ int64, route Detail) ([]Point, error) {
 	if f.upsertErr != nil {
-		return f.upsertErr
+		return nil, f.upsertErr
 	}
 	f.upserted = append(f.upserted, route)
-	return nil
+	if f.upsertPoints != nil {
+		return f.upsertPoints, nil
+	}
+	return route.Points, nil
 }
 
 func (f *fakeStore) ListByUser(_ context.Context, userID int64) ([]Route, error) {
@@ -99,6 +108,47 @@ func TestUpsertHandler_SuccessReturns200AndStoresRoute(t *testing.T) {
 	}
 	if len(store.upserted) != 1 || len(store.upserted[0].Points) != 1 {
 		t.Fatalf("expected the route to reach the store with its points, got %+v", store.upserted)
+	}
+}
+
+func TestUpsertHandler_ResponseIncludesMatchedPointsWhenNormalized(t *testing.T) {
+	store := newFakeStore()
+	matchedLat, matchedLng := 40.1001, -3.1001
+	store.upsertPoints = []Point{
+		{Timestamp: 1000, Lat: 40.1, Lng: -3.1, Alt: 600, Speed: 10, MatchedLat: &matchedLat, MatchedLng: &matchedLng},
+	}
+	handler := auth.RequireAuth(testIssuer())(UpsertHandler(store))
+
+	rec := doRequest(handler, http.MethodPost, "/api/routes", sampleUpsertBody(), bearerFor(t, 42))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var body upsertResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(body.Points) != 1 || body.Points[0].MatchedLat == nil || *body.Points[0].MatchedLat != matchedLat {
+		t.Fatalf("expected the response to include the matched point, got %+v", body.Points)
+	}
+}
+
+func TestUpsertHandler_ResponseEchoesRawPointsWithoutNormalization(t *testing.T) {
+	store := newFakeStore() // sin upsertPoints — el doble echoa route.Points tal cual, sin matched_*
+
+	handler := auth.RequireAuth(testIssuer())(UpsertHandler(store))
+
+	rec := doRequest(handler, http.MethodPost, "/api/routes", sampleUpsertBody(), bearerFor(t, 42))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var body upsertResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(body.Points) != 1 || body.Points[0].Lat != 40.1 || body.Points[0].MatchedLat != nil {
+		t.Fatalf("expected the raw point without any matched fields, got %+v", body.Points)
 	}
 }
 
@@ -228,6 +278,163 @@ func TestDetailHandler_ReturnsNotFoundWhenMissingOrOtherUsers(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected status 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func floatPtr(v float64) *float64 { return &v }
+
+func TestGPXExportHandler_UsesMatchedPointsWhenNormalized(t *testing.T) {
+	store := newFakeStore()
+	store.byID["route-1"] = &Detail{
+		Route:  Route{ID: "route-1", Status: "completed"},
+		Points: []Point{{Timestamp: 1000, Lat: 40.1, Lng: -3.1, MatchedLat: floatPtr(40.1001), MatchedLng: floatPtr(-3.1001)}},
+		Stops:  []Stop{},
+	}
+	handler := auth.RequireAuth(testIssuer())(GPXExportHandler(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/routes/route-1/export.gpx", nil)
+	req = withURLParam(req, "id", "route-1")
+	req.Header.Set("Authorization", "Bearer "+bearerFor(t, 42))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var doc gpxDoc
+	if err := xml.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("expected well-formed GPX, got error: %v", err)
+	}
+	if len(doc.Track.Segments) != 1 || len(doc.Track.Segments[0].Points) != 1 {
+		t.Fatalf("expected exactly 1 track point, got %+v", doc.Track)
+	}
+	got := doc.Track.Segments[0].Points[0]
+	if got.Lat != 40.1001 || got.Lon != -3.1001 {
+		t.Fatalf("expected the matched (road-snapped) coordinates, got lat=%v lon=%v", got.Lat, got.Lon)
+	}
+}
+
+func TestGPXExportHandler_FallsBackToRawPointsWhenNotNormalized(t *testing.T) {
+	store := newFakeStore()
+	store.byID["route-1"] = &Detail{
+		Route:  Route{ID: "route-1", Status: "completed"},
+		Points: []Point{{Timestamp: 1000, Lat: 40.1, Lng: -3.1}},
+		Stops:  []Stop{},
+	}
+	handler := auth.RequireAuth(testIssuer())(GPXExportHandler(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/routes/route-1/export.gpx", nil)
+	req = withURLParam(req, "id", "route-1")
+	req.Header.Set("Authorization", "Bearer "+bearerFor(t, 42))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var doc gpxDoc
+	if err := xml.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("expected well-formed GPX, got error: %v", err)
+	}
+	got := doc.Track.Segments[0].Points[0]
+	if got.Lat != 40.1 || got.Lon != -3.1 {
+		t.Fatalf("expected the raw coordinates, got lat=%v lon=%v", got.Lat, got.Lon)
+	}
+}
+
+func TestGPXExportHandler_ReturnsNotFoundForMissingOrOtherUsersRoute(t *testing.T) {
+	store := newFakeStore()
+	handler := auth.RequireAuth(testIssuer())(GPXExportHandler(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/routes/unknown/export.gpx", nil)
+	req = withURLParam(req, "id", "unknown")
+	req.Header.Set("Authorization", "Bearer "+bearerFor(t, 42))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGPXExportHandler_ReturnsBadRequestForRouteWithoutPoints(t *testing.T) {
+	store := newFakeStore()
+	store.byID["route-1"] = &Detail{Route: Route{ID: "route-1", Status: "completed"}, Points: []Point{}, Stops: []Stop{}}
+	handler := auth.RequireAuth(testIssuer())(GPXExportHandler(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/routes/route-1/export.gpx", nil)
+	req = withURLParam(req, "id", "route-1")
+	req.Header.Set("Authorization", "Bearer "+bearerFor(t, 42))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGPXExportHandler_IncludesStopsAsWaypoints(t *testing.T) {
+	store := newFakeStore()
+	store.byID["route-1"] = &Detail{
+		Route:  Route{ID: "route-1", Status: "completed"},
+		Points: []Point{{Timestamp: 1000, Lat: 40.1, Lng: -3.1}},
+		Stops: []Stop{
+			{StartTime: 1200, Lat: 40.15, Lng: -3.15, Type: "manual"},
+			{StartTime: 1400, Lat: 40.16, Lng: -3.16, Type: "auto"},
+		},
+	}
+	handler := auth.RequireAuth(testIssuer())(GPXExportHandler(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/routes/route-1/export.gpx", nil)
+	req = withURLParam(req, "id", "route-1")
+	req.Header.Set("Authorization", "Bearer "+bearerFor(t, 42))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	var doc gpxDoc
+	if err := xml.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("expected well-formed GPX, got error: %v", err)
+	}
+	if len(doc.Waypoints) != 2 {
+		t.Fatalf("expected 2 waypoints (one per stop), got %d", len(doc.Waypoints))
+	}
+	if doc.Waypoints[0].Lat != 40.15 || doc.Waypoints[1].Lat != 40.16 {
+		t.Fatalf("expected each waypoint to carry its stop's position, got %+v", doc.Waypoints)
+	}
+}
+
+func TestGPXExportHandler_ProducesWellFormedGPX11Document(t *testing.T) {
+	store := newFakeStore()
+	store.byID["route-1"] = &Detail{
+		Route:  Route{ID: "route-1", Status: "completed"},
+		Points: []Point{{Timestamp: 1000, Lat: 40.1, Lng: -3.1}},
+		Stops:  []Stop{},
+	}
+	handler := auth.RequireAuth(testIssuer())(GPXExportHandler(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/routes/route-1/export.gpx", nil)
+	req = withURLParam(req, "id", "route-1")
+	req.Header.Set("Authorization", "Bearer "+bearerFor(t, 42))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if !strings.HasPrefix(body, xml.Header) {
+		t.Fatalf("expected the response to start with the XML declaration, got: %s", body[:min(len(body), 80)])
+	}
+	if !strings.Contains(body, `xmlns="http://www.topografix.com/GPX/1/1"`) || !strings.Contains(body, `version="1.1"`) {
+		t.Fatalf("expected a GPX 1.1 document, got: %s", body)
+	}
+
+	var doc gpxDoc
+	if err := xml.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("expected well-formed XML, got error: %v", err)
+	}
+	if doc.XMLName.Local != "gpx" {
+		t.Fatalf("expected the root element to be <gpx>, got <%s>", doc.XMLName.Local)
+	}
+	if rec.Header().Get("Content-Type") != "application/gpx+xml" {
+		t.Fatalf("expected Content-Type application/gpx+xml, got %q", rec.Header().Get("Content-Type"))
 	}
 }
 

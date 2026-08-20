@@ -15,6 +15,7 @@
     "core:window:allow-set-size",
     "core:window:allow-set-position",
     "notification:default",
+    "dialog:allow-save",
     {
       "identifier": "fs:allow-mkdir",
       "allow": [{ "path": "$APPDATA/photos" }, { "path": "$APPDATA/photos/**" }]

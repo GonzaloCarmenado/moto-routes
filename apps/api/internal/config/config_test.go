@@ -227,3 +227,31 @@ func TestLoad_PassesThroughFCMServiceAccountJSONWhenSet(t *testing.T) {
 		t.Fatalf("expected FCMServiceAccountJSON to be passed through, got %q", cfg.FCMServiceAccountJSON)
 	}
 }
+
+func TestLoad_MapMatchOSRMURLIsOptional(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("MAPMATCH_OSRM_URL", "")
+
+	cfg, err := Load()
+
+	if err != nil {
+		t.Fatalf("expected no error without MAPMATCH_OSRM_URL (GPS normalization is optional), got %v", err)
+	}
+	if cfg.MapMatchOSRMURL != "" {
+		t.Fatalf("expected empty MapMatchOSRMURL, got %q", cfg.MapMatchOSRMURL)
+	}
+}
+
+func TestLoad_PassesThroughMapMatchOSRMURLWhenSet(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("MAPMATCH_OSRM_URL", "http://osrm:5000")
+
+	cfg, err := Load()
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.MapMatchOSRMURL != "http://osrm:5000" {
+		t.Fatalf("expected MapMatchOSRMURL to be passed through, got %q", cfg.MapMatchOSRMURL)
+	}
+}

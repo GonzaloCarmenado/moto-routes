@@ -118,14 +118,33 @@ export interface UploadRoutePayload {
   stops: RouteStop[];
 }
 
+/** Punto resultante de una subida, ya resuelto: `lat`/`lng` son la posición
+ * final (ajustada a carretera si el servidor la normalizó, cruda si no) — ver
+ * design.md de actualizar-mapa-tras-normalizacion, Decisión 1. */
+export interface UploadedRoutePoint {
+  timestamp: number;
+  lat: number;
+  lng: number;
+  alt: number;
+  speed: number;
+}
+
+interface UpsertRouteResponse {
+  id: string;
+  points: { timestamp: number; lat: number; lng: number; alt: number; speed: number; matched_lat?: number; matched_lng?: number }[];
+}
+
 /**
  * `POST /api/routes` — sube (o actualiza, upsert por id) una ruta local
- * completa a la cuenta del usuario autenticado.
+ * completa a la cuenta del usuario autenticado. Devuelve los puntos
+ * resultantes que el servidor guardó, con la posición ya resuelta (ajustada
+ * a carretera cuando el map-matching la tocó) para que el llamador pueda
+ * repintar el mapa sin una segunda petición.
  */
-export async function uploadRoute(apiBaseUrl: string, token: string, payload: UploadRoutePayload): Promise<void> {
+export async function uploadRoute(apiBaseUrl: string, token: string, payload: UploadRoutePayload): Promise<UploadedRoutePoint[]> {
   const { route, points, stops } = payload;
   try {
-    await fetchJson(`${apiBaseUrl}/api/routes`, {
+    const response = await fetchJson<UpsertRouteResponse>(`${apiBaseUrl}/api/routes`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       checkStatus: true,
@@ -150,6 +169,13 @@ export async function uploadRoute(apiBaseUrl: string, token: string, payload: Up
         })),
       },
     });
+    return response.points.map((p) => ({
+      timestamp: p.timestamp,
+      lat: p.matched_lat ?? p.lat,
+      lng: p.matched_lng ?? p.lng,
+      alt: p.alt,
+      speed: p.speed,
+    }));
   } catch (err) {
     throw toRouteCloudApiError(err);
   }
@@ -166,6 +192,39 @@ export async function fetchCloudRoutes(apiBaseUrl: string, token: string): Promi
   } catch (err) {
     throw toRouteCloudApiError(err);
   }
+}
+
+/**
+ * `GET /api/routes/{id}/export.gpx` — descarga el GPX de una ruta del
+ * usuario autenticado (puntos ajustados a carretera si ya se normalizó,
+ * crudos si no). No usa `fetchJson`: la respuesta es XML, no JSON.
+ */
+export async function exportRouteGPX(apiBaseUrl: string, token: string, id: string): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}/api/routes/${id}/export.gpx`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (err) {
+    throw new RouteCloudApiError('network', `Network error exporting route ${id}: ${String(err)}`);
+  }
+
+  if (!response.ok) {
+    let message = `GPX export failed with status ${String(response.status)}`;
+    try {
+      const body = (await response.json()) as ApiErrorBody;
+      if (body.error) message = body.error;
+    } catch {
+      // cuerpo de error no-JSON o vacío — se mantiene el mensaje genérico
+    }
+    // mapStatus no aplica aquí: su 400 -> "too-many-points" es específico del
+    // upsert. En la exportación un 400 significa "sin puntos GPS que exportar"
+    // (ver specs/exportacion-gpx/spec.md) — el mensaje del servidor ya lo explica.
+    const kind = response.status === 401 ? 'unauthorized' : response.status === 404 ? 'not-found' : 'unknown';
+    throw new RouteCloudApiError(kind, message);
+  }
+
+  return response.blob();
 }
 
 /** `GET /api/routes/{id}` — detalle completo (puntos+paradas) de una ruta del usuario autenticado. */

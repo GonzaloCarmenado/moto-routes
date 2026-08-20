@@ -15,6 +15,7 @@ import (
 	"github.com/crzverde/moto-routes/apps/api/internal/config"
 	"github.com/crzverde/moto-routes/apps/api/internal/email"
 	"github.com/crzverde/moto-routes/apps/api/internal/httpmw"
+	"github.com/crzverde/moto-routes/apps/api/internal/mapmatch"
 	"github.com/crzverde/moto-routes/apps/api/internal/migrate"
 	"github.com/crzverde/moto-routes/apps/api/internal/notifications"
 	"github.com/crzverde/moto-routes/apps/api/internal/photos"
@@ -57,6 +58,13 @@ const (
 	routeShareRateLimitMaxAttempts = 5
 	routeShareRateLimitWindow      = 15 * time.Minute
 )
+
+// mapMatchHTTPTimeout acota cada llamada a OSRM (por bloque de puntos, ver
+// internal/mapmatch) — sin timeout explícito, http.DefaultClient no tiene
+// límite y una llamada colgada (ej. OSRM caído) bloquearía el upsert de la
+// ruta muy por encima de lo que la normalización best-effort debería costar
+// (ver design.md de normalizar-y-exportar-rutas, Decisión 6).
+const mapMatchHTTPTimeout = 5 * time.Second
 
 // dbConnectTimeout acota cuánto espera cada intento de conexión a PostgreSQL
 // (incluida la resolución DNS) antes de fallar. Sin este límite, un Postgres
@@ -135,6 +143,9 @@ func main() {
 	router.Post("/api/auth/reset-password/confirm", resetPasswordConfirmHandler)
 
 	routeStore := routes.PostgresRouteStore{Pool: pool}
+	if cfg.MapMatchOSRMURL != "" {
+		routeStore.Matcher = mapmatch.Client{BaseURL: cfg.MapMatchOSRMURL, HTTPClient: &http.Client{Timeout: mapMatchHTTPTimeout}}
+	}
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/routes", routes.UpsertHandler(routeStore).ServeHTTP)
 	router.With(httpmw.PublicCORS).Options("/api/routes", func(http.ResponseWriter, *http.Request) {})
 
@@ -142,6 +153,9 @@ func main() {
 
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/routes/{id}", routes.DetailHandler(routeStore).ServeHTTP)
 	router.With(httpmw.PublicCORS).Options("/api/routes/{id}", func(http.ResponseWriter, *http.Request) {})
+
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/routes/{id}/export.gpx", routes.GPXExportHandler(routeStore).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/routes/{id}/export.gpx", func(http.ResponseWriter, *http.Request) {})
 
 	blobStore, err := photos.NewMinioBlobStore(cfg.MinioEndpoint, cfg.MinioAccessKey, cfg.MinioSecretKey, cfg.MinioBucket, false)
 	if err != nil {

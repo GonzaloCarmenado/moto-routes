@@ -10,6 +10,7 @@ import type { Session } from '../../shared/models/session.types.js';
 import { showToast } from '../../shared/feedback/toast.js';
 import { toErrorMessage } from '../../shared/utils/errors.js';
 import { uploadRouteToCloud } from './route-detail-cloud.service.js';
+import type { UploadedRoutePoint } from '../../shared/http/route-cloud-api.service.js';
 import { CLOUD_UPLOAD_ICON, CLOUD_CHECK_ICON } from '../../shared/icons/cloud-sync-icons.js';
 
 interface SyncIconOptions {
@@ -21,9 +22,11 @@ interface SyncIconOptions {
    * ambos estados siguen siendo pulsables, para poder forzar una re-subida
    * manual de una ruta ya sincronizada. */
   isSynced: boolean;
-  /** Invocado tras una subida manual con éxito, para que el llamador
-   * actualice su propio estado (`_isSynced`) y vuelva a renderizar. */
-  onUploaded: () => void;
+  /** Invocado tras una subida manual con éxito, con los puntos resultantes
+   * que devolvió el servidor (ajustados a carretera si se normalizaron) —
+   * para que el llamador actualice su propio estado (`_isSynced`, mapa) y
+   * vuelva a renderizar (ver actualizar-mapa-tras-normalizacion). */
+  onUploaded: (points: UploadedRoutePoint[]) => void;
 }
 
 /** El llamador solo debe construir este icono con sesión activa y una ruta
@@ -47,9 +50,9 @@ export function buildSyncIconButton(options: SyncIconOptions): HTMLButtonElement
 async function handleUpload(options: SyncIconOptions, btn: HTMLButtonElement): Promise<void> {
   btn.disabled = true;
   try {
-    await uploadRouteToCloud(options.apiBaseUrl, options.session, options.repository, options.route);
+    const points = await uploadRouteToCloud(options.apiBaseUrl, options.session, options.repository, options.route);
     showToast('Ruta subida a la nube', 'success');
-    options.onUploaded();
+    options.onUploaded(points);
   } catch (err) {
     showToast(toErrorMessage(err, 'Error al subir la ruta'), 'error');
   } finally {

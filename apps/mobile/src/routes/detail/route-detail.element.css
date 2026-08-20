@@ -60,37 +60,16 @@
   margin-bottom: var(--space-4);
 }
 
-/* Fila de acciones (favorito/nube/compartir), separada del título — antes
-   compartían línea con el título y competían por espacio con él. */
+/* Fila de acciones (favorito/nube/compartir/exportar), separada del título —
+   antes compartían línea con el título y competían por espacio con él. Solo
+   iconos (sin pill ni etiqueta): con 4 acciones, las pills de ancho desigual
+   rompían mal de línea — favorito/nube ya comunican su estado con el propio
+   icono, y compartir/exportar son universales. Usa el estilo base cuadrado
+   de .favorite-icon/.sync-icon-btn (hitbox-min, sin fondo), definido más abajo. */
 .detail-actions-row {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--space-2);
   margin-bottom: var(--space-5);
-}
-
-.detail-actions-row .favorite-icon,
-.detail-actions-row .sync-icon-btn {
-  width: auto;
-  height: var(--hitbox-min);
-  padding: 0 var(--space-3);
-  gap: var(--space-1);
-  border-radius: var(--r-pill);
-  border: 1px solid var(--panel-sunken);
-  background: var(--panel);
-}
-
-.detail-actions-row .favorite-icon--active,
-.detail-actions-row .sync-icon-btn--synced {
-  border-color: var(--amber-soft);
-  background: var(--amber-soft);
-}
-
-.detail-action__label {
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
 }
 
 /* Stat grid 2 cols */

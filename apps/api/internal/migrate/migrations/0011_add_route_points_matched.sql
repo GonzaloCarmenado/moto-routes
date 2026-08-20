@@ -1,0 +1,3 @@
+ALTER TABLE route_points
+    ADD COLUMN matched_lat DOUBLE PRECISION,
+    ADD COLUMN matched_lng DOUBLE PRECISION;

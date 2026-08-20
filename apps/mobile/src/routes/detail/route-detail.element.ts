@@ -8,10 +8,11 @@ import type { Route, RoutePoint, RouteStop } from '../../shared/models/route.typ
 import type { IStopTypesCacheRepository } from '../../shared/models/stop-types-cache.repository.js';
 import { getApiBaseUrl } from '../../shared/http/api-config.js';
 import { loadCloudRouteDetail, checkIfRouteIsSynced } from './route-detail-cloud.service.js';
+import { uploadedPointsToLocal } from './route-detail-cloud.transform.js';
 import { triggerAutoResync, triggerPhotoUpload, triggerPhotoDelete, type SyncTriggerContext } from './route-detail-sync-triggers.js';
 import { buildLoadingState, buildEmptyMessage, buildLoadErrorMessage } from './route-detail-states.js';
 import type { StopCategory } from '../../shared/stop-types/stop-types.types.js';
-import { formatDuration } from '../../shared/utils/format.js';
+import { buildStatGrid, buildEstadisticasPanel } from './route-detail-stats-panel.js';
 import '../../shared/route-map/route-map.element.js';
 import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from '../../shared/route-map/route-map.element.js';
 import type { MapPhoto } from '../../shared/route-map/route-map-photos.js';
@@ -251,7 +252,7 @@ class RouteDetail extends BaseElement {
     content.className = 'detail-content';
     this._headerEl = this.buildHeader(route);
     content.appendChild(this._headerEl);
-    content.appendChild(this.buildStatGrid(route));
+    content.appendChild(buildStatGrid(route));
     content.appendChild(this.buildTabBar(route));
     return content;
   }
@@ -270,8 +271,10 @@ class RouteDetail extends BaseElement {
         triggerAutoResync(this.syncContext(), route);
         this.render();
       },
-      onUploaded: () => {
+      onUploaded: (points) => {
         this._isSynced = true;
+        if (this._routeId) this._routePoints = uploadedPointsToLocal(points, this._routeId);
+        this._points = this._routePoints.map((p) => ({ lat: p.lat, lng: p.lng }));
         this.render();
       },
     }));
@@ -307,7 +310,7 @@ class RouteDetail extends BaseElement {
 
     this._fotosPanelEl = this.buildPhotosSection();
     tabBar.appendChild(this._fotosPanelEl);
-    tabBar.appendChild(this.buildEstadisticasPanel());
+    tabBar.appendChild(buildEstadisticasPanel());
     tabBar.appendChild(buildNotasPanel(route, (textarea) => this.handleSaveNote(route, textarea)));
     this._timelinePanelEl = this.buildTimelinePanel();
     tabBar.appendChild(this._timelinePanelEl);
@@ -324,32 +327,6 @@ class RouteDetail extends BaseElement {
   /** Contexto común a los triggers de sincronización en segundo plano (ver `route-detail-sync-triggers.ts`). */
   private syncContext(): SyncTriggerContext {
     return { session: this._session, routeId: this._routeId, repository: this._repository, isSynced: this._isSynced };
-  }
-
-  /** "Estadísticas": placeholder de gráfica ya existente, sin cambios (AC-007). */
-  private buildEstadisticasPanel(): HTMLElement {
-    const chart = this.buildChart();
-    chart.setAttribute('slot', 'estadisticas');
-    return chart;
-  }
-
-  private buildStatGrid(route: Route): HTMLElement {
-    const grid = document.createElement('div');
-    grid.className = 'stat-grid cols-2';
-    grid.innerHTML = `
-      <div class="stat-tile"><span class="stat-label">Distancia</span><span class="stat-value">${route.totalDistance.toFixed(1)} <span class="stat-unit">km</span></span></div>
-      <div class="stat-tile"><span class="stat-label">Duración</span><span class="stat-value">${formatDuration(route.duration)}</span></div>
-      <div class="stat-tile"><span class="stat-label">Vel. media</span><span class="stat-value">${route.avgSpeed.toFixed(0)} <span class="stat-unit">km/h</span></span></div>
-      <div class="stat-tile"><span class="stat-label">Desnivel</span><span class="stat-value">-- <span class="stat-unit">m</span></span></div>
-    `;
-    return grid;
-  }
-
-  private buildChart(): HTMLElement {
-    const chart = document.createElement('div');
-    chart.className = 'route-chart';
-    chart.innerHTML = '<div class="chart-label">Velocidad durante la ruta</div><div class="chart-area">(próximamente)</div>';
-    return chart;
   }
 
   /** Punto de apertura del visor sobre la ruta completa: lo comparten la galería en
