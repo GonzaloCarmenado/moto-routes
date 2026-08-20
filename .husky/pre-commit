@@ -1,3 +1,15 @@
 #!/usr/bin/env sh
 
+# Si TODO lo staged es documentacion (markdown en cualquier ruta, tracking de
+# openspec en YAML o metricas SDLC en JSONL), los quality gates no aportan
+# nada -- ni codigo, ni config, ni assets, ni movimiento de carpetas de
+# codigo cambian. Cualquier otro fichero (incluidos assets sueltos dentro de
+# openspec/specs/memory) tira este atajo abajo. Mismo patron replicado en
+# .github/workflows/ci.yml -- mantener en sincronia.
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR)
+if [ -n "$STAGED_FILES" ] && ! echo "$STAGED_FILES" | grep -qvE '\.md$|^openspec/.*\.yaml$|^memory/.*\.jsonl$'; then
+  echo "📄 Solo se ha modificado documentación (markdown/openspec/memory) — saltando quality gates."
+  exit 0
+fi
+
 bash scripts/pre-commit.sh
