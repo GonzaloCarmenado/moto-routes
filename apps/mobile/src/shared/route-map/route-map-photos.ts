@@ -17,6 +17,14 @@ const PHOTO_CLUSTER_RADIUS_METERS = 50;
 // clusters se desagrupan, y en zoom bajo crece y agrupa más (AC-018).
 const PHOTO_CLUSTER_REFERENCE_ZOOM = 15;
 
+/**
+ * Radio fijo (en metros) para agrupar las fotos "de la misma zona" al abrir el visor a
+ * pantalla completa desde un marcador del mapa. A diferencia de `PHOTO_CLUSTER_RADIUS_METERS`
+ * (visual, escalado por zoom, solo evita solapar pines), este radio es semántico y no cambia
+ * con el zoom: define qué fotos pertenecen a la misma parada o punto de interés.
+ */
+export const PHOTO_PROXIMITY_GROUP_RADIUS_METERS = 75;
+
 /** Radio de clustering (en metros) equivalente a `PHOTO_CLUSTER_RADIUS_METERS` en el zoom dado. */
 export function photoClusterRadiusForZoom(zoom: number): number {
   return PHOTO_CLUSTER_RADIUS_METERS * Math.pow(2, PHOTO_CLUSTER_REFERENCE_ZOOM - zoom);
@@ -59,16 +67,11 @@ export function addPhotoMarkers(
 
     if (isCluster) {
       icon.textContent = String(cluster.photos.length);
-      hitArea.addEventListener('click', () => {
-        // Zoom hacia la zona del cluster
-        map.flyTo({
-          center: [cluster.centerLng, cluster.centerLat],
-          zoom: map.getZoom() + 2,
-        });
-      });
-    } else {
-      hitArea.addEventListener('click', () => onPhotoClick?.(cluster.photos[0]!));
     }
+    // Mismo callback para marcador individual o cluster: quien lo recibe (route-detail)
+    // calcula la zona de fotos GPS-cercanas a la foto pulsada y abre el visor con ella,
+    // desacoplado del radio de clustering visual con el que se dibujó este pin.
+    hitArea.addEventListener('click', () => onPhotoClick?.(cluster.photos[0]!));
 
     const marker = new maplibregl.Marker({ element: hitArea })
       .setLngLat([cluster.centerLng, cluster.centerLat])

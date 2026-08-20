@@ -12,10 +12,11 @@ import { uploadedPointsToLocal } from './route-detail-cloud.transform.js';
 import { triggerAutoResync, triggerPhotoUpload, triggerPhotoDelete, type SyncTriggerContext } from './route-detail-sync-triggers.js';
 import { buildLoadingState, buildEmptyMessage, buildLoadErrorMessage } from './route-detail-states.js';
 import type { StopCategory } from '../../shared/stop-types/stop-types.types.js';
-import { formatDuration } from '../../shared/utils/format.js';
+import { buildStatGrid, buildEstadisticasPanel } from './route-detail-stats-panel.js';
 import '../../shared/route-map/route-map.element.js';
 import { ROUTE_MAP_PHOTO_SELECT_EVENT, type RouteMapPhotoSelectDetail } from '../../shared/route-map/route-map.element.js';
 import type { MapPhoto } from '../../shared/route-map/route-map-photos.js';
+import { groupPhotosByProximity } from './route-detail-photo-proximity.js';
 import type { MapStop } from '../../shared/route-map/route-map-stops.js';
 import '../../shared/photo-capture/photo-capture.element.js';
 import type { PhotoCaptureElement } from '../../shared/photo-capture/photo-capture.element.js';
@@ -237,10 +238,11 @@ class RouteDetail extends BaseElement {
     // AC-7.1 a AC-7.3: mismos datos ya resueltos para la timeline (Grupo 6), reutilizados aquí.
     routeMap.stops = this._routeStops.map((s) => ({ lat: s.lat, lng: s.lng, stopCategoryId: s.stopCategoryId }));
     routeMap.stopCategoriesById = this._categoriesById;
-    // AC-015/AC-017: solo el marcador individual dispara este evento, nunca un cluster.
+    // Marcador individual o cluster: ambos abren el visor solo con las fotos GPS-cercanas
+    // a la foto pulsada (agrupar-fotos-proximidad-mapa), nunca la ruta completa.
     routeMap.addEventListener(ROUTE_MAP_PHOTO_SELECT_EVENT, ((event: CustomEvent<RouteMapPhotoSelectDetail>) => {
-      const index = toGalleryPhotos(this._photos).findIndex((p) => p.id === event.detail.photo.id);
-      if (index !== -1) this.openPhotoViewerAt(index);
+      const { photos, startIndex } = groupPhotosByProximity(this._photos, event.detail.photo.id);
+      openPhotoViewer({ photos: toGalleryPhotos(photos), startIndex, onDelete: (p) => this.handleDeletePhoto(p.id) });
     }) as EventListener);
     return routeMap;
   }
@@ -250,7 +252,7 @@ class RouteDetail extends BaseElement {
     content.className = 'detail-content';
     this._headerEl = this.buildHeader(route);
     content.appendChild(this._headerEl);
-    content.appendChild(this.buildStatGrid(route));
+    content.appendChild(buildStatGrid(route));
     content.appendChild(this.buildTabBar(route));
     return content;
   }
@@ -308,7 +310,7 @@ class RouteDetail extends BaseElement {
 
     this._fotosPanelEl = this.buildPhotosSection();
     tabBar.appendChild(this._fotosPanelEl);
-    tabBar.appendChild(this.buildEstadisticasPanel());
+    tabBar.appendChild(buildEstadisticasPanel());
     tabBar.appendChild(buildNotasPanel(route, (textarea) => this.handleSaveNote(route, textarea)));
     this._timelinePanelEl = this.buildTimelinePanel();
     tabBar.appendChild(this._timelinePanelEl);
@@ -327,34 +329,9 @@ class RouteDetail extends BaseElement {
     return { session: this._session, routeId: this._routeId, repository: this._repository, isSynced: this._isSynced };
   }
 
-  /** "Estadísticas": placeholder de gráfica ya existente, sin cambios (AC-007). */
-  private buildEstadisticasPanel(): HTMLElement {
-    const chart = this.buildChart();
-    chart.setAttribute('slot', 'estadisticas');
-    return chart;
-  }
-
-  private buildStatGrid(route: Route): HTMLElement {
-    const grid = document.createElement('div');
-    grid.className = 'stat-grid cols-2';
-    grid.innerHTML = `
-      <div class="stat-tile"><span class="stat-label">Distancia</span><span class="stat-value">${route.totalDistance.toFixed(1)} <span class="stat-unit">km</span></span></div>
-      <div class="stat-tile"><span class="stat-label">Duración</span><span class="stat-value">${formatDuration(route.duration)}</span></div>
-      <div class="stat-tile"><span class="stat-label">Vel. media</span><span class="stat-value">${route.avgSpeed.toFixed(0)} <span class="stat-unit">km/h</span></span></div>
-      <div class="stat-tile"><span class="stat-label">Desnivel</span><span class="stat-value">-- <span class="stat-unit">m</span></span></div>
-    `;
-    return grid;
-  }
-
-  private buildChart(): HTMLElement {
-    const chart = document.createElement('div');
-    chart.className = 'route-chart';
-    chart.innerHTML = '<div class="chart-label">Velocidad durante la ruta</div><div class="chart-area">(próximamente)</div>';
-    return chart;
-  }
-
-  /** Único punto de apertura del visor: galería en cuadrícula y popup del mapa
-   * comparten esta misma llamada (AC-011, AC-015). */
+  /** Punto de apertura del visor sobre la ruta completa: lo comparten la galería en
+   * cuadrícula y la línea de tiempo (AC-011). El mapa abre solo la zona GPS-cercana
+   * a la foto pulsada, ver `groupPhotosByProximity` en `buildMap`. */
   private openPhotoViewerAt(index: number): void {
     openPhotoViewer({ photos: toGalleryPhotos(this._photos), startIndex: index, onDelete: (photo) => this.handleDeletePhoto(photo.id) });
   }
