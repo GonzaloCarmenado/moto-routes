@@ -405,9 +405,14 @@ jobs:
       - name: Verify the APK bundles the freshly built frontend, the real apps/api host, the release version and no sourcemaps
         run: |
           APK=apps/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
-          EXPECTED=$(grep -o 'index-[A-Za-z0-9_]*\.js' apps/mobile/dist/index.html)
+          # El hash de Vite puede incluir un guion (ej. index-DST-i2Oo.js) --
+          # sin él en la clase de caracteres, grep no encuentra ninguna
+          # coincidencia y el script muere en silencio por set -e (visto en
+          # la release v0.1.11 real, APK generado correctamente pero este
+          # paso fallando sin ningún mensaje).
+          EXPECTED=$(grep -o 'index-[A-Za-z0-9_-]*\.js' apps/mobile/dist/index.html)
           PACKAGED_HTML=$(unzip -p "$APK" assets/index.html)
-          ACTUAL=$(echo "$PACKAGED_HTML" | grep -o 'index-[A-Za-z0-9_]*\.js')
+          ACTUAL=$(echo "$PACKAGED_HTML" | grep -o 'index-[A-Za-z0-9_-]*\.js')
           if [ "$EXPECTED" != "$ACTUAL" ]; then
             echo "El APK empaqueta un frontend desactualizado (tiene $ACTUAL, se esperaba $EXPECTED)"
             exit 1
