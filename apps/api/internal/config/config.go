@@ -45,6 +45,13 @@ type Config struct {
 	// siendo la fuente de verdad (ver design.md de notificaciones-push-fcm,
 	// Decisión 4). Es un secreto cuando está presente.
 	FCMServiceAccountJSON string
+	// MapMatchOSRMURL es la URL base de un servicio OSRM propio (ej.
+	// http://osrm:5000) usado para ajustar a carretera los puntos GPS de una
+	// ruta al sincronizarla (ver normalizar-y-exportar-rutas). Opcional, igual
+	// que FCMServiceAccountJSON: sin ella, la normalización queda
+	// desactivada (best-effort) — no hace falta un servicio OSRM real para
+	// desarrollar en local.
+	MapMatchOSRMURL string
 }
 
 // Load lee la configuración desde variables de entorno. DATABASE_URL,
@@ -125,5 +132,6 @@ func Load() (Config, error) {
 		MinioBucket:           minioBucket,
 		PhotoEncryptionKey:    photoEncryptionKey,
 		FCMServiceAccountJSON: os.Getenv("FCM_SERVICE_ACCOUNT_JSON"),
+		MapMatchOSRMURL:       os.Getenv("MAPMATCH_OSRM_URL"),
 	}, nil
 }

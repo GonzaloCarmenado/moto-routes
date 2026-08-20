@@ -41,7 +41,8 @@ type upsertRequest struct {
 }
 
 type upsertResponse struct {
-	ID string `json:"id"`
+	ID     string  `json:"id"`
+	Points []Point `json:"points"`
 }
 
 // UpsertHandler crea o actualiza (por id) la ruta completa del usuario
@@ -86,7 +87,8 @@ func UpsertHandler(store Store) http.Handler {
 			detail.Stops[i] = Stop{StartTime: s.StartTime, EndTime: s.EndTime, Lat: s.Lat, Lng: s.Lng, Type: s.Type, StopCategoryID: s.StopCategoryID}
 		}
 
-		if err := store.Upsert(r.Context(), userID, detail); err != nil {
+		points, err := store.Upsert(r.Context(), userID, detail)
+		if err != nil {
 			switch err {
 			case ErrTooManyPoints:
 				apihttp.WriteError(w, http.StatusBadRequest, "route exceeds the maximum number of points")
@@ -98,7 +100,7 @@ func UpsertHandler(store Store) http.Handler {
 			return
 		}
 
-		apihttp.WriteJSON(w, http.StatusOK, upsertResponse{ID: req.ID})
+		apihttp.WriteJSON(w, http.StatusOK, upsertResponse{ID: req.ID, Points: points})
 	})
 }
 

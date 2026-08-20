@@ -160,6 +160,44 @@ describe('Rutas en la nube - subida, listado combinado, detalle y aislamiento en
     });
   });
 
+  it('subir una ruta con puntos desplazados de una carretera real la normaliza en el servidor', () => {
+    const email = uniqueTestEmail('normaliza');
+    const route = buildSeedRoute({ name: `Ruta a normalizar ${String(Date.now())}` });
+    // Puntos ~15m desplazados de Calle de Chinchilla (Madrid), calle real
+    // cubierta por el extracto de España que usa OSRM en local — mismas
+    // coordenadas ya verificadas manualmente (ver tasks.md, 5.2) para
+    // confirmar que el matcher las ajusta de verdad, no solo con un doble.
+    const points: RoutePoint[] = [
+      { id: crypto.randomUUID(), routeId: route.id, timestamp: 1000, lat: 40.419556, lng: -3.703954, alt: 650, speed: 10 },
+      { id: crypto.randomUUID(), routeId: route.id, timestamp: 6000, lat: 40.419629, lng: -3.7039, alt: 650, speed: 10 },
+      { id: crypto.randomUUID(), routeId: route.id, timestamp: 11000, lat: 40.419689, lng: -3.703856, alt: 650, speed: 10 },
+    ];
+
+    registerVerifiedAccountViaApi(email).then((token) => {
+      cy.visitWithSeed({ routes: [route], points: { [route.id]: points } });
+      loginViaUi(email);
+
+      cy.get('[data-cy="nav-rutas"]').click();
+      cy.contains('[data-cy="route-card"]', route.name as string).click();
+
+      cy.get('[data-cy="route-detail-btn-subir-nube"]').click();
+      cy.get('[data-cy="photo-toast"]').should('contain', 'nube');
+
+      // El mapa se repinta con la misma respuesta que aquí se comprueba
+      // contra el servidor (route-detail.element.ts, onUploaded) — MapLibre
+      // pinta en <canvas>, sin nada localizable en el DOM que asegurar aquí,
+      // así que el punto de verdad observable es que el servidor ya tiene
+      // los puntos ajustados que la app acaba de recibir en la respuesta.
+      cy.request({
+        url: `${API_BASE_URL}/api/routes/${route.id}`,
+        headers: { Authorization: `Bearer ${token}` },
+      }).then((response) => {
+        const body = response.body as { points: { matched_lat: number | null }[] };
+        expect(body.points.some((p) => p.matched_lat !== null)).to.be.true;
+      });
+    });
+  });
+
   it('guardar una nota en una ruta ya sincronizada la re-sube sola, sin ninguna acción adicional', () => {
     const email = uniqueTestEmail('resync');
     const route = buildSeedRoute({ name: `Ruta a re-subir ${String(Date.now())}` });

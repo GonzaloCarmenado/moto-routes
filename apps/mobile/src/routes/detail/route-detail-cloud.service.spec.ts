@@ -93,6 +93,20 @@ describe('uploadRouteToCloud', () => {
     });
   });
 
+  it('devuelve los puntos que le devuelve uploadRoute', async () => {
+    const repository = new MemoryRouteRepository();
+    const routeId = crypto.randomUUID();
+    const route = await repository.save(
+      { id: routeId, duration: 100, totalDistance: 10, avgSpeed: 40, status: 'completed', visibility: 'private', origin: 'local' },
+      [{ routeId, timestamp: 1000, lat: 40.1, lng: -3.1, alt: 600, speed: 10 }],
+      [],
+    );
+    const uploaded = [{ timestamp: 1000, lat: 40.1001, lng: -3.1001, alt: 600, speed: 10 }];
+    vi.mocked(uploadRoute).mockResolvedValue(uploaded);
+
+    await expect(uploadRouteToCloud(BASE_URL, SESSION, repository, route)).resolves.toEqual(uploaded);
+  });
+
   it('propaga el error si la subida falla (sin conexión, límite de puntos, etc.)', async () => {
     const repository = new MemoryRouteRepository();
     const route = await repository.save(
@@ -117,7 +131,7 @@ describe('uploadRouteToCloud', () => {
       id: 1, key: 'total_km_100', requirementType: 'total_distance_km', threshold: 100,
       title: '100 km recorridos', description: 'Has superado los 100 km acumulados en tus rutas.', icon: 'default',
     };
-    vi.mocked(uploadRoute).mockResolvedValue(undefined);
+    vi.mocked(uploadRoute).mockResolvedValue([]);
     vi.mocked(checkAchievements).mockResolvedValue([unlocked]);
 
     await uploadRouteToCloud(BASE_URL, SESSION, repository, route);
@@ -135,7 +149,7 @@ describe('uploadRouteToCloud', () => {
       [],
       [],
     );
-    vi.mocked(uploadRoute).mockResolvedValue(undefined);
+    vi.mocked(uploadRoute).mockResolvedValue([]);
     vi.mocked(checkAchievements).mockResolvedValue([]);
 
     await uploadRouteToCloud(BASE_URL, SESSION, repository, route);
@@ -153,10 +167,10 @@ describe('uploadRouteToCloud', () => {
       [],
       [],
     );
-    vi.mocked(uploadRoute).mockResolvedValue(undefined);
+    vi.mocked(uploadRoute).mockResolvedValue([]);
     vi.mocked(checkAchievements).mockRejectedValue(new Error('network down'));
 
-    await expect(uploadRouteToCloud(BASE_URL, SESSION, repository, route)).resolves.toBeUndefined();
+    await expect(uploadRouteToCloud(BASE_URL, SESSION, repository, route)).resolves.toEqual([]);
     expect(enqueueAchievementUnlock).not.toHaveBeenCalled();
   });
 });
@@ -234,7 +248,7 @@ describe('autoResyncIfNeeded', () => {
       { duration: 100, totalDistance: 10, avgSpeed: 40, status: 'completed', visibility: 'private', origin: 'local' },
       [], [],
     );
-    vi.mocked(uploadRoute).mockResolvedValue(undefined);
+    vi.mocked(uploadRoute).mockResolvedValue([]);
 
     await autoResyncIfNeeded({ apiBaseUrl: BASE_URL, session: SESSION, repository, route, isSynced: true });
 

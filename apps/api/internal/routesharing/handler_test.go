@@ -72,12 +72,12 @@ func newFakeRouteStore() *fakeRouteStore {
 	return &fakeRouteStore{byUser: map[int64]map[string]*routes.Detail{}}
 }
 
-func (f *fakeRouteStore) Upsert(_ context.Context, userID int64, route routes.Detail) error {
+func (f *fakeRouteStore) Upsert(_ context.Context, userID int64, route routes.Detail) ([]routes.Point, error) {
 	if f.byUser[userID] == nil {
 		f.byUser[userID] = map[string]*routes.Detail{}
 	}
 	f.byUser[userID][route.ID] = &route
-	return nil
+	return route.Points, nil
 }
 
 func (f *fakeRouteStore) ListByUser(_ context.Context, _ int64) ([]routes.Route, error) {

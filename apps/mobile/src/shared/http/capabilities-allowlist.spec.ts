@@ -31,6 +31,7 @@ const KNOWN_PERMISSIONS = [
   'core:window:allow-set-size',
   'core:window:allow-set-position',
   'notification:default',
+  'dialog:allow-save',
   'fs:allow-mkdir',
   'fs:allow-exists',
   'fs:allow-write-file',

@@ -40,6 +40,10 @@ docs/.vitepress/cache/
 docs/.vitepress/dist/
 docs/reference/
 
+# Datos OSM procesados para OSRM (normalizar-y-exportar-rutas) — varios GB,
+# se regeneran con infra/docker/osrm/prepare-osm-data.sh, ver su README.md.
+infra/docker/osrm/data/
+
 # Docker (infra/docker) — credenciales de desarrollo local, ver .env.example
 infra/docker/.env
 # Credenciales del servidor de producción, ver .env.prod.example (despliegue-servidor-tailscale)

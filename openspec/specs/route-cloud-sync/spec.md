@@ -7,11 +7,15 @@ Permite subir una ruta grabada localmente a la cuenta del usuario autenticado, y
 ## Requirements
 
 ### Requirement: Subir una ruta local a la cuenta del usuario
-La app SHALL permitir subir una ruta local completa (metadatos, puntos GPS y paradas — sin fotos) a la cuenta del usuario con sesión activa.
+La app SHALL permitir subir una ruta local completa (metadatos, puntos GPS y paradas — sin fotos) a la cuenta del usuario con sesión activa, y SHALL reflejar en el mapa del detalle, inmediatamente tras una subida con éxito, los puntos que el servidor haya devuelto para esa ruta (normalizados o, si no hubo ajuste, los mismos originales) — sin esperar a una recarga de la pantalla.
 
 #### Scenario: Subida correcta
 - **WHEN** un usuario con sesión activa pulsa "Subir a la nube" en el detalle de una ruta local
 - **THEN** la ruta pasa a existir también en el servidor, y el listado la muestra como sincronizada
+
+#### Scenario: La subida actualiza el mapa con los puntos devueltos por el servidor
+- **WHEN** la subida de una ruta local se completa con éxito y el servidor devuelve puntos ajustados a la carretera para alguno de ellos
+- **THEN** el mapa del detalle de esa ruta se repinta de inmediato con los puntos devueltos, sin que el usuario tenga que salir y volver a entrar en la pantalla
 
 #### Scenario: La acción de subir no está disponible sin sesión activa
 - **WHEN** un usuario sin sesión activa abre el detalle de una ruta local

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { cloudRouteDetailToLocal } from './route-detail-cloud.transform.js';
-import type { CloudRouteDetail } from '../../shared/http/route-cloud-api.service.js';
+import { cloudRouteDetailToLocal, uploadedPointsToLocal } from './route-detail-cloud.transform.js';
+import type { CloudRouteDetail, UploadedRoutePoint } from '../../shared/http/route-cloud-api.service.js';
 
 const detail: CloudRouteDetail = {
   id: 'cloud-1',
@@ -47,5 +47,21 @@ describe('cloudRouteDetailToLocal', () => {
 
     expect(points).toEqual([]);
     expect(stops).toEqual([]);
+  });
+});
+
+describe('uploadedPointsToLocal', () => {
+  it('adapta los puntos de una subida a RoutePoint con id/routeId sintetizados', () => {
+    const uploaded: UploadedRoutePoint[] = [{ timestamp: 1000, lat: 40.1001, lng: -3.1001, alt: 600, speed: 10 }];
+
+    const points = uploadedPointsToLocal(uploaded, 'route-1');
+
+    expect(points).toHaveLength(1);
+    expect(points[0]).toMatchObject({ routeId: 'route-1', timestamp: 1000, lat: 40.1001, lng: -3.1001, alt: 600, speed: 10 });
+    expect(points[0]?.id).toBeTypeOf('string');
+  });
+
+  it('sin puntos, devuelve una lista vacía', () => {
+    expect(uploadedPointsToLocal([], 'route-1')).toEqual([]);
   });
 });

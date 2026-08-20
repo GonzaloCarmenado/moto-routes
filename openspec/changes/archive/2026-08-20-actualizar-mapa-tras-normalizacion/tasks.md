@@ -1,0 +1,55 @@
+## 1. Backend — `Store.Upsert` devuelve los puntos resultantes
+
+- [x] 1.1 Test (`postgres_store_test.go`): `Upsert` con un `Matcher` doble que ajusta algún punto devuelve, junto al `nil` error, los puntos de la ruta con `MatchedLat`/`MatchedLng` rellenos para los ajustados.
+- [x] 1.2 Test (`postgres_store_test.go`): `Upsert` con un `Matcher` que falla (o `Matcher == nil`) devuelve los puntos originales, sin ningún `Matched*` relleno — el `Upsert` en sí no falla por esto (comportamiento best-effort ya existente, ahora también verificado en el valor devuelto).
+- [x] 1.3 Cambiar la firma de `Store.Upsert` en `internal/routes/routes.go` de `(ctx, userID, route) error` a `(ctx, userID, route) ([]Point, error)`.
+- [x] 1.4 Implementar en `PostgresRouteStore.Upsert` (`postgres_store.go`): `normalizePoints` deja de ser `func(...)` sin retorno y pasa a devolver `[]Point`; `Upsert` la usa para construir el `[]Point` de retorno (puntos originales si `Matcher` es `nil` o falla).
+- [x] 1.5 Ejecutar `go test ./internal/routes/...` — 1.1 y 1.2 en verde, sin romper los tests existentes de `Upsert`. (18/18 tests de integración en verde contra Postgres real; también actualizados los dos call sites reales fuera de este paquete que implementaban/usaban `Store.Upsert` — `routesharing/accept.go` (clonado de ruta al aceptar una invitación) y su doble `fakeRouteStore` en `routesharing/handler_test.go` — no listados explícitamente en esta tarea pero necesarios para compilar tras el cambio de firma.)
+
+## 2. Backend — la respuesta HTTP incluye los puntos
+
+- [x] 2.1 Test (`handler_test.go`): `POST /api/routes` con un `Matcher` doble que ajusta puntos responde 200 con un cuerpo que incluye `points` (mismo shape que `GET /api/routes/{id}`: `timestamp`/`lat`/`lng`/`alt`/`speed`/`matched_lat`/`matched_lng`).
+- [x] 2.2 Test (`handler_test.go`): `POST /api/routes` sin normalización disponible (`Matcher` falla o `nil`) responde 200 con `points` igual a los puntos enviados, sin ningún `matched_lat`/`matched_lng`.
+- [x] 2.3 Actualizar `upsertResponse` en `handler.go` para incluir `points`, reutilizando el mismo tipo/serialización que ya usa `DetailHandler` para sus puntos.
+- [x] 2.4 Actualizar `UpsertHandler` para propagar el `[]Point` devuelto por `store.Upsert` a la respuesta.
+- [x] 2.5 Ejecutar `go test ./internal/routes/...` completo — 2.1 y 2.2 en verde, sin regresiones. (`go test ./...` completo: 236/236, `govulncheck` limpio.)
+
+## 3. Frontend — parsear los puntos de la respuesta de subida
+
+- [x] 3.1 Test (`route-cloud-api.service.spec.ts` o donde viva `uploadRoute`): la función que llama a `POST /api/routes` devuelve los puntos parseados de la respuesta (incluyendo `matchedLat`/`matchedLng` cuando el servidor los envía), en vez de `void`. (Tipo nuevo `UploadedRoutePoint`, ya resuelto: `lat`/`lng` son la posición final — ajustada o cruda —, sin exponer `matched_lat`/`matched_lng` por separado al resto del frontend.)
+- [x] 3.2 Actualizar `uploadRoute` (`route-cloud-api.service.ts`) para parsear `points` de la respuesta y devolverlos.
+- [x] 3.3 Test (`route-detail-cloud.service.spec.ts`): `uploadRouteToCloud` devuelve los puntos que le devuelve `uploadRoute`.
+- [x] 3.4 Actualizar `uploadRouteToCloud` (`route-detail-cloud.service.ts`) para devolver esos puntos.
+
+## 4. Frontend — `<route-detail>` repinta el mapa tras subir
+
+- [x] 4.1 Test (`route-detail-cloud-upload.spec.ts`): `onUploaded` se invoca con los puntos devueltos por `uploadRouteToCloud` tras una subida con éxito.
+- [x] 4.2 Actualizar `SyncIconOptions.onUploaded` (`route-detail-cloud-upload.ts`) de `() => void` a `(points: UploadedRoutePoint[]) => void` (no `RoutePoint[]` como decía la tarea original — `UploadedRoutePoint` es el tipo ya resuelto de 3.1, sin `id`/`routeId`; sintetizarlos solo hace falta al aplicarlos a `_routePoints`, ver 4.4), y `handleUpload` para reenviar los puntos recibidos.
+- [x] 4.3 Test (`route-detail.element.spec.ts`): tras una subida con éxito con puntos ajustados en la respuesta, el mapa (`route-map`) recibe esos puntos — no los locales originales.
+- [x] 4.4 Actualizar el callback `onUploaded` en `buildHeader()` (`route-detail.element.ts`) para asignar `_points`/`_routePoints` con los puntos recibidos antes de `this.render()`. (Síntesis de `id`/`routeId` extraída a `uploadedPointsToLocal()` en `route-detail-cloud.transform.ts`, mismo patrón que `cloudRouteDetailToLocal` — necesario además para no superar el límite de 400 líneas de `route-detail.element.ts`, ver `eslint.config.js`.)
+- [x] 4.5 Ejecutar `pnpm --filter mobile test` (Vitest) completo — 3.1, 3.3, 4.1, 4.3 en verde, sin regresiones ni bajar del umbral de cobertura (80%). (1224/1224, `tsc --noEmit` limpio, `eslint src/ --max-warnings 0` limpio — mismos comandos que el pre-commit.)
+
+## 5. Verificación real, backend + dispositivo
+
+- [x] 5.1 `docker compose build api && docker compose up -d api` en `infra/docker/` — recordatorio ya documentado en `memory/context.md`: el contenedor no se reconstruye solo tras un cambio de backend. (Docker Desktop no estaba arrancado al empezar la sesión — se levantó de nuevo junto con todo el stack, `osrm` incluido con el extracto de España ya procesado de la sesión anterior, sin reprocesar nada.)
+- [x] 5.2 Verificación manual con `curl` (o el cliente que ya se usó en la sesión anterior): subir una ruta con puntos que se sabe que OSRM ajusta y confirmar que el JSON de respuesta trae `matched_lat`/`matched_lng` poblados para esos puntos. (Coordenadas reales de Calle de Chinchilla, Madrid, localizadas vía `/nearest` de OSRM y desplazadas ~15m — la respuesta de `POST /api/routes` trajo `matched_lat`/`matched_lng` poblados para los 3 puntos. Ruta de prueba borrada tras la verificación.)
+- [x] 5.3 Verificación en dispositivo Android real: subir una ruta local con jitter GPS conocido desde el detalle, confirmar visualmente que el trazado del mapa cambia inmediatamente tras la subida (sin salir de la pantalla), comparándolo con el trazado antes de subir. **Verificación parcial, aceptada así por el usuario**: build debug reconstruido (dos vueltas de la CLI, hash `dist/`↔APK reverificado, y servido en el WebView real confirmado vía Chrome DevTools Protocol — no solo `unzip`, ver gotcha ya documentado en `memory/context.md`) e instalado en `75fe536b` con `adb reverse tcp:8080` hacia el backend local. El usuario probó subir una ruta real desde el detalle y, en el propio intento, se encontró y corrigió un bug real (grupo 7) que bloqueaba la normalización de esa ruta en concreto (grabada 100% dentro de un edificio, sin ninguna carretera cercana). Sin una segunda ruta grabada en exterior a mano, la confirmación visual final de "el mapa cambia" queda respaldada por la verificación de backend equivalente (5.2 reproducido tras el fix del grupo 7, con los mismos puntos reales de Calle de Chinchilla) en vez de una segunda prueba en pantalla — el usuario decidió que es suficiente.
+- [x] 5.4 Cypress E2E (`route-cloud-sync.cy.ts`) — **corregido en implementación**: la redacción original ("puntos de la respuesta del backend fake") contradice la convención ya establecida de este spec (ADR-035: backend real vía `docker compose`, nunca mockeado) y, además, MapLibre pinta en `<canvas>` — no hay nada localizable por DOM que assertar sobre el trazado pintado. Test real añadido: sube vía UI una ruta con puntos ~15m desplazados de una calle real de Madrid ya verificada a mano (5.2) y comprueba contra el servidor real que `matched_lat` llegó poblado — mismo criterio que `expectSyncedField` ya usado en este spec para verificar efectos en segundo plano por su resultado observable, no por el DOM.
+
+## 7. Bug real encontrado verificando 5.3 en dispositivo — OSRM 400 tratado como fallo de servicio
+
+Fuera del alcance original de proposal.md/design.md — hallazgo real durante la verificación en dispositivo (5.3), confirmado con el usuario que se corrige en esta misma rama por bloquear la verificación significativa del propio cambio. Bug preexistente de la sesión `normalizar-y-exportar-rutas`, en `internal/mapmatch/client.go`, no introducido por este cambio.
+
+**Causa**: OSRM responde `HTTP 400` + `{"code":"NoSegment"}` (o `"NoMatch"`) cuando no encuentra ninguna carretera cerca de ningún punto del bloque — verificado reproduciendo la llamada real contra el `osrm` local con los puntos de la ruta de prueba del usuario (grabada dentro de un edificio). `matchChunk()` trataba cualquier status HTTP ≠ 200 como fallo de infraestructura *antes* de mirar el body, así que nunca llegaba al código ya existente que interpreta `code != "Ok"` como "sin coincidencia, resultado válido" (ver design.md de `normalizar-y-exportar-rutas`, Decisión 7) — ese código solo era alcanzable si OSRM respondiera 200 con un código de error, cosa que OSRM real nunca hace. El test que debería haber cubierto esto (`TestClient_Match_NoMatchForWholeChunkLeavesAllPointsUnadjusted`) usaba un doble HTTP con status 200 implícito para `code:"NoMatch"`, sin reproducir el status 400 real de OSRM.
+
+- [x] 7.1 Test (`client_test.go`): un doble HTTP que responde status 400 + `{"code":"NoSegment"}` (reproduciendo el OSRM real) deja todos los puntos del bloque sin ajustar (`nil`), sin devolver error.
+- [x] 7.2 Test (`client_test.go`): mismo caso con `{"code":"NoMatch"}` en status 400.
+- [x] 7.3 Test (`client_test.go`): un status 400 con un código que **no** sea `NoMatch`/`NoSegment` (ej. `InvalidQuery`, indicaría un bug en la construcción de nuestra propia petición) sigue tratándose como error real.
+- [x] 7.4 Implementar en `matchChunk()`: decodificar el body antes de decidir según el status — si el status no es 200 pero el `code` decodificado es `NoMatch`/`NoSegment`, devolver el bloque sin ajustar (no error); cualquier otro caso con status ≠ 200 sigue siendo error.
+- [x] 7.5 Ejecutar `go test ./internal/mapmatch/... ./internal/routes/...` — 7.1-7.3 en verde, sin romper `TestClient_Match_NoMatchForWholeChunkLeavesAllPointsUnadjusted` (sigue pasando tal cual, el fix no toca la rama 200+código≠Ok). (`go test ./...` completo: 239/239, `gofmt -l`/`go vet` limpios en `internal/mapmatch/`.)
+- [x] 7.6 Reconstruir la imagen `api` (`docker compose build api && docker compose up -d api`) y repetir la subida real de la ruta de prueba del usuario (dentro de un edificio, sin carretera cercana) — confirmar en los logs que ya no aparece `map-matching failed`. (Confirmado por `curl` directo con los mismos 5 puntos de la ruta real del usuario: sin `map-matching failed` en los logs, respuesta 200 sin `matched_lat` — correcto, sigue sin haber carretera cerca, pero ya no se trata como fallo. Regresión comprobada también con el caso de coincidencia real de 5.2 — sigue ajustando bien tras el fix.)
+
+## 6. Cierre
+
+- [x] 6.1 `openspec validate actualizar-mapa-tras-normalizacion --strict` sin errores.
+- [x] 6.2 Actualizar `memory/context.md` con el resumen de esta sesión (qué cambió respecto a `normalizar-y-exportar-rutas`, resultado de la verificación en dispositivo).

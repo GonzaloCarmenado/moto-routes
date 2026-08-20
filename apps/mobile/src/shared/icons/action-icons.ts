@@ -8,3 +8,6 @@ export const TRASH_ICON = `<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="
 
 /** Cerrar un diálogo o visor. */
 export const CLOSE_ICON = `<svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>`;
+
+/** Exportar (descargar/compartir un fichero, ej. GPX de una ruta). */
+export const EXPORT_ICON = `<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>`;

@@ -111,6 +111,52 @@ func TestRun_AppliesPasswordResetMigration(t *testing.T) {
 	}
 }
 
+func TestRun_AppliesRoutePointsMatchedMigration(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+
+	if err := Run(ctx, pool, Migrations); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx, "INSERT INTO users (email, password_hash) VALUES ($1, $2)", "rider@example.com", "hash"); err != nil {
+		t.Fatalf("expected users table to accept a row: %v", err)
+	}
+	var userID int64
+	if err := pool.QueryRow(ctx, "SELECT id FROM users WHERE email = $1", "rider@example.com").Scan(&userID); err != nil {
+		t.Fatalf("failed to read back user id: %v", err)
+	}
+
+	_, err := pool.Exec(ctx,
+		`INSERT INTO routes (id, user_id, created_at, duration, total_distance, avg_speed, status)
+		 VALUES ('11111111-1111-1111-1111-111111111111', $1, now(), 0, 0, 0, 'completed')`,
+		userID,
+	)
+	if err != nil {
+		t.Fatalf("expected routes table to accept a row: %v", err)
+	}
+
+	// Un punto sin normalizar (matched_lat/matched_lng NULL) debe aceptarse igual que uno ya ajustado.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO route_points (route_id, timestamp, lat, lng) VALUES ('11111111-1111-1111-1111-111111111111', 1000, 40.1, -3.1)`,
+	); err != nil {
+		t.Fatalf("expected route_points to accept a row without matched_lat/matched_lng: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO route_points (route_id, timestamp, lat, lng, matched_lat, matched_lng) VALUES ('11111111-1111-1111-1111-111111111111', 2000, 40.2, -3.2, 40.2001, -3.2001)`,
+	); err != nil {
+		t.Fatalf("expected route_points to accept matched_lat/matched_lng: %v", err)
+	}
+
+	var matchedLat, matchedLng *float64
+	if err := pool.QueryRow(ctx, "SELECT matched_lat, matched_lng FROM route_points WHERE timestamp = 1000").Scan(&matchedLat, &matchedLng); err != nil {
+		t.Fatalf("expected matched_lat/matched_lng columns to exist: %v", err)
+	}
+	if matchedLat != nil || matchedLng != nil {
+		t.Fatalf("expected matched_lat/matched_lng to be NULL for the unmatched point, got %v/%v", matchedLat, matchedLng)
+	}
+}
+
 func TestRun_IsIdempotent(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()

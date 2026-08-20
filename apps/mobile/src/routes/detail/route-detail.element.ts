@@ -8,6 +8,7 @@ import type { Route, RoutePoint, RouteStop } from '../../shared/models/route.typ
 import type { IStopTypesCacheRepository } from '../../shared/models/stop-types-cache.repository.js';
 import { getApiBaseUrl } from '../../shared/http/api-config.js';
 import { loadCloudRouteDetail, checkIfRouteIsSynced } from './route-detail-cloud.service.js';
+import { uploadedPointsToLocal } from './route-detail-cloud.transform.js';
 import { triggerAutoResync, triggerPhotoUpload, triggerPhotoDelete, type SyncTriggerContext } from './route-detail-sync-triggers.js';
 import { buildLoadingState, buildEmptyMessage, buildLoadErrorMessage } from './route-detail-states.js';
 import type { StopCategory } from '../../shared/stop-types/stop-types.types.js';
@@ -268,8 +269,10 @@ class RouteDetail extends BaseElement {
         triggerAutoResync(this.syncContext(), route);
         this.render();
       },
-      onUploaded: () => {
+      onUploaded: (points) => {
         this._isSynced = true;
+        if (this._routeId) this._routePoints = uploadedPointsToLocal(points, this._routeId);
+        this._points = this._routePoints.map((p) => ({ lat: p.lat, lng: p.lng }));
         this.render();
       },
     }));

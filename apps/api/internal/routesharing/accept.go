@@ -73,7 +73,7 @@ func cloneRoute(ctx context.Context, routeStore routes.Store, photoStore photos.
 	cloned.ID = uuid.NewString()
 	cloned.IsFavorite = false
 
-	if err := routeStore.Upsert(ctx, inv.ToUserID, cloned); err != nil {
+	if _, err := routeStore.Upsert(ctx, inv.ToUserID, cloned); err != nil {
 		return "", err
 	}
 
