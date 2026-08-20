@@ -25,8 +25,51 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Mismo criterio que .husky/pre-commit -- si el diff es solo documentacion
+  # (markdown, tracking de openspec en YAML, metricas SDLC en JSONL) los
+  # quality gates no aportan nada. Corre siempre (es barato), pero solo se usa
+  # su output en push/PR normales -- en un push de tag (release) las tres
+  # jobs de abajo ignoran este output y corren igual, por si se retaguea un
+  # commit cuyo diff parezca solo-docs. Mantener el patron de deteccion en
+  # sincronia con .husky/pre-commit.
+  detect-doc-only-change:
+    name: Detect doc-only change
+    runs-on: ubuntu-latest
+    outputs:
+      only-docs: ${{ steps.check.outputs.only-docs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+          fi
+
+          # Rama nueva, primer push o tag: antes(before) es un SHA vacio/nulo
+          # o no existe todavia en este checkout -- sin base fiable para diff,
+          # se asume que hay cambios de codigo (fail-safe).
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
+            echo "No hay una base fiable para el diff -- se asume que hay cambios de codigo."
+            echo "only-docs=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CHANGED_FILES=$(git diff --name-only "$BASE_SHA" HEAD)
+          if echo "$CHANGED_FILES" | grep -qvE '\.md$|^openspec/.*\.yaml$|^memory/.*\.jsonl$'; then
+            echo "only-docs=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "only-docs=true" >> "$GITHUB_OUTPUT"
+          fi
+
   quality-ts:
     name: Quality gates — TypeScript
+    needs: [detect-doc-only-change]
+    if: needs.detect-doc-only-change.outputs.only-docs != 'true' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -105,6 +148,8 @@ jobs:
 
   quality-tauri:
     name: Quality gates — Tauri (Rust)
+    needs: [detect-doc-only-change]
+    if: needs.detect-doc-only-change.outputs.only-docs != 'true' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -151,6 +196,8 @@ jobs:
 
   quality-go:
     name: Quality gates — Go (apps/api)
+    needs: [detect-doc-only-change]
+    if: needs.detect-doc-only-change.outputs.only-docs != 'true' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     services:
       postgres:
