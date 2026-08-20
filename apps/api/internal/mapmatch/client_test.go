@@ -168,6 +168,57 @@ func TestClient_Match_NullTracepointLeavesThatPointUnadjusted(t *testing.T) {
 	}
 }
 
+// Reproduce el comportamiento real de OSRM: cuando no encuentra ninguna
+// carretera cerca de ningún punto del bloque, responde HTTP 400 (no 200) con
+// code "NoSegment" o "NoMatch" — verificado a mano contra un OSRM real (ver
+// tasks.md, grupo 7). El doble HTTP de
+// TestClient_Match_NoMatchForWholeChunkLeavesAllPointsUnadjusted usaba status
+// 200 implícito, sin reproducir esto.
+func TestClient_Match_NoSegmentStatus400LeavesAllPointsUnadjusted(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"code":"NoSegment","message":"Could not find a matching segment for any coordinate."}`))
+	})
+
+	got, err := client.Match(context.Background(), []Point{{Lat: 40.1, Lng: -3.1}, {Lat: 40.2, Lng: -3.2}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 2 || got[0] != nil || got[1] != nil {
+		t.Fatalf("expected both points unadjusted (nil), got %+v", got)
+	}
+}
+
+func TestClient_Match_NoMatchStatus400LeavesAllPointsUnadjusted(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"code":"NoMatch","message":"Could not match the trace"}`))
+	})
+
+	got, err := client.Match(context.Background(), []Point{{Lat: 40.1, Lng: -3.1}, {Lat: 40.2, Lng: -3.2}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 2 || got[0] != nil || got[1] != nil {
+		t.Fatalf("expected both points unadjusted (nil), got %+v", got)
+	}
+}
+
+// Un status 400 con un código que no sea de la familia "sin coincidencia"
+// indica un problema real (ej. un bug en cómo construimos la propia
+// petición) — sigue siendo un error, no se confunde con "sin coincidencia".
+func TestClient_Match_InvalidQueryStatus400IsAnError(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"code":"InvalidQuery","message":"Query string malformed close to position 42"}`))
+	})
+
+	_, err := client.Match(context.Background(), []Point{{Lat: 40.1, Lng: -3.1}})
+	if err == nil {
+		t.Fatal("expected an explicit error for a non-NoMatch/NoSegment 400 response")
+	}
+}
+
 func TestClient_Match_ReturnsErrorOnServerFailure(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

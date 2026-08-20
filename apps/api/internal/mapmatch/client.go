@@ -126,13 +126,21 @@ func (c Client) matchChunk(ctx context.Context, chunk []Point) ([]*Point, error)
 	}
 	defer resp.Body.Close()
 
+	var parsed osrmMatchResponse
+	decodeErr := json.NewDecoder(resp.Body).Decode(&parsed)
+
 	if resp.StatusCode != http.StatusOK {
+		// OSRM responde con un status distinto de 200 tanto ante un fallo real
+		// del servicio como ante "sin coincidencia para ningún punto del
+		// bloque" (code NoMatch/NoSegment) — solo lo segundo es un resultado
+		// válido de map-matching, no un error (ver design.md, Decisión 7).
+		if decodeErr == nil && isNoMatchCode(parsed.Code) {
+			return make([]*Point, len(chunk)), nil
+		}
 		return nil, fmt.Errorf("osrm match returned status %d", resp.StatusCode)
 	}
-
-	var parsed osrmMatchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return nil, fmt.Errorf("decode osrm match response: %w", err)
+	if decodeErr != nil {
+		return nil, fmt.Errorf("decode osrm match response: %w", decodeErr)
 	}
 
 	results := make([]*Point, len(chunk))
@@ -149,4 +157,11 @@ func (c Client) matchChunk(ctx context.Context, chunk []Point) ([]*Point, error)
 		results[i] = &Point{Lat: tp.Location[1], Lng: tp.Location[0]}
 	}
 	return results, nil
+}
+
+// isNoMatchCode distingue "sin coincidencia" (resultado válido de
+// map-matching, ver design.md Decisión 7) de un error real de OSRM (ej.
+// InvalidQuery, señal de un bug en cómo construimos la propia petición).
+func isNoMatchCode(code string) bool {
+	return code == "NoMatch" || code == "NoSegment"
 }
