@@ -19,20 +19,27 @@ import (
 type fakeStore struct {
 	upsertErr error
 	upserted  []Detail
-	byUser    map[int64][]Route
-	byID      map[string]*Detail
+	// upsertPoints, si no es nil, es lo que Upsert devuelve en vez de
+	// simplemente devolver route.Points sin cambios — para simular una
+	// normalización que ajustó algún punto.
+	upsertPoints []Point
+	byUser       map[int64][]Route
+	byID         map[string]*Detail
 }
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{byUser: map[int64][]Route{}, byID: map[string]*Detail{}}
 }
 
-func (f *fakeStore) Upsert(_ context.Context, _ int64, route Detail) error {
+func (f *fakeStore) Upsert(_ context.Context, _ int64, route Detail) ([]Point, error) {
 	if f.upsertErr != nil {
-		return f.upsertErr
+		return nil, f.upsertErr
 	}
 	f.upserted = append(f.upserted, route)
-	return nil
+	if f.upsertPoints != nil {
+		return f.upsertPoints, nil
+	}
+	return route.Points, nil
 }
 
 func (f *fakeStore) ListByUser(_ context.Context, userID int64) ([]Route, error) {
@@ -101,6 +108,47 @@ func TestUpsertHandler_SuccessReturns200AndStoresRoute(t *testing.T) {
 	}
 	if len(store.upserted) != 1 || len(store.upserted[0].Points) != 1 {
 		t.Fatalf("expected the route to reach the store with its points, got %+v", store.upserted)
+	}
+}
+
+func TestUpsertHandler_ResponseIncludesMatchedPointsWhenNormalized(t *testing.T) {
+	store := newFakeStore()
+	matchedLat, matchedLng := 40.1001, -3.1001
+	store.upsertPoints = []Point{
+		{Timestamp: 1000, Lat: 40.1, Lng: -3.1, Alt: 600, Speed: 10, MatchedLat: &matchedLat, MatchedLng: &matchedLng},
+	}
+	handler := auth.RequireAuth(testIssuer())(UpsertHandler(store))
+
+	rec := doRequest(handler, http.MethodPost, "/api/routes", sampleUpsertBody(), bearerFor(t, 42))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var body upsertResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(body.Points) != 1 || body.Points[0].MatchedLat == nil || *body.Points[0].MatchedLat != matchedLat {
+		t.Fatalf("expected the response to include the matched point, got %+v", body.Points)
+	}
+}
+
+func TestUpsertHandler_ResponseEchoesRawPointsWithoutNormalization(t *testing.T) {
+	store := newFakeStore() // sin upsertPoints — el doble echoa route.Points tal cual, sin matched_*
+
+	handler := auth.RequireAuth(testIssuer())(UpsertHandler(store))
+
+	rec := doRequest(handler, http.MethodPost, "/api/routes", sampleUpsertBody(), bearerFor(t, 42))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var body upsertResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(body.Points) != 1 || body.Points[0].Lat != 40.1 || body.Points[0].MatchedLat != nil {
+		t.Fatalf("expected the raw point without any matched fields, got %+v", body.Points)
 	}
 }
 

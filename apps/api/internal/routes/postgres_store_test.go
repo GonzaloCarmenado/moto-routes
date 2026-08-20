@@ -99,7 +99,7 @@ func TestPostgresRouteStore_UpsertInsertsNewRouteWithPointsAndStops(t *testing.T
 	userID := seedUser(t, store.Pool, "rider1@example.com")
 	detail := sampleDetail("11111111-1111-1111-1111-111111111111")
 
-	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+	if _, err := store.Upsert(context.Background(), userID, detail); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -120,7 +120,7 @@ func TestPostgresRouteStore_UpsertCalledTwiceReplacesDataWithoutDuplicating(t *t
 	userID := seedUser(t, store.Pool, "rider2@example.com")
 	detail := sampleDetail("22222222-2222-2222-2222-222222222222")
 
-	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+	if _, err := store.Upsert(context.Background(), userID, detail); err != nil {
 		t.Fatalf("unexpected error on first upsert: %v", err)
 	}
 
@@ -129,7 +129,7 @@ func TestPostgresRouteStore_UpsertCalledTwiceReplacesDataWithoutDuplicating(t *t
 	updated.Points = []Point{{Timestamp: 3000, Lat: 41.0, Lng: -4.0, Alt: 700, Speed: 20}}
 	updated.Stops = []Stop{}
 
-	if err := store.Upsert(context.Background(), userID, updated); err != nil {
+	if _, err := store.Upsert(context.Background(), userID, updated); err != nil {
 		t.Fatalf("unexpected error on second upsert: %v", err)
 	}
 
@@ -155,7 +155,7 @@ func TestPostgresRouteStore_UpsertRejectsRouteExceedingMaxPoints(t *testing.T) {
 	detail := sampleDetail("33333333-3333-3333-3333-333333333333")
 	detail.Points = make([]Point, MaxPoints+1)
 
-	if err := store.Upsert(context.Background(), userID, detail); err != ErrTooManyPoints {
+	if _, err := store.Upsert(context.Background(), userID, detail); err != ErrTooManyPoints {
 		t.Fatalf("expected ErrTooManyPoints, got %v", err)
 	}
 }
@@ -166,13 +166,13 @@ func TestPostgresRouteStore_UpsertNeverOverwritesAnotherUsersRoute(t *testing.T)
 	attacker := seedUser(t, store.Pool, "attacker@example.com")
 
 	detail := sampleDetail("44444444-4444-4444-4444-444444444444")
-	if err := store.Upsert(context.Background(), owner, detail); err != nil {
+	if _, err := store.Upsert(context.Background(), owner, detail); err != nil {
 		t.Fatalf("unexpected error seeding owner's route: %v", err)
 	}
 
 	tampered := detail
 	tampered.Duration = 999
-	if err := store.Upsert(context.Background(), attacker, tampered); err != ErrRouteOwnedByAnotherUser {
+	if _, err := store.Upsert(context.Background(), attacker, tampered); err != ErrRouteOwnedByAnotherUser {
 		t.Fatalf("expected ErrRouteOwnedByAnotherUser, got %v", err)
 	}
 
@@ -190,10 +190,10 @@ func TestPostgresRouteStore_ListByUserReturnsOnlySummariesForThatUser(t *testing
 	userA := seedUser(t, store.Pool, "user-a@example.com")
 	userB := seedUser(t, store.Pool, "user-b@example.com")
 
-	if err := store.Upsert(context.Background(), userA, sampleDetail("55555555-5555-5555-5555-555555555555")); err != nil {
+	if _, err := store.Upsert(context.Background(), userA, sampleDetail("55555555-5555-5555-5555-555555555555")); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if err := store.Upsert(context.Background(), userB, sampleDetail("66666666-6666-6666-6666-666666666666")); err != nil {
+	if _, err := store.Upsert(context.Background(), userB, sampleDetail("66666666-6666-6666-6666-666666666666")); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -225,7 +225,7 @@ func TestPostgresRouteStore_GetByIDForUserReturnsNilForAnotherUsersRoute(t *test
 	other := seedUser(t, store.Pool, "other2@example.com")
 	detail := sampleDetail("77777777-7777-7777-7777-777777777777")
 
-	if err := store.Upsert(context.Background(), owner, detail); err != nil {
+	if _, err := store.Upsert(context.Background(), owner, detail); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -256,7 +256,7 @@ func TestPostgresRouteStore_UpsertDefaultsIsFavoriteToFalse(t *testing.T) {
 	userID := seedUser(t, store.Pool, "fav1@example.com")
 	detail := sampleDetail("99999999-9999-9999-9999-999999999999")
 
-	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+	if _, err := store.Upsert(context.Background(), userID, detail); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -275,7 +275,7 @@ func TestPostgresRouteStore_UpsertPersistsIsFavorite(t *testing.T) {
 	detail := sampleDetail("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	detail.IsFavorite = true
 
-	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+	if _, err := store.Upsert(context.Background(), userID, detail); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -289,7 +289,7 @@ func TestPostgresRouteStore_UpsertPersistsIsFavorite(t *testing.T) {
 
 	unfavorited := detail
 	unfavorited.IsFavorite = false
-	if err := store.Upsert(context.Background(), userID, unfavorited); err != nil {
+	if _, err := store.Upsert(context.Background(), userID, unfavorited); err != nil {
 		t.Fatalf("unexpected error on second upsert: %v", err)
 	}
 	got, err = store.GetByIDForUser(context.Background(), userID, detail.ID)
@@ -307,7 +307,7 @@ func TestPostgresRouteStore_UpsertFillsMatchedColumnsWhenMatcherSucceeds(t *test
 	userID := seedUser(t, store.Pool, "matcher1@example.com")
 	detail := sampleDetail("cccccccc-cccc-cccc-cccc-cccccccccccc")
 
-	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+	if _, err := store.Upsert(context.Background(), userID, detail); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -335,7 +335,7 @@ func TestPostgresRouteStore_UpsertSucceedsWithRawPointsWhenMatcherFails(t *testi
 	userID := seedUser(t, store.Pool, "matcher2@example.com")
 	detail := sampleDetail("dddddddd-dddd-dddd-dddd-dddddddddddd")
 
-	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+	if _, err := store.Upsert(context.Background(), userID, detail); err != nil {
 		t.Fatalf("expected upsert to succeed even if the matcher fails, got: %v", err)
 	}
 
@@ -345,13 +345,72 @@ func TestPostgresRouteStore_UpsertSucceedsWithRawPointsWhenMatcherFails(t *testi
 	}
 }
 
+func TestPostgresRouteStore_UpsertReturnsPointsWithMatchedFieldsWhenMatcherSucceeds(t *testing.T) {
+	store := testStore(t)
+	store.Matcher = &fakeMatcher{}
+	userID := seedUser(t, store.Pool, "matcher5@example.com")
+	detail := sampleDetail("11111111-2222-3333-4444-555555555555")
+
+	points, err := store.Upsert(context.Background(), userID, detail)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(points) != len(detail.Points) {
+		t.Fatalf("expected %d points, got %d", len(detail.Points), len(points))
+	}
+	if points[0].MatchedLat == nil || points[0].MatchedLng == nil {
+		t.Fatalf("expected matched_lat/matched_lng to be filled in the returned points, got %+v", points[0])
+	}
+	wantLat := detail.Points[0].Lat + 0.0001
+	if *points[0].MatchedLat != wantLat {
+		t.Fatalf("expected matched_lat %v, got %v", wantLat, *points[0].MatchedLat)
+	}
+	if points[0].Lat != detail.Points[0].Lat {
+		t.Fatalf("expected the returned point to keep the original GPS position alongside the matched one, got %+v", points[0])
+	}
+}
+
+func TestPostgresRouteStore_UpsertReturnsRawPointsWhenMatcherFails(t *testing.T) {
+	store := testStore(t)
+	store.Matcher = &fakeMatcher{err: errors.New("osrm unavailable")}
+	userID := seedUser(t, store.Pool, "matcher6@example.com")
+	detail := sampleDetail("66666666-7777-8888-9999-000000000000")
+
+	points, err := store.Upsert(context.Background(), userID, detail)
+	if err != nil {
+		t.Fatalf("expected upsert to succeed even if the matcher fails, got: %v", err)
+	}
+	if len(points) != len(detail.Points) {
+		t.Fatalf("expected %d points, got %d", len(detail.Points), len(points))
+	}
+	for i, p := range points {
+		if p.MatchedLat != nil || p.MatchedLng != nil {
+			t.Fatalf("expected no matched fields when the matcher fails, got %+v at index %d", p, i)
+		}
+	}
+}
+
+func TestPostgresRouteStore_UpsertReturnsRawPointsWhenNoMatcherConfigured(t *testing.T) {
+	store := testStore(t) // sin Matcher — comportamiento por defecto
+	userID := seedUser(t, store.Pool, "matcher7@example.com")
+	detail := sampleDetail("77777777-8888-9999-0000-111111111111")
+
+	points, err := store.Upsert(context.Background(), userID, detail)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(points) != len(detail.Points) || points[0].MatchedLat != nil || points[0].MatchedLng != nil {
+		t.Fatalf("expected the raw points without any matched fields, got %+v", points)
+	}
+}
+
 func TestPostgresRouteStore_UpsertNormalizationDoesNotAlterStops(t *testing.T) {
 	store := testStore(t)
 	store.Matcher = &fakeMatcher{}
 	userID := seedUser(t, store.Pool, "matcher3@example.com")
 	detail := sampleDetail("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
 
-	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+	if _, err := store.Upsert(context.Background(), userID, detail); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -369,7 +428,7 @@ func TestPostgresRouteStore_UpsertSkipsNormalizationWhenNoMatcherConfigured(t *t
 	userID := seedUser(t, store.Pool, "matcher4@example.com")
 	detail := sampleDetail("ffffffff-ffff-ffff-ffff-ffffffffffff")
 
-	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+	if _, err := store.Upsert(context.Background(), userID, detail); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -385,7 +444,7 @@ func TestPostgresRouteStore_ListByUserIncludesIsFavorite(t *testing.T) {
 	detail := sampleDetail("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 	detail.IsFavorite = true
 
-	if err := store.Upsert(context.Background(), userID, detail); err != nil {
+	if _, err := store.Upsert(context.Background(), userID, detail); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

@@ -13,6 +13,7 @@
 import type { IRouteRepository } from '../../shared/models/route.repository.js';
 import type { Route } from '../../shared/models/route.types.js';
 import type { Session } from '../../shared/models/session.types.js';
+import type { UploadedRoutePoint } from '../../shared/http/route-cloud-api.service.js';
 import { getApiBaseUrl } from '../../shared/http/api-config.js';
 import { formatRouteDate } from '../../shared/utils/date.js';
 import { buildRouteDisplayName } from '../../shared/utils/route-naming.js';
@@ -37,7 +38,9 @@ export interface DetailHeaderOptions {
    * JSDoc de route-detail-share.ts). */
   hasPendingPhotos: boolean;
   onFavoriteToggled: () => void;
-  onUploaded: () => void;
+  /** Invocado tras una subida manual con éxito, con los puntos resultantes
+   * que devolvió el servidor (ver route-detail-cloud-upload.ts). */
+  onUploaded: (points: UploadedRoutePoint[]) => void;
 }
 
 /** Construye la fila de acciones (favorito/nube/compartir/exportar), separada del título — ver JSDoc del módulo. */

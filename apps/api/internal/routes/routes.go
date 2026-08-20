@@ -66,9 +66,11 @@ type Detail struct {
 // Store persiste y consulta rutas, siempre acotadas al usuario propietario.
 type Store interface {
 	// Upsert inserta o actualiza (por Detail.ID) la ruta completa del usuario
-	// indicado. Devuelve ErrRouteOwnedByAnotherUser si el id ya existe
-	// asociado a otra cuenta, y ErrTooManyPoints si supera MaxPoints.
-	Upsert(ctx context.Context, userID int64, route Detail) error
+	// indicado, y devuelve los puntos resultantes (con MatchedLat/MatchedLng
+	// rellenos si se normalizaron, ver actualizar-mapa-tras-normalizacion).
+	// Devuelve ErrRouteOwnedByAnotherUser si el id ya existe asociado a otra
+	// cuenta, y ErrTooManyPoints si supera MaxPoints.
+	Upsert(ctx context.Context, userID int64, route Detail) ([]Point, error)
 	// ListByUser devuelve solo los resúmenes (sin puntos/paradas) de las
 	// rutas del usuario, en orden descendente de creación.
 	ListByUser(ctx context.Context, userID int64) ([]Route, error)

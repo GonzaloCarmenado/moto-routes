@@ -40,7 +40,7 @@ describe('uploadRoute', () => {
   });
 
   it('envía la ruta, sus puntos y paradas en snake_case con el Bearer del token', async () => {
-    const fetchMock = stubFetch({ ok: true, status: 200, json: () => Promise.resolve({ id: 'route-1' }) });
+    const fetchMock = stubFetch({ ok: true, status: 200, json: () => Promise.resolve({ id: 'route-1', points: [] }) });
 
     await uploadRoute(BASE_URL, TOKEN, { route: sampleRoute, points: samplePoints, stops: sampleStops });
 
@@ -53,6 +53,28 @@ describe('uploadRoute', () => {
     expect(body['is_favorite']).toBe(true);
     expect((body['points'] as unknown[])[0]).toMatchObject({ timestamp: 1000, lat: 40.1 });
     expect((body['stops'] as unknown[])[0]).toMatchObject({ start_time: 1500, stop_category_id: 1 });
+  });
+
+  it('devuelve los puntos resultantes de la respuesta, con la posición ajustada cuando el servidor la normalizó', async () => {
+    stubFetch({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          id: 'route-1',
+          points: [
+            { timestamp: 1000, lat: 40.1, lng: -3.1, alt: 600, speed: 10, matched_lat: 40.1001, matched_lng: -3.1001 },
+            { timestamp: 2000, lat: 40.2, lng: -3.2, alt: 610, speed: 12 },
+          ],
+        }),
+    });
+
+    const result = await uploadRoute(BASE_URL, TOKEN, { route: sampleRoute, points: samplePoints, stops: sampleStops });
+
+    expect(result).toEqual([
+      { timestamp: 1000, lat: 40.1001, lng: -3.1001, alt: 600, speed: 10 },
+      { timestamp: 2000, lat: 40.2, lng: -3.2, alt: 610, speed: 12 },
+    ]);
   });
 
   it('lanza RouteCloudApiError kind "too-many-points" en 400', async () => {

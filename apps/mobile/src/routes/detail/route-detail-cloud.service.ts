@@ -3,7 +3,7 @@ import type { Route, RoutePoint, RouteStop } from '../../shared/models/route.typ
 import type { Session } from '../../shared/models/session.types.js';
 import type { IPhotoRepository } from '../../shared/models/photo.repository.js';
 import type { Photo } from '../../shared/models/photo.types.js';
-import { uploadRoute, fetchCloudRouteDetail, fetchCloudRoutes } from '../../shared/http/route-cloud-api.service.js';
+import { uploadRoute, fetchCloudRouteDetail, fetchCloudRoutes, type UploadedRoutePoint } from '../../shared/http/route-cloud-api.service.js';
 import { uploadRoutePhoto, deleteRoutePhoto } from '../../shared/http/photo-cloud-api.service.js';
 import { checkAchievements } from '../../shared/http/achievement-api.service.js';
 import { readPhotoBlob } from '../../shared/services/photo-storage.service.js';
@@ -36,20 +36,24 @@ function checkAchievementsAfterSync(apiBaseUrl: string, session: Session): void 
 /**
  * Sube (o actualiza, upsert por id) una ruta local completa a la cuenta del
  * usuario autenticado — sus puntos y paradas se leen del repositorio local
- * en el momento de subir, no se guardan aparte.
+ * en el momento de subir, no se guardan aparte. Devuelve los puntos
+ * resultantes que el servidor guardó (ajustados a carretera si se
+ * normalizaron), para que el llamador pueda repintar el mapa sin una
+ * segunda petición.
  */
 export async function uploadRouteToCloud(
   apiBaseUrl: string,
   session: Session,
   repository: IRouteRepository,
   route: Route,
-): Promise<void> {
+): Promise<UploadedRoutePoint[]> {
   const [points, stops] = await Promise.all([
     repository.getPointsByRouteId(route.id),
     repository.getStopsByRouteId(route.id),
   ]);
-  await uploadRoute(apiBaseUrl, session.token, { route, points, stops });
+  const uploaded = await uploadRoute(apiBaseUrl, session.token, { route, points, stops });
   checkAchievementsAfterSync(apiBaseUrl, session);
+  return uploaded;
 }
 
 /** Parámetros de {@link autoResyncIfNeeded}, agrupados por `max-params`. */

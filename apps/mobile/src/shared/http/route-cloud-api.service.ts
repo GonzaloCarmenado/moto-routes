@@ -118,14 +118,33 @@ export interface UploadRoutePayload {
   stops: RouteStop[];
 }
 
+/** Punto resultante de una subida, ya resuelto: `lat`/`lng` son la posición
+ * final (ajustada a carretera si el servidor la normalizó, cruda si no) — ver
+ * design.md de actualizar-mapa-tras-normalizacion, Decisión 1. */
+export interface UploadedRoutePoint {
+  timestamp: number;
+  lat: number;
+  lng: number;
+  alt: number;
+  speed: number;
+}
+
+interface UpsertRouteResponse {
+  id: string;
+  points: { timestamp: number; lat: number; lng: number; alt: number; speed: number; matched_lat?: number; matched_lng?: number }[];
+}
+
 /**
  * `POST /api/routes` — sube (o actualiza, upsert por id) una ruta local
- * completa a la cuenta del usuario autenticado.
+ * completa a la cuenta del usuario autenticado. Devuelve los puntos
+ * resultantes que el servidor guardó, con la posición ya resuelta (ajustada
+ * a carretera cuando el map-matching la tocó) para que el llamador pueda
+ * repintar el mapa sin una segunda petición.
  */
-export async function uploadRoute(apiBaseUrl: string, token: string, payload: UploadRoutePayload): Promise<void> {
+export async function uploadRoute(apiBaseUrl: string, token: string, payload: UploadRoutePayload): Promise<UploadedRoutePoint[]> {
   const { route, points, stops } = payload;
   try {
-    await fetchJson(`${apiBaseUrl}/api/routes`, {
+    const response = await fetchJson<UpsertRouteResponse>(`${apiBaseUrl}/api/routes`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       checkStatus: true,
@@ -150,6 +169,13 @@ export async function uploadRoute(apiBaseUrl: string, token: string, payload: Up
         })),
       },
     });
+    return response.points.map((p) => ({
+      timestamp: p.timestamp,
+      lat: p.matched_lat ?? p.lat,
+      lng: p.matched_lng ?? p.lng,
+      alt: p.alt,
+      speed: p.speed,
+    }));
   } catch (err) {
     throw toRouteCloudApiError(err);
   }

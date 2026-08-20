@@ -36,17 +36,19 @@ type PostgresRouteStore struct {
 }
 
 // Upsert reemplaza la ruta completa (metadatos + puntos + paradas) del
-// usuario indicado. El id ya existente ligado a otro usuario nunca se
-// sobrescribe: la propia consulta de upsert falla en ese caso (Goal de
-// aislamiento estricto, ver design.md).
-func (s PostgresRouteStore) Upsert(ctx context.Context, userID int64, route Detail) error {
+// usuario indicado, y devuelve los puntos resultantes (con MatchedLat/
+// MatchedLng rellenos si el Matcher los ajustó — ver
+// actualizar-mapa-tras-normalizacion). El id ya existente ligado a otro
+// usuario nunca se sobrescribe: la propia consulta de upsert falla en ese
+// caso (Goal de aislamiento estricto, ver design.md).
+func (s PostgresRouteStore) Upsert(ctx context.Context, userID int64, route Detail) ([]Point, error) {
 	if len(route.Points) > MaxPoints {
-		return ErrTooManyPoints
+		return nil, ErrTooManyPoints
 	}
 
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -66,43 +68,46 @@ func (s PostgresRouteStore) Upsert(ctx context.Context, userID int64, route Deta
 		route.ID, userID, route.CreatedAt, route.Duration, route.TotalDistance, route.AvgSpeed, route.Status, route.Name, route.Notes, route.IsFavorite,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if tag.RowsAffected() == 0 {
-		return ErrRouteOwnedByAnotherUser
+		return nil, ErrRouteOwnedByAnotherUser
 	}
 
 	if _, err := tx.Exec(ctx, "DELETE FROM route_points WHERE route_id = $1", route.ID); err != nil {
-		return err
+		return nil, err
 	}
 	if _, err := tx.Exec(ctx, "DELETE FROM route_stops WHERE route_id = $1", route.ID); err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := insertPoints(ctx, tx, route.ID, route.Points); err != nil {
-		return err
+		return nil, err
 	}
 	if err := insertStops(ctx, tx, route.ID, route.Stops); err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return err
+		return nil, err
 	}
 
 	if s.Matcher != nil {
-		s.normalizePoints(ctx, route.ID, route.Points)
+		return s.normalizePoints(ctx, route.ID, route.Points), nil
 	}
-	return nil
+	return route.Points, nil
 }
 
 // normalizePoints ajusta los puntos ya guardados de una ruta a la carretera
 // más probable, best-effort: un fallo del Matcher (servicio OSRM caído,
-// timeout, sin coincidencia) se registra en el log y no se propaga — la ruta
-// ya está guardada con sus puntos originales (ver design.md, Decisión 6).
-func (s PostgresRouteStore) normalizePoints(ctx context.Context, routeID string, points []Point) {
+// timeout, sin coincidencia) se registra en el log y devuelve los puntos
+// originales sin ajuste — la ruta ya está guardada con sus puntos originales
+// (ver design.md, Decisión 6). Devuelve los puntos resultantes (originales o
+// ajustados) para que el llamador los propague en la respuesta de
+// sincronización.
+func (s PostgresRouteStore) normalizePoints(ctx context.Context, routeID string, points []Point) []Point {
 	if len(points) == 0 {
-		return
+		return points
 	}
 
 	input := make([]mapmatch.Point, len(points))
@@ -113,9 +118,11 @@ func (s PostgresRouteStore) normalizePoints(ctx context.Context, routeID string,
 	adjusted, err := s.Matcher.Match(ctx, input)
 	if err != nil {
 		log.Printf("routes: map-matching failed for route %s: %v", routeID, err)
-		return
+		return points
 	}
 
+	result := make([]Point, len(points))
+	copy(result, points)
 	for i, a := range adjusted {
 		if a == nil {
 			continue
@@ -125,8 +132,12 @@ func (s PostgresRouteStore) normalizePoints(ctx context.Context, routeID string,
 			a.Lat, a.Lng, routeID, points[i].Timestamp,
 		); err != nil {
 			log.Printf("routes: failed to persist matched point for route %s: %v", routeID, err)
+			continue
 		}
+		result[i].MatchedLat = &a.Lat
+		result[i].MatchedLng = &a.Lng
 	}
+	return result
 }
 
 func insertPoints(ctx context.Context, tx pgx.Tx, routeID string, points []Point) error {

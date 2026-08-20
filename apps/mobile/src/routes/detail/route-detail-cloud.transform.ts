@@ -1,5 +1,5 @@
 import type { Route, RoutePoint, RouteStop } from '../../shared/models/route.types.js';
-import type { CloudRouteDetail } from '../../shared/http/route-cloud-api.service.js';
+import type { CloudRouteDetail, UploadedRoutePoint } from '../../shared/http/route-cloud-api.service.js';
 
 /** Datos de una ruta de la nube, adaptados a los tipos locales para poder
  * reutilizar el mismo render (mapa, timeline) que una ruta del dispositivo. */
@@ -53,4 +53,24 @@ export function cloudRouteDetailToLocal(detail: CloudRouteDetail): LocalizedClou
   }));
 
   return { route, points, stops };
+}
+
+/**
+ * Adapta los puntos devueltos por una subida (`uploadRouteToCloud`) a
+ * `RoutePoint[]`, para repintar el mapa de `<route-detail>` de inmediato tras
+ * subir con éxito, sin esperar a una recarga (ver
+ * actualizar-mapa-tras-normalizacion). Los `id` se sintetizan igual que en
+ * {@link cloudRouteDetailToLocal}: son puramente de presentación, viven solo
+ * en memoria para esta sesión de pantalla y nunca se persisten localmente.
+ */
+export function uploadedPointsToLocal(points: UploadedRoutePoint[], routeId: string): RoutePoint[] {
+  return points.map((p) => ({
+    id: crypto.randomUUID(),
+    routeId,
+    timestamp: p.timestamp,
+    lat: p.lat,
+    lng: p.lng,
+    alt: p.alt,
+    speed: p.speed,
+  }));
 }
