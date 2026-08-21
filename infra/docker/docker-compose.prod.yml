@@ -1,4 +1,28 @@
 services:
+  # Ajusta a carretera los puntos GPS de una ruta al sincronizarla (ver
+  # openspec/changes/normalizar-y-exportar-rutas y desplegar-osrm-produccion).
+  # Requiere el extracto de España ya procesado en ./osrm/data (ver
+  # ./osrm/README.md) — si no existe, este servicio simplemente no arranca y
+  # api sigue funcionando igual (normalización best-effort, ver design.md).
+  # --ip 127.0.0.1 evita que osrm-routed (que por defecto escucha en 0.0.0.0)
+  # quede expuesto en las interfaces públicas del host bajo network_mode: host
+  # — mismo criterio que restringir api a la IP de Tailscale vía SERVER_ADDRESS.
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend
+    command: osrm-routed --algorithm mld --ip 127.0.0.1 /data/spain-latest.osrm
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./osrm/data:/data:ro
+    healthcheck:
+      # La imagen oficial osrm-backend no trae wget/curl — comprobación a
+      # nivel de socket TCP con bash (sí incluido), suficiente como liveness
+      # check ya que la normalización es best-effort y no depende de esto.
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/5000'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   api:
     build:
       context: ../../apps/api
