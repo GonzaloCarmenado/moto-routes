@@ -41,9 +41,64 @@ Borrar `./data/spain-latest.osm.pbf` y volver a ejecutar el script — vuelve a
 descargar el extracto más reciente de Geofabrik y reprocesa todo desde cero.
 No hay actualización incremental.
 
-## Pendiente: servidor de producción
+## Servidor de producción
 
-Este procedimiento se ha ejecutado en local. Falta repetirlo en el servidor
-(ver `infra/docker/docker-compose.prod.yml`, que usa `network_mode: host` —
-el servicio `osrm` ahí necesitaría el mismo tratamiento que `MINIO_ENDPOINT`,
-apuntando `MAPMATCH_OSRM_URL` a `http://127.0.0.1:5000`).
+`docker-compose.prod.yml` ya define el servicio `osrm` (ver
+`openspec/changes/desplegar-osrm-produccion`), pero el procesado de datos
+en sí **no está automatizado** en el pipeline de despliegue
+(`scripts/deploy-local.sh`) — es un proceso pesado (~11 GB de RAM, ver
+"Requisitos de recursos" arriba) que no se quiere lanzar sin control en cada
+`git push` a un servidor que ya sirve tráfico real. Se ejecuta una vez, a
+mano, con tu propio usuario SSH (no `ci-deploy`, que solo tiene la shell fija
+de `deploy-local.sh`, sin acceso libre — ver ADR-044).
+
+1. **Comprobar RAM libre antes de lanzarlo** — no reintentar a ciegas si el
+   servidor está ya cerca de su límite:
+   ```bash
+   free -h
+   ```
+   Si la RAM disponible es ajustada, hacerlo en una ventana de bajo uso.
+
+2. **Ejecutar el mismo script que en local, o copiar los datos ya procesados
+   — según la RAM real del servidor.** El servidor de producción actual
+   (`debian`, 5.6 GiB de RAM total) **no tiene suficiente para el paso 1**:
+   confirmado en la sesión `desplegar-osrm-produccion` (2026-08-21, ver
+   [[ADR-053]]). Si tu servidor tampoco llega a los ~12 GB recomendados:
+
+   ```bash
+   # Desde una máquina que YA tenga ./data/spain-latest.osrm.* procesado
+   # (excluye el .osm.pbf y los .log — no hacen falta en el servidor):
+   scp infra/docker/osrm/data/spain-latest.osrm.* \
+     usuario@servidor:/ruta/al/repo/infra/docker/osrm/data/
+   ```
+
+   Si `osrm/` en el servidor pertenece a `ci-deploy` (checkout de git vía
+   `deploy-local.sh`) sin permiso de escritura para tu usuario, crear
+   `./data/` a mano primero con `sudo`:
+   ```bash
+   sudo mkdir -p /ruta/al/repo/infra/docker/osrm/data
+   sudo chown $(whoami):users /ruta/al/repo/infra/docker/osrm/data
+   ```
+
+   Si el servidor sí tiene RAM de sobra, ejecutar el mismo script que en
+   local en su lugar:
+   ```bash
+   cd /home/gonzalo/moto-routes/infra/docker/osrm
+   ./prepare-osm-data.sh
+   ```
+   Cualquiera de las dos vías deja los ficheros `spain-latest.osrm.*` en
+   `./data/`, igual que en local.
+
+3. **Rellenar `MAPMATCH_OSRM_URL` en el `.env.prod` del servidor** (no
+   versionado, ver `infra/docker/.env.prod.example`):
+   ```
+   MAPMATCH_OSRM_URL=http://127.0.0.1:5000
+   ```
+
+4. **Redeploy normal** — el siguiente `deploy-local.sh` (automático en cada
+   push a `master`) recrea `api` con la variable ya presente y levanta
+   `osrm` con los datos ya procesados, sin ningún paso manual adicional en
+   ese momento.
+
+Para regenerar los datos más adelante (mapa desactualizado), repetir el
+paso 2 — mismo criterio que en local, sin actualización incremental.
