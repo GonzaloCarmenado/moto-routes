@@ -69,6 +69,8 @@ describe('Cockpit - Grabación de Rutas', () => {
     cy.get('[data-cy="cockpit-master-btn"]').trigger('pointerdown');
     cy.wait(1700);
     cy.get('[data-cy="save-route-dialog-action-discard"]').click();
+    // Confirmación de descarte (bug real: se borraba sin ningún aviso).
+    cy.get('[data-cy="confirm-dialog-action-confirm"]').click();
 
     cy.get('[data-cy="save-route-dialog-input-name"]').should('not.exist');
     cy.get('[data-cy="photo-toast"]').should('contain', 'Ruta descartada');
@@ -76,5 +78,19 @@ describe('Cockpit - Grabación de Rutas', () => {
 
     cy.get('[data-cy="nav-rutas"]').click();
     cy.get('[data-cy="route-list-empty"]').should('be.visible');
+  });
+
+  it('cancelling the discard confirmation returns to the save/discard dialog without deleting the route (bug real: se perdía la ruta sin ningún aviso)', () => {
+    cy.get('[data-cy="cockpit-master-btn"]').click();
+    cy.get('[data-cy="cockpit-master-btn"]').trigger('pointerdown');
+    cy.wait(1700);
+    cy.get('[data-cy="save-route-dialog-action-discard"]').click();
+    cy.get('[data-cy="confirm-dialog-action-cancel"]').click();
+
+    // Sigue en el diálogo original — nada se ha borrado todavía.
+    cy.get('[data-cy="save-route-dialog-input-name"]').should('be.visible');
+    cy.get('[data-cy="save-route-dialog-action-save"]').click();
+
+    cy.get('[data-cy="photo-toast"]').should('contain', 'Ruta guardada');
   });
 });

@@ -104,3 +104,26 @@ func TestPublicCORS_AllowsMethodsDELETEForPreflight(t *testing.T) {
 		t.Fatalf("expected Access-Control-Allow-Methods to include DELETE, got %q", got)
 	}
 }
+
+// Mismo gap, cuarta vez: PATCH /api/auth/username (nombre-usuario) quedaba
+// fuera de Access-Control-Allow-Methods, así que el preflight lo rechazaba
+// antes de llegar a la red. A diferencia del gap de DELETE, este sí se
+// reprodujo con Cypress real (fetch() rechaza con "TypeError: Failed to
+// fetch"), no solo contra un WebView Android -- la asunción de que Cypress
+// no aplica CORS con el mismo rigor no era una garantía general.
+func TestPublicCORS_AllowsMethodsPATCHForPreflight(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/auth/username", nil)
+	req.Header.Set("Origin", "http://localhost:1420")
+	req.Header.Set("Access-Control-Request-Method", "PATCH")
+	rec := httptest.NewRecorder()
+
+	PublicCORS(inner).ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, "PATCH") {
+		t.Fatalf("expected Access-Control-Allow-Methods to include PATCH, got %q", got)
+	}
+}

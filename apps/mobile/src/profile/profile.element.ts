@@ -25,16 +25,9 @@ import { openProfileEditDialog } from './profile-edit-dialog.element.js';
 import { openVehicleEditDialog } from './profile-vehicle-dialog.element.js';
 import { VEHICLE_TYPE_LABELS } from './profile-vehicle-dialog-fields.js';
 import { formatDuration } from '../shared/utils/format.js';
-import { getApiBaseUrl } from '../shared/http/api-config.js';
-import { loadAuthSectionState, type AuthSectionState } from '../auth/auth-section.service.js';
-import { buildAuthSection } from '../auth/auth-section.js';
-import { openLoginDialog } from '../auth/auth-login-dialog.element.js';
-import { openRegisterDialog } from '../auth/auth-register-dialog.element.js';
-import { openForgotPasswordDialog } from '../auth/auth-forgot-password-dialog.element.js';
+import { ProfileAccountController } from './profile-account.js';
 import { buildAchievementsLink } from './profile-achievements-link.js';
 import styles from './profile.element.css?inline';
-
-const EMPTY_AUTH_STATE: AuthSectionState = { status: 'logged-out' };
 
 const EMPTY_VIEW_MODEL: ProfileViewModel = { avatarUrl: null, name: null, vehicle: null };
 
@@ -58,7 +51,10 @@ class ProfileView extends BaseElement {
   private _loading = false;
   private viewModel: ProfileViewModel = EMPTY_VIEW_MODEL;
   private stats: ProfileStats | null = null;
-  private authState: AuthSectionState = EMPTY_AUTH_STATE;
+  private readonly account = new ProfileAccountController({
+    getSessionRepository: (): ISessionRepository | null => this._sessionRepository,
+    onChange: (): void => { this.render(); },
+  });
 
   set repository(repo: IRouteRepository | null) {
     this._repository = repo;
@@ -86,7 +82,7 @@ class ProfileView extends BaseElement {
    */
   set sessionRepository(repo: ISessionRepository | null) {
     this._sessionRepository = repo;
-    if (repo) void this.refreshAuthState();
+    if (repo) void this.account.refresh();
   }
 
   get sessionRepository(): ISessionRepository | null {
@@ -103,47 +99,8 @@ class ProfileView extends BaseElement {
       void this.fetchAndRender();
     }
     if (this._sessionRepository) {
-      void this.refreshAuthState();
+      void this.account.refresh();
     }
-  }
-
-  private async refreshAuthState(): Promise<void> {
-    const sessionRepo = this._sessionRepository;
-    if (!sessionRepo) return;
-    this.authState = await loadAuthSectionState(getApiBaseUrl(), sessionRepo);
-    this.render();
-  }
-
-  private async handleOpenLogin(): Promise<void> {
-    const sessionRepo = this._sessionRepository;
-    if (!sessionRepo) return;
-    const result = await openLoginDialog({ apiBaseUrl: getApiBaseUrl(), sessionRepository: sessionRepo });
-    if (result === 'logged-in') await this.refreshAuthState();
-  }
-
-  private async handleOpenRegister(): Promise<void> {
-    await openRegisterDialog({ apiBaseUrl: getApiBaseUrl() });
-  }
-
-  private async handleOpenForgotPassword(): Promise<void> {
-    await openForgotPasswordDialog({ apiBaseUrl: getApiBaseUrl() });
-  }
-
-  private async handleLogout(): Promise<void> {
-    const sessionRepo = this._sessionRepository;
-    if (!sessionRepo) return;
-    await sessionRepo.clear();
-    this.authState = EMPTY_AUTH_STATE;
-    this.render();
-  }
-
-  private buildAccountSection(): HTMLElement {
-    return buildAuthSection(this.authState, {
-      onOpenLogin: () => { void this.handleOpenLogin(); },
-      onOpenRegister: () => { void this.handleOpenRegister(); },
-      onOpenForgotPassword: () => { void this.handleOpenForgotPassword(); },
-      onLogout: () => { void this.handleLogout(); },
-    });
   }
 
   private async fetchAndRender(): Promise<void> {
@@ -211,7 +168,7 @@ class ProfileView extends BaseElement {
     divider.className = 'identity-card__divider';
     card.appendChild(divider);
 
-    card.appendChild(this.buildAccountSection());
+    card.appendChild(this.account.build());
     return card;
   }
 

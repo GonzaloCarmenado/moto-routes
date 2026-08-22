@@ -99,10 +99,21 @@ func newFakeUserStore() *fakeUserStore {
 	return &fakeUserStore{byEmail: map[string]auth.StoredUser{}}
 }
 
-func (f *fakeUserStore) CreateUser(_ context.Context, email, _ string) (auth.StoredUser, error) {
-	user := auth.StoredUser{ID: int64(len(f.byEmail) + 1), Email: email}
+func (f *fakeUserStore) CreateUser(_ context.Context, email, _, username string) (auth.StoredUser, error) {
+	user := auth.StoredUser{ID: int64(len(f.byEmail) + 1), Email: email, Username: &username}
 	f.byEmail[email] = user
 	return user, nil
+}
+
+func (f *fakeUserStore) UpdateUsername(_ context.Context, id int64, username string) error {
+	for email, user := range f.byEmail {
+		if user.ID == id {
+			user.Username = &username
+			f.byEmail[email] = user
+			return nil
+		}
+	}
+	return auth.ErrUserNotFound
 }
 
 func (f *fakeUserStore) FindUserByEmail(_ context.Context, email string) (auth.StoredUser, error) {

@@ -24,6 +24,20 @@ function clickDiscard(dialog: HTMLElement): void {
   dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="save-route-dialog-action-discard"]')!.click();
 }
 
+function getConfirmDialog(): HTMLElement {
+  const el = document.body.querySelector('confirm-dialog');
+  expect(el).not.toBeNull();
+  return el as HTMLElement;
+}
+
+function clickConfirmDiscard(): void {
+  getConfirmDialog().shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="confirm-dialog-action-confirm"]')!.click();
+}
+
+function clickCancelDiscard(): void {
+  getConfirmDialog().shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="confirm-dialog-action-cancel"]')!.click();
+}
+
 function createMockPhotoRepo(): IPhotoRepository {
   return {
     add: vi.fn(),
@@ -36,6 +50,10 @@ function createMockPhotoRepo(): IPhotoRepository {
 }
 
 const metadata: RouteMetadata = { date: '2026-07-22T00:00:00.000Z', duration: 120, totalDistance: 5.2, avgSpeed: 30, stops: [] };
+
+function flushPromises(): Promise<void> {
+  return new Promise((resolve) => { setTimeout(resolve, 0); });
+}
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -75,6 +93,8 @@ describe('resolveStopDecision', () => {
       getPhotoRepo: () => Promise.resolve(photoRepo),
     });
     clickDiscard(getDialog());
+    await flushPromises();
+    clickConfirmDiscard();
     await promise;
 
     expect(service.discardStop).toHaveBeenCalledOnce();
@@ -97,6 +117,8 @@ describe('resolveStopDecision', () => {
       getPhotoRepo: () => Promise.reject(new Error('no se pudo abrir el repositorio de fotos')),
     });
     clickDiscard(getDialog());
+    await flushPromises();
+    clickConfirmDiscard();
     await promise;
 
     expect(service.discardStop).toHaveBeenCalledOnce();
@@ -159,10 +181,64 @@ describe('resolveStopDecision', () => {
     const dialog = getDialog();
     typeName(dialog, 'Ruta de prueba');
     clickDiscard(dialog);
+    await flushPromises();
+    clickConfirmDiscard();
     await promise;
 
     expect(service.confirmSaveRecording).not.toHaveBeenCalled();
     expect(await routeRepo.getById(route.id)).toBeNull();
+  });
+
+  it('shows a confirmation dialog before discarding, without deleting anything yet (bug real: se perdía la ruta sin ningún aviso)', async () => {
+    const routeRepo = new MemoryRouteRepository();
+    const route = await routeRepo.save(
+      { duration: 0, totalDistance: 0, avgSpeed: 0, status: 'active', visibility: 'private', origin: 'local' },
+      [], [],
+    );
+    const photoRepo = createMockPhotoRepo();
+    const service = { confirmSaveRecording: vi.fn(), discardStop: vi.fn() };
+
+    const promise = resolveStopDecision({
+      metadata, routeId: route.id, service, routeRepo,
+      getPhotoRepo: () => Promise.resolve(photoRepo),
+    });
+    clickDiscard(getDialog());
+    await flushPromises();
+
+    expect(getConfirmDialog().shadowRoot!.querySelector('.title')!.textContent).toBe('¿Descartar la ruta?');
+    expect(service.discardStop).not.toHaveBeenCalled();
+    expect(await routeRepo.getById(route.id)).not.toBeNull();
+
+    clickConfirmDiscard();
+    await promise;
+  });
+
+  it('cancelling the discard confirmation returns to the save/discard dialog instead of deleting anything', async () => {
+    const routeRepo = new MemoryRouteRepository();
+    const route = await routeRepo.save(
+      { duration: 0, totalDistance: 0, avgSpeed: 0, status: 'active', visibility: 'private', origin: 'local' },
+      [], [],
+    );
+    const photoRepo = createMockPhotoRepo();
+    const service = { confirmSaveRecording: vi.fn(), discardStop: vi.fn() };
+
+    const promise = resolveStopDecision({
+      metadata, routeId: route.id, service, routeRepo,
+      getPhotoRepo: () => Promise.resolve(photoRepo),
+    });
+    clickDiscard(getDialog());
+    await flushPromises();
+    clickCancelDiscard();
+    await flushPromises();
+
+    expect(service.discardStop).not.toHaveBeenCalled();
+    expect(await routeRepo.getById(route.id)).not.toBeNull();
+    // Vuelve a la decisión inicial en vez de dejar la grabación parada sin ninguna acción aplicada.
+    const dialogAgain = getDialog();
+
+    clickSave(dialogAgain);
+    await promise;
+    expect(service.confirmSaveRecording).toHaveBeenCalledOnce();
   });
 
   it('truncates a name longer than 100 characters before persisting (AC-009)', async () => {

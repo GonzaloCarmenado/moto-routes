@@ -3,10 +3,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { MemoryProfileRepository } from '../shared/repositories/memory-profile.repository.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
+import { MemorySessionRepository } from '../shared/repositories/memory-session.repository.js';
 import type { IProfileRepository } from '../shared/models/profile.repository.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
+import type { ISessionRepository } from '../shared/models/session.repository.js';
 import type { Route } from '../shared/models/route.types.js';
 import { fetchVehicleMakes, fetchVehicleModels } from './vpic.service.js';
+import { fetchCurrentUser, setUsername } from '../auth/auth-api.service.js';
+import type * as AuthApiService from '../auth/auth-api.service.js';
 import './profile.element.js';
 
 // AC-024: la carga normal de la vista de Perfil nunca debe consultar la API
@@ -16,6 +20,11 @@ vi.mock('./vpic.service.js', () => ({
   fetchVehicleModels: vi.fn(),
 }));
 
+vi.mock('../auth/auth-api.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof AuthApiService>();
+  return { ...actual, fetchCurrentUser: vi.fn(), setUsername: vi.fn() };
+});
+
 // `?inline` no sirve para inspeccionar el CSS fuente bajo Vitest — se lee el
 // fichero directamente, mismo patrón que `profile-edit-dialog.element.spec.ts`.
 const cssPath = resolve(process.cwd(), 'src/profile/profile.element.css');
@@ -24,6 +33,7 @@ const viewStyles = readFileSync(cssPath, 'utf8');
 type ProfileViewEl = HTMLElement & {
   repository: IRouteRepository | null;
   profileRepository: IProfileRepository | null;
+  sessionRepository: ISessionRepository | null;
 };
 
 async function waitRender(): Promise<void> {
@@ -57,6 +67,20 @@ async function createView(profileRepo: IProfileRepository, routeRepo: IRouteRepo
   const el = document.createElement('profile-view') as ProfileViewEl;
   el.profileRepository = profileRepo;
   el.repository = routeRepo;
+  document.body.appendChild(el);
+  await waitRender();
+  return el;
+}
+
+async function createViewWithSession(
+  profileRepo: IProfileRepository,
+  routeRepo: IRouteRepository,
+  sessionRepo: ISessionRepository,
+): Promise<ProfileViewEl> {
+  const el = document.createElement('profile-view') as ProfileViewEl;
+  el.profileRepository = profileRepo;
+  el.repository = routeRepo;
+  el.sessionRepository = sessionRepo;
   document.body.appendChild(el);
   await waitRender();
   return el;
@@ -199,5 +223,101 @@ describe('profile-view — vista principal', () => {
     expect(root.querySelector('[data-cy="profile-btn-editar-vehiculo"]')?.classList.contains('edit-btn')).toBe(true);
     expect(viewStyles).toMatch(/\.edit-btn\s*\{[^}]*min-width:\s*var\(--hitbox-min\)[^}]*\}/);
     expect(viewStyles).toMatch(/\.edit-btn\s*\{[^}]*min-height:\s*var\(--hitbox-min\)[^}]*\}/);
+  });
+});
+
+describe('profile-view — editar username (nombre-usuario, Grupo 6)', () => {
+  it('con sesión activa, muestra el username actual y una acción para editarlo que abre el diálogo compartido (6.1)', async () => {
+    vi.mocked(fetchCurrentUser).mockResolvedValue({ id: 1, email: 'rider@example.com', emailVerified: true, username: 'rider42' });
+    const sessionRepo = new MemorySessionRepository();
+    await sessionRepo.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const view = await createViewWithSession(new MemoryProfileRepository(), new MemoryRouteRepository(), sessionRepo);
+    const root = view.shadowRoot!;
+
+    expect(root.textContent).toContain('rider42');
+    root.querySelector<HTMLButtonElement>('[data-cy="auth-btn-editar-username"]')?.click();
+    await waitRender();
+
+    expect(document.body.querySelector('username-edit-dialog')).not.toBeNull();
+  });
+
+  it('guardar un username disponible desde el diálogo lo actualiza y se refleja de inmediato en Perfil (6.2)', async () => {
+    // `sessionRepository` dispara `refreshAuthState()` tanto desde su propio setter como desde
+    // `connectedCallback()` (ver profile.element.ts) — se resuelve por estado mutable en vez de
+    // por número de llamadas, para no acoplar el test a ese detalle de implementación.
+    let currentUsername = 'rider42';
+    vi.mocked(fetchCurrentUser).mockImplementation(() =>
+      Promise.resolve({ id: 1, email: 'rider@example.com', emailVerified: true, username: currentUsername }),
+    );
+    vi.mocked(setUsername).mockImplementation((_apiBaseUrl, _token, username) => {
+      currentUsername = username;
+      return Promise.resolve();
+    });
+    const sessionRepo = new MemorySessionRepository();
+    await sessionRepo.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const view = await createViewWithSession(new MemoryProfileRepository(), new MemoryRouteRepository(), sessionRepo);
+    const root = view.shadowRoot!;
+
+    root.querySelector<HTMLButtonElement>('[data-cy="auth-btn-editar-username"]')?.click();
+    await waitRender();
+    const dialog = document.body.querySelector('username-edit-dialog')!;
+    const form = dialog.shadowRoot!.querySelector('username-form')!;
+    const input = form.shadowRoot!.querySelector<HTMLInputElement>('[data-cy="username-form-input"]')!;
+    input.value = 'newname';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    form.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="username-form-btn-guardar"]')?.click();
+    await waitRender();
+
+    expect(document.body.querySelector('username-edit-dialog')).toBeNull();
+    expect(root.textContent).toContain('newname');
+  });
+
+  it('guardar un username ya en uso muestra el error sin cerrar el diálogo ni cambiar el username mostrado (6.3)', async () => {
+    vi.mocked(fetchCurrentUser).mockResolvedValue({ id: 1, email: 'rider@example.com', emailVerified: true, username: 'rider42' });
+    const { AuthApiError } = await import('../auth/auth-api.service.js');
+    vi.mocked(setUsername).mockRejectedValue(new AuthApiError('username-taken', 'username already taken'));
+    const sessionRepo = new MemorySessionRepository();
+    await sessionRepo.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const view = await createViewWithSession(new MemoryProfileRepository(), new MemoryRouteRepository(), sessionRepo);
+    const root = view.shadowRoot!;
+
+    root.querySelector<HTMLButtonElement>('[data-cy="auth-btn-editar-username"]')?.click();
+    await waitRender();
+    const dialog = document.body.querySelector('username-edit-dialog')!;
+    const form = dialog.shadowRoot!.querySelector('username-form')!;
+    const input = form.shadowRoot!.querySelector<HTMLInputElement>('[data-cy="username-form-input"]')!;
+    input.value = 'taken';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    form.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="username-form-btn-guardar"]')?.click();
+    await waitRender();
+
+    expect(document.body.querySelector('username-edit-dialog')).not.toBeNull();
+    expect(form.shadowRoot!.querySelector('[data-cy="username-form-error"]')).not.toBeNull();
+    expect(root.textContent).toContain('rider42');
+  });
+
+  it('intentar guardar vacío se rechaza en cliente, sin llamar al backend (6.4)', async () => {
+    vi.mocked(fetchCurrentUser).mockResolvedValue({ id: 1, email: 'rider@example.com', emailVerified: true, username: 'rider42' });
+    const sessionRepo = new MemorySessionRepository();
+    await sessionRepo.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const view = await createViewWithSession(new MemoryProfileRepository(), new MemoryRouteRepository(), sessionRepo);
+    const root = view.shadowRoot!;
+
+    root.querySelector<HTMLButtonElement>('[data-cy="auth-btn-editar-username"]')?.click();
+    await waitRender();
+    const dialog = document.body.querySelector('username-edit-dialog')!;
+    const form = dialog.shadowRoot!.querySelector('username-form')!;
+    const input = form.shadowRoot!.querySelector<HTMLInputElement>('[data-cy="username-form-input"]')!;
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    form.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="username-form-btn-guardar"]')?.click();
+    await waitRender();
+
+    expect(setUsername).not.toHaveBeenCalled();
+    expect(document.body.querySelector('username-edit-dialog')).not.toBeNull();
   });
 });

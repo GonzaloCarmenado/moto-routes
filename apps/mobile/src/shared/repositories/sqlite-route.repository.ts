@@ -54,6 +54,18 @@ const SCHEMA = `
 `;
 
 /**
+ * Acota cuántas filas lleva cada INSERT multi-valor de puntos/paradas, para
+ * no acercarse al límite de parámetros por sentencia de SQLite
+ * (SQLITE_MAX_VARIABLE_NUMBER, 32766 en el SQLite que trae este build de
+ * `tauri-plugin-sql` — reproducido y confirmado con una ruta real de 3h15min
+ * y ~11.500 puntos, que superaba el límite y perdía todos sus puntos GPS en
+ * silencio). Mismo criterio y mismo valor que `insertChunkSize` en
+ * `apps/api/internal/routes/postgres_store.go` (allí por el límite de
+ * PostgreSQL, aquí por el de SQLite).
+ */
+const INSERT_CHUNK_SIZE = 500;
+
+/**
  * Implementación de IRouteRepository usando SQLite via Tauri plugin.
  * Recibe SqlDb inyectado para poder mockear en tests.
  */
@@ -160,10 +172,11 @@ export class SqliteRouteRepository implements IRouteRepository {
       );
     }
 
-    if (points.length > 0) {
-      const placeholders = points.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
+    for (let start = 0; start < points.length; start += INSERT_CHUNK_SIZE) {
+      const chunk = points.slice(start, start + INSERT_CHUNK_SIZE);
+      const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
       const values: unknown[] = [];
-      for (const p of points) {
+      for (const p of chunk) {
         values.push(crypto.randomUUID(), id, p.timestamp, p.lat, p.lng, p.alt, p.speed);
       }
       await this.db.execute(
@@ -172,10 +185,11 @@ export class SqliteRouteRepository implements IRouteRepository {
       );
     }
 
-    if (stops.length > 0) {
-      const placeholders = stops.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+    for (let start = 0; start < stops.length; start += INSERT_CHUNK_SIZE) {
+      const chunk = stops.slice(start, start + INSERT_CHUNK_SIZE);
+      const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
       const values: unknown[] = [];
-      for (const s of stops) {
+      for (const s of chunk) {
         values.push(crypto.randomUUID(), id, s.startTime, s.endTime, s.lat, s.lng, s.type, s.stopCategoryId);
       }
       await this.db.execute(

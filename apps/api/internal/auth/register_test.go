@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,22 +16,45 @@ import (
 // fakeUserStore es un UserStore en memoria para no depender de PostgreSQL en
 // los tests de comportamiento del handler.
 type fakeUserStore struct {
-	byEmail map[string]StoredUser
-	nextID  int64
+	byEmail    map[string]StoredUser
+	byUsername map[string]int64
+	nextID     int64
 }
 
 func newFakeUserStore() *fakeUserStore {
-	return &fakeUserStore{byEmail: map[string]StoredUser{}}
+	return &fakeUserStore{byEmail: map[string]StoredUser{}, byUsername: map[string]int64{}}
 }
 
-func (s *fakeUserStore) CreateUser(_ context.Context, email, passwordHash string) (StoredUser, error) {
+func (s *fakeUserStore) CreateUser(_ context.Context, email, passwordHash, username string) (StoredUser, error) {
 	if _, exists := s.byEmail[email]; exists {
 		return StoredUser{}, ErrEmailTaken
 	}
+	if _, exists := s.byUsername[username]; exists {
+		return StoredUser{}, ErrUsernameTaken
+	}
 	s.nextID++
-	user := StoredUser{ID: s.nextID, Email: email, PasswordHash: passwordHash}
+	user := StoredUser{ID: s.nextID, Email: email, PasswordHash: passwordHash, Username: &username}
 	s.byEmail[email] = user
+	s.byUsername[username] = s.nextID
 	return user, nil
+}
+
+func (s *fakeUserStore) UpdateUsername(_ context.Context, id int64, username string) error {
+	if existingID, exists := s.byUsername[username]; exists && existingID != id {
+		return ErrUsernameTaken
+	}
+	for email, user := range s.byEmail {
+		if user.ID == id {
+			if user.Username != nil {
+				delete(s.byUsername, *user.Username)
+			}
+			user.Username = &username
+			s.byEmail[email] = user
+			s.byUsername[username] = id
+			return nil
+		}
+	}
+	return ErrUserNotFound
 }
 
 func (s *fakeUserStore) FindUserByEmail(_ context.Context, email string) (StoredUser, error) {
@@ -72,9 +96,19 @@ func (s *fakeUserStore) UpdatePasswordHash(_ context.Context, id int64, password
 	return ErrUserNotFound
 }
 
+// testUsernameSeq genera un username válido y distinto en cada llamada, para
+// que los tests existentes (centrados en email/contraseña) no tengan que
+// elegir uno a mano — ver nombre-usuario, tasks.md Grupo 2.
+var testUsernameSeq int
+
+func nextTestUsername() string {
+	testUsernameSeq++
+	return fmt.Sprintf("testuser%d", testUsernameSeq)
+}
+
 func doRegisterVia(t *testing.T, handler http.Handler, emailAddr, password string) *httptest.ResponseRecorder {
 	t.Helper()
-	body, err := json.Marshal(map[string]string{"email": emailAddr, "password": password})
+	body, err := json.Marshal(map[string]string{"email": emailAddr, "password": password, "username": nextTestUsername()})
 	if err != nil {
 		t.Fatalf("failed to marshal request body: %v", err)
 	}
@@ -166,6 +200,49 @@ func TestRegisterHandler_WeakPasswordIsRejectedWithoutCreatingAnAccount(t *testi
 	store := newFakeUserStore()
 
 	rec := doRegister(t, store, "rider@example.com", "short")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(store.byEmail) != 0 {
+		t.Fatalf("expected no account to be created, got %d", len(store.byEmail))
+	}
+}
+
+// doRegisterWithUsername, a diferencia de doRegister, permite fijar el
+// username a mano en vez de generar uno válido con nextTestUsername() —
+// necesario para probar el propio rechazo por username inválido/duplicado.
+func doRegisterWithUsername(t *testing.T, store UserStore, emailAddr, password, username string) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := json.Marshal(map[string]string{"email": emailAddr, "password": password, "username": username})
+	if err != nil {
+		t.Fatalf("failed to marshal request body: %v", err)
+	}
+	handler := RegisterHandler(store, newFakeVerificationTokenStore(), &email.FakeSender{}, "https://api.example.com")
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestRegisterHandler_UsernameAlreadyTakenIsRejectedWithoutCreatingASecondAccount(t *testing.T) {
+	store := newFakeUserStore()
+	doRegisterWithUsername(t, store, "first@example.com", "correct-horse-battery", "takenname")
+
+	rec := doRegisterWithUsername(t, store, "second@example.com", "correct-horse-battery", "takenname")
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected status 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(store.byEmail) != 1 {
+		t.Fatalf("expected exactly 1 stored account, got %d", len(store.byEmail))
+	}
+}
+
+func TestRegisterHandler_InvalidUsernameFormatIsRejectedWithoutCreatingAnAccount(t *testing.T) {
+	store := newFakeUserStore()
+
+	rec := doRegisterWithUsername(t, store, "rider@example.com", "correct-horse-battery", "AB")
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400, got %d: %s", rec.Code, rec.Body.String())
