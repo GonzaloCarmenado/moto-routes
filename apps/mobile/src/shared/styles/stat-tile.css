@@ -33,6 +33,9 @@
 .stat-tile .stat-value {
   font-size: 26px;
   color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .stat-tile .stat-unit {
   font-size: 13px;
