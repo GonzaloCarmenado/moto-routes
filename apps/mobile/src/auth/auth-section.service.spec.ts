@@ -26,12 +26,22 @@ describe('loadAuthSectionState', () => {
   it('con sesión guardada y válida, devuelve logged-in con el email confirmado por /me', async () => {
     const sessionRepository = new MemorySessionRepository();
     await sessionRepository.save({ token: 'jwt-token', email: 'stale@example.com' });
-    vi.mocked(fetchCurrentUser).mockResolvedValue({ id: 1, email: 'rider@example.com', emailVerified: true });
+    vi.mocked(fetchCurrentUser).mockResolvedValue({ id: 1, email: 'rider@example.com', emailVerified: true, username: 'rider42' });
 
     const state = await loadAuthSectionState('http://localhost:8080', sessionRepository);
 
-    expect(state).toEqual({ status: 'logged-in', email: 'rider@example.com' });
+    expect(state).toEqual({ status: 'logged-in', email: 'rider@example.com', username: 'rider42' });
     expect(fetchCurrentUser).toHaveBeenCalledWith('http://localhost:8080', 'jwt-token');
+  });
+
+  it('con sesión guardada y válida pero sin username fijado, devuelve logged-in con username null', async () => {
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-token', email: 'rider@example.com' });
+    vi.mocked(fetchCurrentUser).mockResolvedValue({ id: 1, email: 'rider@example.com', emailVerified: true, username: null });
+
+    const state = await loadAuthSectionState('http://localhost:8080', sessionRepository);
+
+    expect(state).toEqual({ status: 'logged-in', email: 'rider@example.com', username: null });
   });
 
   it('con sesión guardada pero ya no válida (401), borra la sesión local y devuelve logged-out', async () => {
@@ -52,7 +62,7 @@ describe('loadAuthSectionState', () => {
 
     const state = await loadAuthSectionState('http://localhost:8080', sessionRepository);
 
-    expect(state).toEqual({ status: 'logged-in', email: 'rider@example.com' });
+    expect(state).toEqual({ status: 'logged-in', email: 'rider@example.com', username: null });
     await expect(sessionRepository.get()).resolves.not.toBeNull();
   });
 });

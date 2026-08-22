@@ -39,7 +39,7 @@ export interface FetchJsonOptions {
   /** Tiempo máximo de espera en milisegundos antes de abortar la petición. */
   timeoutMs?: number;
   /** Método HTTP. Por defecto `'GET'`. */
-  method?: 'GET' | 'POST' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   /**
    * Cuerpo de la petición. Un `FormData` se envía tal cual, sin serializar a
    * JSON ni fijar `Content-Type` (el navegador/WebView añade el `boundary`

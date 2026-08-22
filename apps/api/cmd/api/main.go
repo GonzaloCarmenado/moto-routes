@@ -53,6 +53,12 @@ const (
 	passwordResetRateLimitWindow      = 15 * time.Minute
 )
 
+// Límite de fijado/cambio de username por cuenta: 5 cada 15 minutos.
+const (
+	usernameRateLimitMaxAttempts = 5
+	usernameRateLimitWindow      = 15 * time.Minute
+)
+
 // Límite de invitaciones de compartir ruta por email destino: 5 cada 15 minutos.
 const (
 	routeShareRateLimitMaxAttempts = 5
@@ -128,6 +134,11 @@ func main() {
 
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/auth/me", auth.MeHandler(userStore).ServeHTTP)
 	router.With(httpmw.PublicCORS).Options("/api/auth/me", func(http.ResponseWriter, *http.Request) {})
+
+	usernameRateLimiter := auth.NewLoginRateLimiter(usernameRateLimitMaxAttempts, usernameRateLimitWindow)
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Patch("/api/auth/username",
+		auth.RateLimitedUsernameHandler(userStore, usernameRateLimiter).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/auth/username", func(http.ResponseWriter, *http.Request) {})
 
 	router.With(httpmw.PublicCORS).Post("/api/auth/verify-email/request",
 		auth.RateLimitedRequestVerificationHandler(userStore, verificationTokenStore, resendSender, cfg.PublicAPIBaseURL, verificationRequestRateLimiter).ServeHTTP)

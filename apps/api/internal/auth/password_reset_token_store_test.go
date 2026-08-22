@@ -22,7 +22,7 @@ func testPasswordResetTokenStore(t *testing.T) (PostgresPasswordResetTokenStore,
 	}
 
 	userStore := PostgresUserStore{Pool: pool}
-	user, err := userStore.CreateUser(context.Background(), "rider@example.com", "hashed-value")
+	user, err := userStore.CreateUser(context.Background(), "rider@example.com", "hashed-value", "rider1")
 	if err != nil {
 		t.Fatalf("failed to seed a user: %v", err)
 	}

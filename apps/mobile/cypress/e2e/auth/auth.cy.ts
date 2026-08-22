@@ -22,6 +22,14 @@ function uniqueTestEmail(suffix: string): string {
   return `${TEST_EMAIL_PREFIX}-${String(Date.now())}-${suffix}@example.com`;
 }
 
+let usernameCounter = 0;
+
+/** Username único y válido (`[a-z0-9_]{3,20}`, ver `validateUsername` en `apps/api`) — obligatorio desde `nombre-usuario`. */
+function uniqueTestUsername(): string {
+  usernameCounter += 1;
+  return `cy${Date.now().toString(36)}${String(usernameCounter)}`.slice(0, 20);
+}
+
 function openProfile(): void {
   cy.get('[data-cy="nav-perfil"]').click();
   cy.get('profile-view').should('be.visible');
@@ -51,6 +59,7 @@ describe('Pantallas de auth - registro, login, recuperación y cierre de sesión
     cy.get('[data-cy="auth-btn-abrir-registro"]').click();
     cy.get('[data-cy="auth-input-email-registro"]').type(uniqueTestEmail('weak'));
     cy.get('[data-cy="auth-input-password-registro"]').type('short');
+    cy.get('[data-cy="auth-input-username-registro"]').type(uniqueTestUsername());
     cy.get('[data-cy="auth-btn-confirmar-registro"]').click();
 
     cy.get('[data-cy="auth-dialog-registro"] .error').should('be.visible');
@@ -65,6 +74,7 @@ describe('Pantallas de auth - registro, login, recuperación y cierre de sesión
     cy.get('[data-cy="auth-btn-abrir-registro"]').click();
     cy.get('[data-cy="auth-input-email-registro"]').type(email);
     cy.get('[data-cy="auth-input-password-registro"]').type(TEST_PASSWORD);
+    cy.get('[data-cy="auth-input-username-registro"]').type(uniqueTestUsername());
     cy.get('[data-cy="auth-btn-confirmar-registro"]').click();
     // Espera a que el diálogo transicione al paso de éxito antes del segundo
     // click ("Entendido") — sin esto, el segundo click puede llegar mientras
@@ -77,6 +87,7 @@ describe('Pantallas de auth - registro, login, recuperación y cierre de sesión
     cy.get('[data-cy="auth-btn-abrir-registro"]').click();
     cy.get('[data-cy="auth-input-email-registro"]').type(email);
     cy.get('[data-cy="auth-input-password-registro"]').type(TEST_PASSWORD);
+    cy.get('[data-cy="auth-input-username-registro"]').type(uniqueTestUsername());
     cy.get('[data-cy="auth-btn-confirmar-registro"]').click();
 
     cy.get('[data-cy="auth-dialog-registro"] .error').should('be.visible');
@@ -103,6 +114,7 @@ describe('Pantallas de auth - registro, login, recuperación y cierre de sesión
     cy.get('[data-cy="auth-btn-abrir-registro"]').click();
     cy.get('[data-cy="auth-input-email-registro"]').type(email);
     cy.get('[data-cy="auth-input-password-registro"]').type(TEST_PASSWORD);
+    cy.get('[data-cy="auth-input-username-registro"]').type(uniqueTestUsername());
     cy.get('[data-cy="auth-btn-confirmar-registro"]').click();
     cy.get('[data-cy="auth-dialog-registro"]').should('contain', 'verifica tu cuenta');
     cy.get('[data-cy="auth-btn-confirmar-registro"]').click();
@@ -137,6 +149,7 @@ describe('Pantallas de auth - registro, login, recuperación y cierre de sesión
     cy.get('[data-cy="auth-btn-abrir-registro"]').click();
     cy.get('[data-cy="auth-input-email-registro"]').type(email);
     cy.get('[data-cy="auth-input-password-registro"]').type(TEST_PASSWORD);
+    cy.get('[data-cy="auth-input-username-registro"]').type(uniqueTestUsername());
     cy.get('[data-cy="auth-btn-confirmar-registro"]').click();
     cy.get('[data-cy="auth-dialog-registro"]').should('contain', 'verifica tu cuenta');
     cy.get('[data-cy="auth-btn-confirmar-registro"]').click();

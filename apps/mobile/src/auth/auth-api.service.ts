@@ -11,6 +11,8 @@ export type AuthApiErrorKind =
   | 'invalid-email'
   | 'invalid-credentials'
   | 'email-not-verified'
+  | 'username-taken'
+  | 'invalid-username'
   | 'rate-limited'
   | 'unauthorized'
   | 'network'
@@ -51,9 +53,21 @@ function toAuthApiError(err: unknown, mapStatus: (status: number, message: strin
 }
 
 function mapRegisterStatus(status: number, message: string): AuthApiErrorKind {
-  if (status === 409) return 'email-taken';
+  if (status === 409) return message.includes('username') ? 'username-taken' : 'email-taken';
   if (status === 429) return 'rate-limited';
-  if (status === 400) return message.includes('password') ? 'weak-password' : 'invalid-email';
+  if (status === 400) {
+    if (message.includes('password')) return 'weak-password';
+    if (message.includes('username')) return 'invalid-username';
+    return 'invalid-email';
+  }
+  return 'unknown';
+}
+
+function mapUsernameStatus(status: number): AuthApiErrorKind {
+  if (status === 401) return 'unauthorized';
+  if (status === 409) return 'username-taken';
+  if (status === 429) return 'rate-limited';
+  if (status === 400) return 'invalid-username';
   return 'unknown';
 }
 
@@ -72,14 +86,20 @@ function mapMeStatus(status: number): AuthApiErrorKind {
 export interface RegisterResult {
   id: number;
   email: string;
+  username: string;
 }
 
 /** `POST /api/auth/register` — ver `mapRegisterStatus` para el mapeo de errores. */
-export async function registerAccount(apiBaseUrl: string, email: string, password: string): Promise<RegisterResult> {
+export async function registerAccount(
+  apiBaseUrl: string,
+  email: string,
+  password: string,
+  username: string,
+): Promise<RegisterResult> {
   try {
     return await fetchJson<RegisterResult>(`${apiBaseUrl}/api/auth/register`, {
       method: 'POST',
-      body: { email, password },
+      body: { email, password, username },
       checkStatus: true,
     });
   } catch (err) {
@@ -128,12 +148,15 @@ export interface CurrentUser {
   id: number;
   email: string;
   emailVerified: boolean;
+  /** `null` mientras la cuenta no ha fijado ningún username todavía (ver nombre-usuario). */
+  username: string | null;
 }
 
 interface CurrentUserResponse {
   id: number;
   email: string;
   email_verified: boolean;
+  username: string | null;
 }
 
 /** `GET /api/auth/me` — ver `mapMeStatus` para el mapeo de errores. */
@@ -143,8 +166,26 @@ export async function fetchCurrentUser(apiBaseUrl: string, token: string): Promi
       headers: { Authorization: `Bearer ${token}` },
       checkStatus: true,
     });
-    return { id: response.id, email: response.email, emailVerified: response.email_verified };
+    return { id: response.id, email: response.email, emailVerified: response.email_verified, username: response.username };
   } catch (err) {
     throw toAuthApiError(err, mapMeStatus);
+  }
+}
+
+/**
+ * `PATCH /api/auth/username` — fija o cambia el username de la cuenta
+ * autenticada, misma operación para ambos casos (ver nombre-usuario,
+ * design.md Decisión 2). Ver `mapUsernameStatus` para el mapeo de errores.
+ */
+export async function setUsername(apiBaseUrl: string, token: string, username: string): Promise<void> {
+  try {
+    await fetchJson(`${apiBaseUrl}/api/auth/username`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}` },
+      body: { username },
+      checkStatus: true,
+    });
+  } catch (err) {
+    throw toAuthApiError(err, mapUsernameStatus);
   }
 }

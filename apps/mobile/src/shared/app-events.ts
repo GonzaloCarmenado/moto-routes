@@ -16,6 +16,7 @@ export const APP_EVENTS = {
   VIEW_SHARING: 'view-sharing',
   VIEW_ACHIEVEMENTS: 'view-achievements',
   BACK_TO_LIST: 'back-to-list',
+  AUTH_LOGGED_IN: 'auth-logged-in',
 } as const;
 
 /** Forma del `detail` de cada evento. `undefined` = evento sin payload. */
@@ -27,6 +28,10 @@ export interface AppEventDetailMap {
   'view-sharing': undefined;
   'view-achievements': undefined;
   'back-to-list': undefined;
+  /** Despachado tras un login interactivo correcto (`profile-account.ts`) — permite
+   * a `app-root` re-comprobar el bloqueo por username sin fijar (nombre-usuario,
+   * design.md Decisión 3) sin esperar al próximo arranque de la app. */
+  'auth-logged-in': undefined;
 }
 
 /** Nombre de evento de navegación (clave de `AppEventDetailMap`). */
