@@ -1,10 +1,4 @@
-# user-auth Specification
-
-## Purpose
-
-Permite que `apps/api` identifique de forma fiable a los usuarios que la consumen, como base para proteger cualquier endpoint que exponga datos o funcionalidad ligada a una cuenta.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Registro de usuario con email y contraseña
 La API SHALL permitir crear una cuenta nueva a partir de un email, una contraseña y un nombre de usuario, rechazando el registro si el email ya está en uso, si la contraseña no cumple la política mínima de complejidad, si el nombre de usuario ya está en uso (sin distinguir mayúsculas de minúsculas) o si no cumple el formato permitido (letras, dígitos y guion bajo, entre 3 y 20 caracteres).
@@ -28,6 +22,8 @@ La API SHALL permitir crear una cuenta nueva a partir de un email, una contrase�
 #### Scenario: Registro rechazado por formato de nombre de usuario inválido
 - **WHEN** un cliente envía un nombre de usuario que no cumple el formato permitido (por ejemplo, demasiado corto, demasiado largo, o con caracteres no permitidos)
 - **THEN** la API rechaza la petición sin crear la cuenta, indicando el motivo
+
+## ADDED Requirements
 
 ### Requirement: Una cuenta existente sin nombre de usuario queda bloqueada hasta fijarlo
 La app SHALL bloquear el acceso al resto de la app (mostrando únicamente una pantalla dedicada para fijar el nombre de usuario) cuando una cuenta con sesión activa todavía no tiene ninguno — nunca deja pasar a una cuenta sin username, ni siquiera temporalmente. Una vez fijado con éxito, SHALL restaurar el acceso normal a la app sin exigir un nuevo login.
@@ -62,37 +58,3 @@ La app SHALL permitir a un usuario con sesión activa y nombre de usuario ya fij
 #### Scenario: No se puede dejar el nombre de usuario vacío
 - **WHEN** un usuario con sesión activa intenta guardar un nombre de usuario vacío desde su perfil
 - **THEN** la app rechaza la acción sin llamar al servidor, sin cambiar el nombre de usuario actual
-
-### Requirement: Login emite un token de sesión válido
-La API SHALL verificar el email y la contraseña recibidos contra la cuenta registrada; si coinciden y la cuenta tiene el email verificado, SHALL emitir un token de sesión. Si las credenciales no coinciden, SHALL rechazar la petición sin revelar si el email existe o no. Si las credenciales coinciden pero la cuenta no tiene el email verificado, SHALL rechazar la petición indicando que hace falta verificar el email.
-
-#### Scenario: Login correcto devuelve un token
-- **WHEN** un cliente envía el email y la contraseña correctos de una cuenta existente con el email ya verificado
-- **THEN** la API responde con éxito y un token de sesión utilizable en peticiones posteriores
-
-#### Scenario: Login rechazado por credenciales incorrectas
-- **WHEN** un cliente envía una contraseña incorrecta para un email existente, o un email que no tiene cuenta asociada
-- **THEN** la API responde con el mismo tipo de error genérico en ambos casos, sin indicar cuál de los dos datos era incorrecto
-
-#### Scenario: Login rechazado por email sin verificar
-- **WHEN** un cliente envía el email y la contraseña correctos de una cuenta existente cuyo email todavía no está verificado
-- **THEN** la API rechaza la petición con un error distinguible del de credenciales incorrectas, indicando que hace falta verificar el email antes de iniciar sesión
-
-### Requirement: Los endpoints protegidos exigen un token de sesión válido
-Todo endpoint que dependa de una cuenta de usuario SHALL exigir un token de sesión válido y no expirado; SHALL rechazar la petición si el token falta, está mal formado, ha expirado o su firma no es válida.
-
-#### Scenario: Acceso concedido con un token válido
-- **WHEN** un cliente hace una petición a un endpoint protegido incluyendo un token de sesión válido y no expirado
-- **THEN** la API procesa la petición con normalidad
-
-#### Scenario: Acceso denegado sin token
-- **WHEN** un cliente hace una petición a un endpoint protegido sin incluir ningún token
-- **THEN** la API responde con un error de autenticación (401) sin procesar la petición
-
-#### Scenario: Acceso denegado con token expirado
-- **WHEN** un cliente hace una petición a un endpoint protegido con un token cuya fecha de expiración ya ha pasado
-- **THEN** la API responde con un error de autenticación (401) sin procesar la petición
-
-#### Scenario: Acceso denegado con token de firma inválida
-- **WHEN** un cliente hace una petición a un endpoint protegido con un token modificado o firmado con una clave distinta a la de la API
-- **THEN** la API responde con un error de autenticación (401) sin procesar la petición
