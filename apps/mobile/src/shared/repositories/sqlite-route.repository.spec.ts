@@ -369,6 +369,53 @@ describe('stop_type_id column migration (catalogo-tipos-parada)', () => {
   });
 });
 
+describe('save() troceado de puntos/paradas (bug real: rutas largas perdían todos sus puntos GPS)', () => {
+  it('persiste todos los puntos de una ruta larga (más de un chunk) en varios INSERT, no uno solo', async () => {
+    const db = createMockDb();
+    const repo = new SqliteRouteRepository(db);
+    const pointCount = 1200; // > INSERT_CHUNK_SIZE (500): fuerza al menos 3 INSERT
+    const points = Array.from({ length: pointCount }, (_, i) => ({
+      routeId: '', timestamp: i, lat: 40 + i * 0.0001, lng: -3 + i * 0.0001, alt: 1000, speed: 20,
+    }));
+
+    await repo.save(
+      { id: 'route-long', duration: pointCount, totalDistance: 200, avgSpeed: 65, status: 'completed', visibility: 'private', origin: 'local' },
+      points,
+      [],
+    );
+
+    const stored = await repo.getPointsByRouteId('route-long');
+    expect(stored).toHaveLength(pointCount);
+
+    const insertCalls = vi.mocked(db.execute).mock.calls.filter(([sql]) => sql.trim().toUpperCase().startsWith('INSERT INTO ROUTE_POINTS'));
+    expect(insertCalls.length).toBeGreaterThan(1);
+    for (const [, params] of insertCalls) {
+      expect((params as unknown[]).length).toBeLessThanOrEqual(500 * 7);
+    }
+  });
+
+  it('persiste todas las paradas de una ruta con más paradas que un chunk', async () => {
+    const db = createMockDb();
+    const repo = new SqliteRouteRepository(db);
+    const stopCount = 600; // > INSERT_CHUNK_SIZE (500): fuerza al menos 2 INSERT
+    const stops = Array.from({ length: stopCount }, (_, i) => ({
+      routeId: 'route-long-stops', startTime: i, endTime: i + 1, lat: 40, lng: -3, type: 'manual' as const, stopCategoryId: null,
+    }));
+
+    await repo.save(
+      { id: 'route-long-stops', duration: 100, totalDistance: 10, avgSpeed: 5, status: 'completed', visibility: 'private', origin: 'local' },
+      [],
+      stops,
+    );
+
+    const stored = await repo.getStopsByRouteId('route-long-stops');
+    expect(stored).toHaveLength(stopCount);
+
+    const insertCalls = vi.mocked(db.execute).mock.calls.filter(([sql]) => sql.trim().toUpperCase().startsWith('INSERT INTO ROUTE_STOPS'));
+    expect(insertCalls.length).toBeGreaterThan(1);
+  });
+});
+
 describe('SqliteRouteRepository SQL injection safety', () => {
   it('should use parameterized queries', () => {
     const db = createMockDb();

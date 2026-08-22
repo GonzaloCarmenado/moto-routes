@@ -36,6 +36,36 @@ func TestMeHandler_ReturnsAuthenticatedUser(t *testing.T) {
 	if body.EmailVerified {
 		t.Fatal("expected EmailVerified false for a freshly registered account")
 	}
+	if body.Username == nil {
+		t.Fatal("expected a username: registration always sets one")
+	}
+}
+
+func TestMeHandler_AccountWithoutUsernameReturnsNull(t *testing.T) {
+	store := newFakeUserStore()
+	created, err := store.CreateUser(context.Background(), "rider@example.com", "hash", "rider1")
+	if err != nil {
+		t.Fatalf("failed to seed user: %v", err)
+	}
+	// Simula una cuenta preexistente a la migración (ver nombre-usuario,
+	// design.md Decisión 1): username nunca se rellena automáticamente.
+	created.Username = nil
+	store.byEmail["rider@example.com"] = created
+
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	ctx := context.WithValue(req.Context(), userIDContextKey, created.ID)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	MeHandler(store).ServeHTTP(rec, req)
+
+	var body meResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+	if body.Username != nil {
+		t.Fatalf("expected username null, got %q", *body.Username)
+	}
 }
 
 func TestMeHandler_WithoutContextUserIsDenied(t *testing.T) {

@@ -590,6 +590,13 @@ describe('CockpitView - guardar/descartar al parar (AC-003 a AC-006)', () => {
     discardBtn.click();
     await waitRender();
 
+    // Confirmación de descarte (bug real: se borraba sin ningún aviso, ver fix/mejoras-varias).
+    const confirmBtn = document.body
+      .querySelector('confirm-dialog')!
+      .shadowRoot!.querySelector('[data-cy="confirm-dialog-action-confirm"]') as HTMLButtonElement;
+    confirmBtn.click();
+    await waitRender();
+
     const all = await repo.getAll();
     expect(all).toHaveLength(0);
     expect(document.body.querySelector('[data-cy="photo-toast"]')?.textContent).toBe('Ruta descartada');

@@ -5,6 +5,7 @@ export interface AuthSectionCallbacks {
   onOpenRegister: () => void;
   onOpenForgotPassword: () => void;
   onLogout: () => void;
+  onEditUsername: () => void;
 }
 
 /**
@@ -20,23 +21,28 @@ export function buildAuthSection(state: AuthSectionState, callbacks: AuthSection
   section.className = 'auth-section';
   section.setAttribute('data-cy', 'auth-section-cuenta');
 
-  section.appendChild(state.status === 'logged-in' ? buildLoggedIn(state.email, callbacks) : buildLoggedOut(callbacks));
+  section.appendChild(
+    state.status === 'logged-in' ? buildLoggedIn(state.email, state.username, callbacks) : buildLoggedOut(callbacks),
+  );
 
   return section;
 }
 
-function buildLoggedIn(email: string, callbacks: AuthSectionCallbacks): HTMLElement {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'auth-loggedin-row';
+function buildLoggedIn(email: string, username: string | null, callbacks: AuthSectionCallbacks): HTMLElement {
+  const container = document.createElement('div');
+  container.className = 'auth-loggedin';
+
+  const row = document.createElement('div');
+  row.className = 'auth-loggedin-row';
 
   const dot = document.createElement('span');
   dot.className = 'auth-status-dot';
-  wrapper.appendChild(dot);
+  row.appendChild(dot);
 
   const emailEl = document.createElement('p');
   emailEl.className = 'auth-email';
   emailEl.textContent = email;
-  wrapper.appendChild(emailEl);
+  row.appendChild(emailEl);
 
   const logoutBtn = document.createElement('button');
   logoutBtn.type = 'button';
@@ -44,9 +50,31 @@ function buildLoggedIn(email: string, callbacks: AuthSectionCallbacks): HTMLElem
   logoutBtn.setAttribute('data-cy', 'auth-btn-cerrar-sesion');
   logoutBtn.textContent = 'Salir';
   logoutBtn.addEventListener('click', callbacks.onLogout);
-  wrapper.appendChild(logoutBtn);
+  row.appendChild(logoutBtn);
 
-  return wrapper;
+  container.appendChild(row);
+  container.appendChild(buildUsernameRow(username, callbacks));
+  return container;
+}
+
+function buildUsernameRow(username: string | null, callbacks: AuthSectionCallbacks): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'auth-username-row';
+
+  const label = document.createElement('p');
+  label.className = 'auth-username';
+  label.textContent = username ?? 'Sin nombre de usuario';
+  row.appendChild(label);
+
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'auth-link-btn';
+  editBtn.setAttribute('data-cy', 'auth-btn-editar-username');
+  editBtn.textContent = username ? 'Editar' : 'Fijar';
+  editBtn.addEventListener('click', callbacks.onEditUsername);
+  row.appendChild(editBtn);
+
+  return row;
 }
 
 function buildLoggedOut(callbacks: AuthSectionCallbacks): HTMLElement {

@@ -3,6 +3,11 @@ import { persistRouteOnStop, persistRouteOnStart } from './cockpit-persist.servi
 import type { IRouteRepository } from '../../shared/models/route.repository.js';
 import type { CockpitState } from '../cockpit.types.js';
 
+vi.mock('../../shared/feedback/toast.js', () => ({
+  showToast: vi.fn(),
+}));
+import { showToast } from '../../shared/feedback/toast.js';
+
 const BACKUP_KEY = 'moto-routes-pending-backup';
 
 function flushPromises(): Promise<void> {
@@ -45,6 +50,7 @@ function createRepository(): IRouteRepository {
 describe('persistRouteOnStop', () => {
   beforeEach(() => {
     localStorage.removeItem(BACKUP_KEY);
+    vi.mocked(showToast).mockReset();
   });
 
   it('does nothing when there is no repository', () => {
@@ -85,6 +91,17 @@ describe('persistRouteOnStop', () => {
     const backup = localStorage.getItem(BACKUP_KEY);
     expect(backup).not.toBeNull();
     expect(JSON.parse(backup!)).toMatchObject({ route: { id: 'route-1', name: 'Ruta de prueba' } });
+  });
+
+  it('shows a visible error toast when save() fails, so the loss is never silent (bug real: rutas largas perdían todos sus puntos GPS sin ningún aviso)', async () => {
+    const repository = createRepository();
+    (repository.save as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('too many SQL variables'));
+    const state = createState();
+
+    persistRouteOnStop(repository, state, 'Ruta de prueba');
+    await flushPromises();
+
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('No se pudo guardar'), 'error');
   });
 
   it('does not write a backup when only updatePreviewPolyline() fails (non-critical)', async () => {

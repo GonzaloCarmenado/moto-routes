@@ -133,6 +133,14 @@ describe('Route list - miniatura de una ruta exclusiva de la nube (miniatura-lis
     return `${TEST_EMAIL_PREFIX}-${String(Date.now())}-${suffix}@example.com`;
   }
 
+  let usernameCounter = 0;
+
+  /** Username único y válido (`[a-z0-9_]{3,20}`, ver `validateUsername` en `apps/api`) — obligatorio desde `nombre-usuario`. */
+  function uniqueTestUsername(): string {
+    usernameCounter += 1;
+    return `cy${Date.now().toString(36)}${String(usernameCounter)}`.slice(0, 20);
+  }
+
   function markEmailVerified(email: string): Cypress.Chainable {
     return cy.exec(
       `docker exec docker-postgres-1 psql -U motoroutes -d motoroutes -c "UPDATE users SET email_verified = true WHERE email = '${email}';"`,
@@ -141,7 +149,7 @@ describe('Route list - miniatura de una ruta exclusiva de la nube (miniatura-lis
 
   function registerVerifiedAccountViaApi(email: string): Cypress.Chainable<string> {
     return cy
-      .request('POST', `${API_BASE_URL}/api/auth/register`, { email, password: TEST_PASSWORD })
+      .request('POST', `${API_BASE_URL}/api/auth/register`, { email, password: TEST_PASSWORD, username: uniqueTestUsername() })
       .then(() => markEmailVerified(email))
       .then(() => cy.request('POST', `${API_BASE_URL}/api/auth/login`, { email, password: TEST_PASSWORD }))
       .then((res) => (res.body as { token: string }).token);
