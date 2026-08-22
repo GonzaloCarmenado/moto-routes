@@ -7,6 +7,7 @@ import type { CockpitState } from '../cockpit.types.js';
 import type { IRouteRepository } from '../../shared/models/route.repository.js';
 import type { CreateRoute, CreateRoutePoint, CreateRouteStop } from '../../shared/models/route.types.js';
 import { simplifyPolyline } from '../../shared/services/route-polyline.service.js';
+import { showToast } from '../../shared/feedback/toast.js';
 
 const BACKUP_KEY = 'moto-routes-pending-backup';
 
@@ -89,8 +90,11 @@ export function persistRouteOnStop(repository: IRouteRepository | undefined, sta
   const points = buildCreatePoints(state);
   const stops = buildStops(state);
   repository.save(route, points, stops).catch(() => {
-    // Si falla, guardar backup en localStorage
+    // Si falla, guardar backup en localStorage (best-effort, ver persistFallback) y avisar
+    // de forma visible — un guardado roto en silencio es justo el incidente real que
+    // motivó este aviso (ruta larga sin ningún aviso hasta días después).
     persistFallback(JSON.stringify({ route, points, stops }));
+    showToast('No se pudo guardar la ruta grabada. Los datos GPS podrían haberse perdido.', 'error');
   });
 
   const previewPolyline = simplifyPolyline(state.points);
