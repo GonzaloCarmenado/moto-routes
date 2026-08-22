@@ -13,11 +13,13 @@ import (
 type registerRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	Username string `json:"username"`
 }
 
 type registerResponse struct {
-	ID    int64  `json:"id"`
-	Email string `json:"email"`
+	ID       int64  `json:"id"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
 }
 
 // RegisterHandler crea una cuenta nueva a partir de email y contraseña,
@@ -43,16 +45,25 @@ func RegisterHandler(store UserStore, tokenStore VerificationTokenStore, sender 
 			return
 		}
 
+		if err := validateUsername(req.Username); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid username")
+			return
+		}
+
 		hash, err := hashPassword(req.Password)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "could not process the request")
 			return
 		}
 
-		user, err := store.CreateUser(r.Context(), req.Email, hash)
+		user, err := store.CreateUser(r.Context(), req.Email, hash, req.Username)
 		if err != nil {
 			if errors.Is(err, ErrEmailTaken) {
 				writeError(w, http.StatusConflict, "email already registered")
+				return
+			}
+			if errors.Is(err, ErrUsernameTaken) {
+				writeError(w, http.StatusConflict, "username already taken")
 				return
 			}
 			writeError(w, http.StatusInternalServerError, "could not process the request")
@@ -63,7 +74,11 @@ func RegisterHandler(store UserStore, tokenStore VerificationTokenStore, sender 
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(registerResponse{ID: user.ID, Email: user.Email})
+		username := ""
+		if user.Username != nil {
+			username = *user.Username
+		}
+		_ = json.NewEncoder(w).Encode(registerResponse{ID: user.ID, Email: user.Email, Username: username})
 	})
 }
 

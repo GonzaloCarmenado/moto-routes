@@ -17,6 +17,8 @@ const ERROR_MESSAGES: Partial<Record<AuthApiErrorKind, string>> = {
   'email-taken': 'Ya existe una cuenta con ese email. Prueba a iniciar sesión.',
   'weak-password': 'La contraseña debe tener al menos 8 caracteres.',
   'invalid-email': 'Introduce un email válido.',
+  'username-taken': 'Ese nombre de usuario ya está en uso. Prueba con otro.',
+  'invalid-username': 'El nombre de usuario debe tener 3-20 caracteres: minúsculas, dígitos y guion bajo.',
   'rate-limited': 'Demasiados intentos. Prueba de nuevo en unos minutos.',
 };
 const GENERIC_ERROR_MESSAGE = 'No se pudo crear la cuenta. Inténtalo de nuevo.';
@@ -33,6 +35,7 @@ class AuthRegisterDialogElement extends BaseElement {
    * `profile-edit-dialog.element.ts`). */
   private currentEmail = '';
   private currentPassword = '';
+  private currentUsername = '';
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.key === 'Escape' && !this.submitting) this.close('cancelled');
@@ -70,15 +73,17 @@ class AuthRegisterDialogElement extends BaseElement {
     if (!this.options || this.submitting) return;
     this.currentEmail = this.shadowRoot?.querySelector<HTMLInputElement>('[data-cy="auth-input-email-registro"]')?.value ?? '';
     this.currentPassword = this.shadowRoot?.querySelector<HTMLInputElement>('[data-cy="auth-input-password-registro"]')?.value ?? '';
+    this.currentUsername = this.shadowRoot?.querySelector<HTMLInputElement>('[data-cy="auth-input-username-registro"]')?.value ?? '';
     const email = this.currentEmail;
     const password = this.currentPassword;
+    const username = this.currentUsername;
 
     this.submitting = true;
     this.errorMessage = null;
     this.render();
 
     try {
-      await registerAccount(this.options.apiBaseUrl, email, password);
+      await registerAccount(this.options.apiBaseUrl, email, password, username);
       this.submitting = false;
       this.step = 'success';
       this.render();
@@ -118,6 +123,7 @@ class AuthRegisterDialogElement extends BaseElement {
 
     dialog.appendChild(this.buildField('Email', 'email', 'auth-input-email-registro', this.currentEmail));
     dialog.appendChild(this.buildField('Contraseña', 'password', 'auth-input-password-registro', this.currentPassword));
+    dialog.appendChild(this.buildField('Nombre de usuario', 'text', 'auth-input-username-registro', this.currentUsername));
     dialog.appendChild(this.buildFormActions());
     return dialog;
   }

@@ -27,12 +27,15 @@ func TestPostgresUserStore_CreateAndFindRoundTrip(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
 
-	created, err := store.CreateUser(ctx, "rider@example.com", "hashed-value")
+	created, err := store.CreateUser(ctx, "rider@example.com", "hashed-value", "rider1")
 	if err != nil {
 		t.Fatalf("unexpected error creating user: %v", err)
 	}
 	if created.ID == 0 {
 		t.Fatal("expected a non-zero id")
+	}
+	if created.Username == nil || *created.Username != "rider1" {
+		t.Fatalf("expected username rider1, got %+v", created.Username)
 	}
 
 	found, err := store.FindUserByEmail(ctx, "rider@example.com")
@@ -48,13 +51,81 @@ func TestPostgresUserStore_CreateDuplicateEmailReturnsErrEmailTaken(t *testing.T
 	store := testStore(t)
 	ctx := context.Background()
 
-	if _, err := store.CreateUser(ctx, "rider@example.com", "hash-1"); err != nil {
+	if _, err := store.CreateUser(ctx, "rider@example.com", "hash-1", "rider1"); err != nil {
 		t.Fatalf("unexpected error on first create: %v", err)
 	}
 
-	_, err := store.CreateUser(ctx, "rider@example.com", "hash-2")
+	_, err := store.CreateUser(ctx, "rider@example.com", "hash-2", "rider2")
 	if !errors.Is(err, ErrEmailTaken) {
 		t.Fatalf("expected ErrEmailTaken, got %v", err)
+	}
+}
+
+func TestPostgresUserStore_CreateDuplicateUsernameReturnsErrUsernameTaken(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	if _, err := store.CreateUser(ctx, "rider1@example.com", "hash-1", "rider1"); err != nil {
+		t.Fatalf("unexpected error on first create: %v", err)
+	}
+
+	_, err := store.CreateUser(ctx, "rider2@example.com", "hash-2", "rider1")
+	if !errors.Is(err, ErrUsernameTaken) {
+		t.Fatalf("expected ErrUsernameTaken, got %v", err)
+	}
+}
+
+func TestPostgresUserStore_CreateDuplicateUsernameIsCaseInsensitive(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	if _, err := store.CreateUser(ctx, "rider1@example.com", "hash-1", "rider1"); err != nil {
+		t.Fatalf("unexpected error on first create: %v", err)
+	}
+
+	_, err := store.CreateUser(ctx, "rider2@example.com", "hash-2", "RIDER1")
+	if !errors.Is(err, ErrUsernameTaken) {
+		t.Fatalf("expected ErrUsernameTaken for a case-insensitive duplicate, got %v", err)
+	}
+}
+
+func TestPostgresUserStore_UpdateUsernameSetsAndChangesIt(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	created, err := store.CreateUser(ctx, "rider@example.com", "hashed-value", "rider1")
+	if err != nil {
+		t.Fatalf("unexpected error creating user: %v", err)
+	}
+
+	if err := store.UpdateUsername(ctx, created.ID, "newname"); err != nil {
+		t.Fatalf("unexpected error updating username: %v", err)
+	}
+
+	found, err := store.FindUserByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("unexpected error finding user: %v", err)
+	}
+	if found.Username == nil || *found.Username != "newname" {
+		t.Fatalf("expected username newname, got %+v", found.Username)
+	}
+}
+
+func TestPostgresUserStore_UpdateUsernameToTakenReturnsErrUsernameTaken(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	if _, err := store.CreateUser(ctx, "rider1@example.com", "hash-1", "rider1"); err != nil {
+		t.Fatalf("unexpected error creating first user: %v", err)
+	}
+	second, err := store.CreateUser(ctx, "rider2@example.com", "hash-2", "rider2")
+	if err != nil {
+		t.Fatalf("unexpected error creating second user: %v", err)
+	}
+
+	err = store.UpdateUsername(ctx, second.ID, "rider1")
+	if !errors.Is(err, ErrUsernameTaken) {
+		t.Fatalf("expected ErrUsernameTaken, got %v", err)
 	}
 }
 
@@ -72,7 +143,7 @@ func TestPostgresUserStore_NewAccountStartsWithEmailUnverified(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
 
-	created, err := store.CreateUser(ctx, "rider@example.com", "hashed-value")
+	created, err := store.CreateUser(ctx, "rider@example.com", "hashed-value", "rider1")
 	if err != nil {
 		t.Fatalf("unexpected error creating user: %v", err)
 	}
@@ -93,7 +164,7 @@ func TestPostgresUserStore_MarkEmailVerifiedPersists(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
 
-	created, err := store.CreateUser(ctx, "rider@example.com", "hashed-value")
+	created, err := store.CreateUser(ctx, "rider@example.com", "hashed-value", "rider1")
 	if err != nil {
 		t.Fatalf("unexpected error creating user: %v", err)
 	}

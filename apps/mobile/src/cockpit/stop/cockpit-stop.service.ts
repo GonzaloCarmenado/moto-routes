@@ -15,6 +15,7 @@ import { openSaveRouteDialog } from '../save-route-dialog/cockpit-save-route-dia
 import { deleteRouteAndPhotos } from '../../shared/services/route-deletion.service.js';
 import { toErrorMessage } from '../../shared/utils/errors.js';
 import { showToast } from '../../shared/feedback/toast.js';
+import { confirmDialog } from '../../shared/feedback/confirm-dialog.element.js';
 
 interface StopOutcome {
   choice: 'save' | 'discard';
@@ -32,6 +33,24 @@ async function decideStopOutcome(metadata: RouteMetadata): Promise<StopOutcome> 
   const sanitized = sanitizeRouteName(result.name);
   const name = sanitized || buildDefaultRouteName(metadata.date);
   return { choice: result.action, name };
+}
+
+/**
+ * Segunda confirmación antes de borrar de verdad — descartar era, hasta este
+ * cambio, una acción irreversible de un solo click sin ningún aviso (bug
+ * real reportado por un usuario que perdió una ruta grabada por error).
+ * `true` si el usuario confirma el borrado.
+ */
+async function confirmDiscard(): Promise<boolean> {
+  const choice = await confirmDialog({
+    title: '¿Descartar la ruta?',
+    message: 'Se perderá toda la ruta grabada, incluidas sus fotos. Esta acción no se puede deshacer.',
+    actions: [
+      { id: 'cancel', label: 'Cancelar', variant: 'neutral' },
+      { id: 'confirm', label: 'Descartar', variant: 'danger' },
+    ],
+  });
+  return choice === 'confirm';
 }
 
 /** Parámetros del flujo de resolución de la parada (diálogo guardar/descartar). */
@@ -52,7 +71,13 @@ export interface ResolveStopDecisionParams {
  */
 export async function resolveStopDecision(params: ResolveStopDecisionParams): Promise<void> {
   const { metadata, routeId, service, routeRepo, getPhotoRepo } = params;
-  const { choice, name } = await decideStopOutcome(metadata);
+  let outcome = await decideStopOutcome(metadata);
+  // Cancelar la confirmación de descarte vuelve a la decisión inicial (guardar/descartar)
+  // en vez de dejar la grabación parada sin ninguna acción aplicada.
+  while (outcome.choice === 'discard' && !(await confirmDiscard())) {
+    outcome = await decideStopOutcome(metadata);
+  }
+  const { choice, name } = outcome;
 
   if (choice === 'save') {
     service.confirmSaveRecording(name);

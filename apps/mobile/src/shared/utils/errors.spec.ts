@@ -1,9 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { toErrorMessage } from './errors.js';
+import { ExternalApiError } from '../http/external-api.service.js';
 
 describe('toErrorMessage', () => {
   it('returns the message of a real Error instance', () => {
     expect(toErrorMessage(new Error('boom'))).toBe('boom');
+  });
+
+  it('prefers the caller-provided fallback over the raw technical message of an ExternalApiError (bug real: un timeout de red mostraba literalmente "Request to https://... timed out")', () => {
+    const err = new ExternalApiError('timeout', 'Request to https://api.example.com/routes timed out');
+    expect(toErrorMessage(err, 'No se pudo actualizar la ruta en la nube')).toBe('No se pudo actualizar la ruta en la nube');
+  });
+
+  it('falls back to the default message for an ExternalApiError when no fallback was given', () => {
+    const err = new ExternalApiError('network', 'Network error requesting https://api.example.com/routes: TypeError');
+    expect(toErrorMessage(err)).toBe('Error desconocido');
   });
 
   it('returns the value itself for plain string rejections (e.g. Tauri invoke())', () => {

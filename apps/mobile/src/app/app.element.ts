@@ -9,6 +9,7 @@ import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { IProfileRepository } from '../shared/models/profile.repository.js';
 import type { IStopTypesCacheRepository } from '../shared/models/stop-types-cache.repository.js';
 import type { ISessionRepository } from '../shared/models/session.repository.js';
+import type { Session } from '../shared/models/session.types.js';
 import { SqliteRouteRepository } from '../shared/repositories/sqlite-route.repository.js';
 import { createSqliteDb } from '../shared/repositories/sqlite-route.factory.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
@@ -31,16 +32,24 @@ import { reregisterDeviceTokenAfterRefresh } from '../shared/services/device-tok
 import { getPendingTapScreen, clearPendingTapScreen } from '../shared/tauri/commands.js';
 import { applyCypressSeed } from './app-seed.service.js';
 import type { NavBarActiveView } from '../shared/nav-bar/nav-bar.element.js';
+import { fetchCurrentUser } from '../auth/auth-api.service.js';
+import '../auth/username-form.element.js';
+import { USERNAME_FORM_SUCCESS_EVENT } from '../auth/username-form.types.js';
 
-/** Vista interna de `app-root` (6 vistas — `nav-bar` solo entiende 3, ver `navViewFor`). */
-type AppView = 'cockpit' | 'routes' | 'detail' | 'profile' | 'sharing' | 'achievements';
+/** Vista interna de `app-root` (7 vistas — `nav-bar` solo entiende 3, ver `navViewFor`).
+ * `username-gate` es una séptima vista sin acceso desde `nav-bar` (ver nombre-usuario,
+ * design.md Decisión 3): se muestra en vez de `cockpit` al arrancar si la cuenta con
+ * sesión activa todavía no tiene username fijado, bloqueando el resto de la app. */
+type AppView = 'cockpit' | 'routes' | 'detail' | 'profile' | 'sharing' | 'achievements' | 'username-gate';
 
 /**
- * Traduce las 6 vistas internas de `app-root` a las 3 que entiende `<nav-bar>`
- * (AC-036): el detalle de ruta y la pantalla de invitaciones son sub-vistas
- * de "Rutas"; "Mis logros" es sub-vista de "Perfil" (se abre desde ahí).
+ * Traduce las 6 vistas internas de `app-root` que sí tienen barra de
+ * navegación a las 3 que entiende `<nav-bar>` (AC-036): el detalle de ruta y
+ * la pantalla de invitaciones son sub-vistas de "Rutas"; "Mis logros" es
+ * sub-vista de "Perfil" (se abre desde ahí). `username-gate` nunca llega
+ * aquí — `showView()` oculta `<nav-bar>` por completo mientras está activa.
  */
-function navViewFor(view: AppView): NavBarActiveView {
+function navViewFor(view: Exclude<AppView, 'username-gate'>): NavBarActiveView {
   if (view === 'detail' || view === 'sharing') return 'routes';
   if (view === 'achievements') return 'profile';
   return view;
@@ -58,10 +67,15 @@ class AppRoot extends BaseElement {
   private sharingEl: HTMLElement | null = null;
   private achievementsEl: HTMLElement | null = null;
   private navBarEl: HTMLElement | null = null;
+  private usernameGateEl: HTMLElement | null = null;
+  /** `true` mientras la cuenta con sesión activa no tiene username fijado —
+   * bloquea la navegación por `<nav-bar>` (ver nombre-usuario, design.md
+   * Decisión 3), nunca se accede al resto de la app hasta fijarlo. */
+  private usernameGateActive = false;
 
-  private readonly onGrabar = (): void => { this.showView('cockpit'); };
-  private readonly onRutas = (): void => { this.showView('routes'); };
-  private readonly onPerfil = (): void => { this.showView('profile'); };
+  private readonly onGrabar = (): void => { if (!this.usernameGateActive) this.showView('cockpit'); };
+  private readonly onRutas = (): void => { if (!this.usernameGateActive) this.showView('routes'); };
+  private readonly onPerfil = (): void => { if (!this.usernameGateActive) this.showView('profile'); };
   private readonly onViewRoute = (e: Event): void => {
     const routeId = (e as CustomEvent<AppEventDetailMap['view-route']>).detail.routeId;
     if (this.routeDetailEl) {
@@ -72,6 +86,8 @@ class AppRoot extends BaseElement {
   private readonly onViewSharing = (): void => { this.showView('sharing'); };
   private readonly onViewAchievements = (): void => { this.showView('achievements'); };
   private readonly onBackToList = (): void => { this.showView('routes'); };
+  /** Re-comprueba el bloqueo por username sin fijar tras un login interactivo — ver `checkUsernameGate()`. */
+  private readonly onAuthLoggedIn = (): void => { void this.checkUsernameGate(); };
   private unlistenNotificationTap: (() => void) | null = null;
 
   connectedCallback(): void {
@@ -82,6 +98,7 @@ class AppRoot extends BaseElement {
     window.addEventListener(APP_EVENTS.VIEW_SHARING, this.onViewSharing);
     window.addEventListener(APP_EVENTS.VIEW_ACHIEVEMENTS, this.onViewAchievements);
     window.addEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
+    window.addEventListener(APP_EVENTS.AUTH_LOGGED_IN, this.onAuthLoggedIn);
     // Tocar una notificación push de invitación abre la app directamente en
     // Invitaciones (notificaciones-push-fcm) — dispara el mismo evento
     // `VIEW_SHARING` que el icono de invitaciones del listado (no basta con
@@ -102,6 +119,7 @@ class AppRoot extends BaseElement {
     window.removeEventListener(APP_EVENTS.VIEW_SHARING, this.onViewSharing);
     window.removeEventListener(APP_EVENTS.VIEW_ACHIEVEMENTS, this.onViewAchievements);
     window.removeEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
+    window.removeEventListener(APP_EVENTS.AUTH_LOGGED_IN, this.onAuthLoggedIn);
     this.unlistenNotificationTap?.();
   }
 
@@ -160,6 +178,90 @@ class AppRoot extends BaseElement {
     return achievements;
   }
 
+  /**
+   * Pantalla de bloqueo para una cuenta con sesión activa sin username
+   * (nombre-usuario, design.md Decisión 3) — solo `<username-form>`, sin
+   * botón de cancelar ni acceso al resto de la app hasta fijarlo con éxito.
+   */
+  private buildUsernameGateView(session: Session): HTMLElement {
+    const view = document.createElement('div');
+    view.className = 'app-view username-gate';
+    view.setAttribute('data-cy', 'username-gate');
+
+    const title = document.createElement('h1');
+    title.className = 'username-gate__title';
+    title.textContent = 'Elige tu nombre de usuario';
+    view.appendChild(title);
+
+    const message = document.createElement('p');
+    message.className = 'username-gate__message';
+    message.textContent = 'Lo necesitamos para poder identificarte — podrás cambiarlo después desde tu perfil.';
+    view.appendChild(message);
+
+    const form = document.createElement('username-form') as HTMLElement & {
+      apiBaseUrl: string;
+      token: string;
+      currentUsername: string | null;
+    };
+    form.apiBaseUrl = getApiBaseUrl();
+    form.token = session.token;
+    form.currentUsername = null;
+    form.addEventListener(USERNAME_FORM_SUCCESS_EVENT, () => {
+      this.usernameGateActive = false;
+      this.refreshProfileAccountState();
+      this.showView('cockpit');
+    });
+    view.appendChild(form);
+
+    return view;
+  }
+
+  /**
+   * Fuerza que la sección "Cuenta" de `<profile-view>` recargue su estado tras
+   * fijar el username desde la pantalla de bloqueo — a diferencia del resto
+   * de vistas, `profile-view` se construye una única vez en `init()` y solo
+   * alterna su visibilidad (`showView()`), así que su `connectedCallback` no
+   * vuelve a dispararse al navegar a Perfil después: sin este empujón se
+   * quedaría mostrando "Sin nombre de usuario" hasta el próximo arranque en
+   * frío (gap real encontrado verificando 7.2 en Cypress). Reasignar
+   * `sessionRepository` reutiliza el refresco que ya dispara su propio setter
+   * (`profile.element.ts`), sin duplicar esa lógica aquí.
+   */
+  private refreshProfileAccountState(): void {
+    if (!this.profileEl) return;
+    (this.profileEl as HTMLElement & { sessionRepository: ISessionRepository }).sessionRepository = this.sessionRepo;
+  }
+
+  /** Construye y muestra la pantalla de bloqueo bajo demanda (depende de la
+   * sesión, resuelta de forma asíncrona tras el primer `render()`, a
+   * diferencia del resto de vistas — ver `init()`). */
+  private showUsernameGate(session: Session): void {
+    this.usernameGateActive = true;
+    const gate = this.buildUsernameGateView(session);
+    this.usernameGateEl = gate;
+    this.appendChild(gate);
+    this.showView('username-gate');
+  }
+
+  /**
+   * Comprueba el bloqueo por username sin fijar (nombre-usuario, design.md
+   * Decisión 3) — se llama tanto desde `init()` (arranque en frío con sesión
+   * ya persistida) como desde `onAuthLoggedIn` (login interactivo dentro de
+   * una sesión de app ya abierta, ver `profile-account.ts::handleOpenLogin`).
+   * Best-effort: un fallo de red (Decisión 4) deja pasar sin bloqueo.
+   */
+  private async checkUsernameGate(): Promise<void> {
+    if (this.usernameGateActive) return;
+    const session = await this.sessionRepo.get();
+    if (!session) return;
+    try {
+      const currentUser = await fetchCurrentUser(getApiBaseUrl(), session.token);
+      if (currentUser.username === null) this.showUsernameGate(session);
+    } catch {
+      // Sin conexión u otro fallo: se comprobará de nuevo en el próximo arranque/login.
+    }
+  }
+
   // Decide primero por isTauri() (en vez de por éxito/fracaso del intento de SQLite)
   // para que la siembra de rutas de test sea determinista y no dependa de si, por
   // casualidad, hay un plugin SQL cargable en el navegador de pruebas (AC-007/AC-010).
@@ -211,6 +313,12 @@ class AppRoot extends BaseElement {
     void this.sessionRepo.get().then((session) => {
       if (session) void reregisterDeviceTokenAfterRefresh(getApiBaseUrl(), session);
     });
+
+    // Bloqueo por username sin fijar (nombre-usuario, design.md Decisión 3):
+    // best-effort, igual que el resto de comprobaciones en segundo plano de
+    // este método — un fallo de red (Decisión 4) deja la app arrancar con
+    // normalidad, sin bloqueo, en vez de dejarla inutilizable.
+    void this.checkUsernameGate();
 
     // Best-effort, en segundo plano: no bloquea el arranque ni el primer render.
     // Si falla (sin red, apps/api no disponible), la caché existente se queda tal
@@ -274,8 +382,14 @@ class AppRoot extends BaseElement {
     if (this.profileEl) this.profileEl.style.display = view === 'profile' ? '' : 'none';
     if (this.sharingEl) this.sharingEl.style.display = view === 'sharing' ? '' : 'none';
     if (this.achievementsEl) this.achievementsEl.style.display = view === 'achievements' ? '' : 'none';
+    if (this.usernameGateEl) this.usernameGateEl.style.display = view === 'username-gate' ? '' : 'none';
     if (this.navBarEl) {
-      (this.navBarEl as HTMLElement & { activeView: NavBarActiveView }).activeView = navViewFor(view);
+      if (view === 'username-gate') {
+        this.navBarEl.style.display = 'none';
+      } else {
+        this.navBarEl.style.display = '';
+        (this.navBarEl as HTMLElement & { activeView: NavBarActiveView }).activeView = navViewFor(view);
+      }
     }
   }
 }
