@@ -31,6 +31,12 @@ describe('shared/styles/stat-tile.css (AC-028, AC-034)', () => {
       /\.stat-tile \.stat-label\s*{[^}]*font-size:\s*12px;[^}]*text-transform:\s*uppercase;[^}]*letter-spacing:\s*0\.06em;[^}]*color:\s*var\(--ink-faint\);[^}]*font-weight:\s*600;[^}]*}/,
     );
     expect(styles).toMatch(/\.stat-tile \.stat-value\s*{[^}]*font-size:\s*26px;[^}]*color:\s*var\(--ink\);[^}]*}/);
+    // Sin esto, un valor largo (p. ej. el nombre de la ruta más larga en Perfil)
+    // desborda por la derecha de la tarjeta y hace crecer su altura, rompiendo
+    // la fila entera del grid (bug real reportado en producción).
+    expect(styles).toMatch(
+      /\.stat-tile \.stat-value\s*{[^}]*white-space:\s*nowrap;[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;[^}]*}/,
+    );
     expect(styles).toMatch(
       /\.stat-tile \.stat-unit\s*{[^}]*font-size:\s*13px;[^}]*color:\s*var\(--ink-soft\);[^}]*font-weight:\s*500;[^}]*}/,
     );
