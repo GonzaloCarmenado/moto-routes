@@ -12,6 +12,7 @@ import (
 
 	"github.com/crzverde/moto-routes/apps/api/internal/achievements"
 	"github.com/crzverde/moto-routes/apps/api/internal/auth"
+	"github.com/crzverde/moto-routes/apps/api/internal/avatar"
 	"github.com/crzverde/moto-routes/apps/api/internal/config"
 	"github.com/crzverde/moto-routes/apps/api/internal/email"
 	"github.com/crzverde/moto-routes/apps/api/internal/httpmw"
@@ -110,6 +111,11 @@ func main() {
 	deviceTokenStore := notifications.PostgresDeviceTokenStore{Pool: pool}
 	notifier := buildNotifier(ctx, cfg.FCMServiceAccountJSON, deviceTokenStore)
 
+	blobStore, err := photos.NewMinioBlobStore(cfg.MinioEndpoint, cfg.MinioAccessKey, cfg.MinioSecretKey, cfg.MinioBucket, false)
+	if err != nil {
+		log.Fatalf("failed to create MinIO client: %v", err)
+	}
+
 	router := chi.NewRouter()
 	router.Use(httpmw.Recover)
 	router.Get("/api/ping", ping.Handler(ping.PostgresService{Pool: pool}).ServeHTTP)
@@ -140,6 +146,10 @@ func main() {
 		auth.RateLimitedUsernameHandler(userStore, usernameRateLimiter).ServeHTTP)
 	router.With(httpmw.PublicCORS).Options("/api/auth/username", func(http.ResponseWriter, *http.Request) {})
 
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/auth/avatar", avatar.UploadAvatarHandler(blobStore, cfg.PhotoEncryptionKey).ServeHTTP)
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/auth/avatar", avatar.DownloadAvatarHandler(blobStore, cfg.PhotoEncryptionKey).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/auth/avatar", func(http.ResponseWriter, *http.Request) {})
+
 	router.With(httpmw.PublicCORS).Post("/api/auth/verify-email/request",
 		auth.RateLimitedRequestVerificationHandler(userStore, verificationTokenStore, resendSender, cfg.PublicAPIBaseURL, verificationRequestRateLimiter).ServeHTTP)
 	router.With(httpmw.PublicCORS).Options("/api/auth/verify-email/request", func(http.ResponseWriter, *http.Request) {})
@@ -168,10 +178,6 @@ func main() {
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/routes/{id}/export.gpx", routes.GPXExportHandler(routeStore).ServeHTTP)
 	router.With(httpmw.PublicCORS).Options("/api/routes/{id}/export.gpx", func(http.ResponseWriter, *http.Request) {})
 
-	blobStore, err := photos.NewMinioBlobStore(cfg.MinioEndpoint, cfg.MinioAccessKey, cfg.MinioSecretKey, cfg.MinioBucket, false)
-	if err != nil {
-		log.Fatalf("failed to create MinIO client: %v", err)
-	}
 	photoStore := photos.PostgresPhotoStore{Pool: pool}
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/routes/{id}/photos", photos.UploadHandler(photoStore, blobStore, cfg.PhotoEncryptionKey).ServeHTTP)
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/routes/{id}/photos", photos.ListHandler(photoStore).ServeHTTP)

@@ -19,36 +19,32 @@ export function registerProfileRepositoryTests(getRepo: () => IProfileRepository
   });
 
   it('should default absent fields to null when saving a partial patch on an empty profile (AC-009)', async () => {
-    const saved = await getRepo().save({ name: 'Marc' });
-    expect(saved.name).toBe('Marc');
-    expect(saved.avatarPath).toBeNull();
-    expect(saved.vehicleType).toBeNull();
+    const saved = await getRepo().save({ vehicleType: 'motorcycle' });
+    expect(saved.vehicleType).toBe('motorcycle');
     expect(saved.vehicleMake).toBeNull();
     expect(saved.vehicleModel).toBeNull();
   });
 
-  it('should persist and retrieve avatarPath and name together (AC-009, AC-013)', async () => {
-    await getRepo().save({ avatarPath: '/x/avatar.jpg', name: 'Marc' });
+  it('should persist and retrieve the vehicle fields together (AC-009, AC-013)', async () => {
+    await getRepo().save({ vehicleType: 'motorcycle', vehicleMake: 'Honda', vehicleModel: 'CB500X' });
 
     const fetched = await getRepo().get();
     expect(fetched).not.toBeNull();
-    expect(fetched!.avatarPath).toBe('/x/avatar.jpg');
-    expect(fetched!.name).toBe('Marc');
+    expect(fetched!.vehicleType).toBe('motorcycle');
+    expect(fetched!.vehicleMake).toBe('Honda');
   });
 
-  it('should NOT wipe name/avatarPath when saving only the vehicle fields afterwards (field-level coalescing, AC-014/AC-021)', async () => {
-    await getRepo().save({ avatarPath: '/x/avatar.jpg', name: 'Marc' });
+  it('should NOT wipe the vehicle when saving it again with the same values (field-level coalescing, AC-014/AC-021)', async () => {
+    await getRepo().save({ vehicleType: 'motorcycle', vehicleMake: 'Honda', vehicleModel: 'CB500X' });
 
     const saved = await getRepo().save({ vehicleType: 'motorcycle', vehicleMake: 'Honda', vehicleModel: 'CB500X' });
-    expect(saved.name).toBe('Marc');
-    expect(saved.avatarPath).toBe('/x/avatar.jpg');
     expect(saved.vehicleType).toBe('motorcycle');
     expect(saved.vehicleMake).toBe('Honda');
     expect(saved.vehicleModel).toBe('CB500X');
 
     const fetched = await getRepo().get();
-    expect(fetched!.name).toBe('Marc');
-    expect(fetched!.avatarPath).toBe('/x/avatar.jpg');
+    expect(fetched!.vehicleType).toBe('motorcycle');
+    expect(fetched!.vehicleMake).toBe('Honda');
   });
 
   it('should replace all three vehicle fields at once, never mixing the previous vehicle with the new one (AC-021)', async () => {
@@ -66,11 +62,11 @@ export function registerProfileRepositoryTests(getRepo: () => IProfileRepository
   });
 
   it('should never create a second row — save() called twice keeps a single profile (singleton constraint)', async () => {
-    await getRepo().save({ name: 'Marc' });
-    await getRepo().save({ name: 'Marc Updated' });
+    await getRepo().save({ vehicleMake: 'Honda' });
+    await getRepo().save({ vehicleMake: 'Yamaha' });
 
     const fetched = await getRepo().get();
     expect(fetched).not.toBeNull();
-    expect(fetched!.name).toBe('Marc Updated');
+    expect(fetched!.vehicleMake).toBe('Yamaha');
   });
 }

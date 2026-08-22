@@ -1,46 +1,55 @@
 /**
- * Web Component `<profile-edit-dialog>`: modal "Editar perfil" que combina
- * previsualización en vivo (reutilizando `buildProfileHeader` del Paso 9),
- * campo de nombre y control "Cambiar foto" con su propio menú Cámara/Galería
- * sobre las funciones del adapter compartido — nunca reutiliza la instancia
- * del Web Component `<photo-capture>` (ver decisión de diseño #4 del plan).
+ * Web Component `<profile-edit-dialog>`: modal "Editar perfil", único punto
+ * de edición de identidad de cuenta — avatar (con previsualización en vivo,
+ * reutilizando `buildProfileHeader`, y su propio menú Cámara/Galería sobre
+ * las funciones del adapter compartido) y username (delegado en el diálogo
+ * ya existente `username-edit-dialog.element.ts`, sin cambios, solo
+ * invocado desde aquí en vez de desde un botón propio en la pantalla
+ * principal de Perfil — a petición explícita del usuario: un solo botón
+ * "Editar" visible, no dos con el mismo texto).
  *
- * A diferencia de `openSaveRouteDialog`, el guardado real ocurre *dentro*
- * del flujo del diálogo: recibe un callback `onSave` en vez de devolver los
- * datos crudos, precisamente para poder mantenerse abierto mostrando el
- * error de AC-012 sin que el llamador tenga que volver a abrirlo. Reutiliza
- * el patrón overlay/`trapFocus` de `confirm-dialog.element.ts`, con
- * `closable: true` (a diferencia de `cockpit-save-route-dialog`, este modal
- * sí es cerrable con ESC/overlay).
+ * El guardado del avatar ocurre *dentro* del flujo del diálogo: recibe un
+ * callback `onSave` en vez de devolver los datos crudos, para poder
+ * mantenerse abierto mostrando el error de AC-012 sin que el llamador tenga
+ * que volver a abrirlo. El username, en cambio, se guarda de inmediato
+ * dentro de `username-edit-dialog` (igual que ya hacía antes de moverse
+ * aquí) — cancelar este diálogo con "Cancelar"/ESC/overlay solo descarta la
+ * foto elegida, nunca deshace un cambio de username ya guardado.
+ * Reutiliza el patrón overlay/`trapFocus` de `confirm-dialog.element.ts`, con
+ * `closable: true`.
  */
 import { BaseElement } from '../shared/base-element.js';
 import { buildProfileHeader } from './profile-header.js';
 import { captureFromCamera, pickFromGallery, validatePhoto } from '../shared/services/photo-capture-adapter.service.js';
-import { savePhotoFile } from '../shared/services/photo-storage.service.js';
 import { showToast } from '../shared/feedback/toast.js';
 import styles from './profile-edit-dialog.element.css?inline';
 
 /** Resultado pasado al callback de guardado inyectado por el llamador. */
 export interface ProfileEditSaveResult {
-  /** Ruta ya persistida en disco de la nueva foto (tras `savePhotoFile`), o `null` si el usuario no cambió la foto (señal de "no cambiar" para el llamador). */
-  avatarPath: string | null;
-  /** Nombre tal cual escrito, sin trim — el saneado (`sanitizeProfileName`) es responsabilidad del llamador. */
-  name: string;
+  /** Archivo de avatar recién elegido por el usuario, ya validado (formato/tamaño). */
+  avatarFile: File;
 }
 
 /** Opciones para abrir el modal "Editar perfil". */
 export interface ProfileEditDialogOptions {
-  /** URL ya resuelta del avatar actual, o `null` si todavía no hay ninguno configurado. */
+  /** URL ya resuelta del avatar actual de la cuenta, o `null` si todavía no hay ninguno configurado. */
   avatarUrl: string | null;
-  /** Nombre guardado actual, o `null` si todavía no hay ninguno configurado. */
-  name: string | null;
+  /** `username` de la cuenta autenticada, mostrado en la previsualización. */
+  username: string | null;
   /**
-   * Invocado al pulsar "Guardar" con los datos recogidos en el modal. Si la
-   * promesa rechaza (p. ej. fallo de persistencia), el modal permanece
-   * abierto mostrando un toast de error y conservando los valores
-   * introducidos (AC-012), en vez de cerrarse.
+   * Invocado al pulsar "Guardar" con el archivo elegido. Si la promesa
+   * rechaza (p. ej. subida fallida), el modal permanece abierto mostrando un
+   * toast de error y conservando la previsualización elegida (AC-012), en
+   * vez de cerrarse.
    */
   onSave: (result: ProfileEditSaveResult) => Promise<void>;
+  /**
+   * Invocado al pulsar "Editar username"/"Fijar username": abre
+   * `username-edit-dialog` y devuelve el username ya actualizado si se
+   * guardó, o `null` si se canceló — para que la previsualización de este
+   * diálogo se actualice sin cerrarlo.
+   */
+  onEditUsername: () => Promise<string | null>;
 }
 
 class ProfileEditDialogElement extends BaseElement {
@@ -48,24 +57,24 @@ class ProfileEditDialogElement extends BaseElement {
   private onResolve: ((value: 'saved' | 'cancelled') => void) | null = null;
   private previouslyFocused: HTMLElement | null = null;
 
-  /** Foto recién elegida en el modal, todavía no escrita a disco (decisión de diseño #5). */
+  /** Foto recién elegida en el modal, todavía no subida al servidor. */
   private avatarFile: File | null = null;
   /** URL mostrada en la previsualización: la del avatar actual, o el `blob:` de la foto recién elegida. */
   private previewUrl: string | null = null;
+  /** Username mostrado en la previsualización — separado de `options.username` para poder actualizarse tras editarlo sin cerrar este diálogo. */
+  private currentUsername: string | null = null;
+  /** `true` mientras `handleEditUsername()` está en curso (el diálogo anidado ya tiene su propio spinner/estado, esto solo deshabilita el botón que lo abre). */
+  private editingUsername = false;
   /** `blob:` URL creada por este diálogo (si la hay), para liberarla al cerrar. */
   private createdObjectUrl: string | null = null;
-  /** Nombre actual del input, seguido aparte de `this.options.name` para no perderlo si `render()` se llama a mitad de edición (p. ej. al mostrar el spinner de guardado). */
-  private currentName = '';
   /**
-   * `true` mientras `handleSave()` está escribiendo la foto a disco y
-   * persistiendo — guardar una foto grande puede tardar perceptiblemente
-   * (AC-042); sin indicador visual, la UI parece colgada entre el click en
-   * "Guardar" y el cierre del modal.
+   * `true` mientras `handleSave()` está subiendo la foto al servidor —
+   * subir una foto grande puede tardar perceptiblemente (AC-042); sin
+   * indicador visual, la UI parece colgada entre el click en "Guardar" y el
+   * cierre del modal.
    */
   private saving = false;
 
-  private previewContainer: HTMLElement | null = null;
-  private nameInput: HTMLInputElement | null = null;
   private menuEl: HTMLElement | null = null;
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
@@ -77,14 +86,12 @@ class ProfileEditDialogElement extends BaseElement {
     this.close('cancelled');
   };
 
-  /** Ciclo de foco: input → Cambiar foto → Cancelar → Guardar → (Tab) vuelve al input, y viceversa con Shift+Tab. */
+  /** Ciclo de foco: Cambiar foto → Cancelar → Guardar, y viceversa con Shift+Tab. */
   private trapFocus(event: KeyboardEvent): void {
     const root = this.shadowRoot;
     if (!root) return;
     const focusables = Array.from(
-      root.querySelectorAll<HTMLElement>(
-        '[data-cy="profile-input-nombre"], [data-cy="profile-btn-cambiar-foto"], .action',
-      ),
+      root.querySelectorAll<HTMLElement>('[data-cy="profile-btn-cambiar-foto"], [data-cy="profile-btn-editar-username"], .action'),
     );
     if (focusables.length === 0) return;
     const first = focusables[0]!;
@@ -117,10 +124,9 @@ class ProfileEditDialogElement extends BaseElement {
   open(options: ProfileEditDialogOptions): Promise<'saved' | 'cancelled'> {
     this.options = options;
     this.previewUrl = options.avatarUrl;
-    this.currentName = options.name ?? '';
+    this.currentUsername = options.username;
     this.previouslyFocused = document.activeElement as HTMLElement | null;
     this.render();
-    this.nameInput?.focus();
     return new Promise((resolve) => { this.onResolve = resolve; });
   }
 
@@ -136,18 +142,6 @@ class ProfileEditDialogElement extends BaseElement {
     this.remove();
   }
 
-  private getCurrentName(): string | null {
-    return this.nameInput ? this.nameInput.value : this.currentName;
-  }
-
-  private updatePreview(): void {
-    if (!this.previewContainer) return;
-    this.previewContainer.innerHTML = '';
-    this.previewContainer.appendChild(
-      buildProfileHeader({ avatarUrl: this.previewUrl, name: this.getCurrentName() }),
-    );
-  }
-
   private toggleMenu(): void {
     this.menuEl?.classList.toggle('menu-open');
   }
@@ -156,7 +150,7 @@ class ProfileEditDialogElement extends BaseElement {
     this.menuEl?.classList.remove('menu-open');
   }
 
-  /** Aplica una foto recién elegida (cámara o galería) a la previsualización, sin tocar disco todavía (AC-007). */
+  /** Aplica una foto recién elegida (cámara o galería) a la previsualización, sin subirla todavía (AC-007). */
   private applyChosenPhoto(file: File): void {
     const validationError = validatePhoto(file);
     if (validationError) {
@@ -170,7 +164,7 @@ class ProfileEditDialogElement extends BaseElement {
     this.avatarFile = file;
     this.previewUrl = url;
     this.createdObjectUrl = url;
-    this.updatePreview();
+    this.render();
   }
 
   private async handleCameraSource(): Promise<void> {
@@ -184,26 +178,18 @@ class ProfileEditDialogElement extends BaseElement {
     if (file) this.applyChosenPhoto(file);
   }
 
-  /**
-   * Guarda: escribe la foto a disco (si se cambió) y delega la persistencia
-   * en `onSave` (AC-009, AC-012). El nombre se captura de forma síncrona
-   * antes de mostrar el spinner de guardado (AC-042) — `render()` reconstruye
-   * `nameInput` desde `this.currentName`, así que hay que fijar ese valor
-   * primero o se perdería lo escrito por el usuario en el re-render.
-   */
+  /** Guarda: delega la subida en `onSave` (AC-009, AC-012). Deshabilitado hasta elegir una foto nueva — no hay nada más que editar aquí. */
   private async handleSave(): Promise<void> {
-    if (!this.options || this.saving) return;
-    const name = this.currentName;
+    if (!this.options || this.saving || !this.avatarFile) return;
     this.saving = true;
     this.render();
     try {
-      const avatarPath = this.avatarFile ? await savePhotoFile(this.avatarFile) : null;
-      await this.options.onSave({ avatarPath, name });
+      await this.options.onSave({ avatarFile: this.avatarFile });
       this.close('saved');
     } catch {
       this.saving = false;
       this.render();
-      showToast('No se pudo guardar el perfil. Inténtalo de nuevo.', 'error');
+      showToast('No se pudo subir la foto de perfil. Inténtalo de nuevo.', 'error');
     }
   }
 
@@ -218,9 +204,35 @@ class ProfileEditDialogElement extends BaseElement {
   private buildPreview(): HTMLElement {
     const container = document.createElement('div');
     container.className = 'preview';
-    container.appendChild(buildProfileHeader({ avatarUrl: this.previewUrl, name: this.getCurrentName() }));
-    this.previewContainer = container;
+    container.appendChild(buildProfileHeader({ avatarUrl: this.previewUrl, name: this.currentUsername }));
     return container;
+  }
+
+  /** Abre `username-edit-dialog` (sin cambios) y actualiza la previsualización si se guardó, sin cerrar este diálogo. */
+  private async handleEditUsername(): Promise<void> {
+    if (!this.options || this.editingUsername) return;
+    this.editingUsername = true;
+    this.render();
+    const updated = await this.options.onEditUsername();
+    this.editingUsername = false;
+    if (updated !== null) this.currentUsername = updated;
+    this.render();
+  }
+
+  private buildUsernameControl(): HTMLElement {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'username-control';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'username-edit-btn';
+    btn.setAttribute('data-cy', 'profile-btn-editar-username');
+    btn.textContent = this.currentUsername ? 'Editar nombre de usuario' : 'Fijar nombre de usuario';
+    btn.disabled = this.saving || this.editingUsername;
+    btn.addEventListener('click', () => { void this.handleEditUsername(); });
+    wrapper.appendChild(btn);
+
+    return wrapper;
   }
 
   private buildChangePhotoControl(): HTMLElement {
@@ -273,35 +285,6 @@ class ProfileEditDialogElement extends BaseElement {
     return menu;
   }
 
-  private buildNameField(): HTMLElement {
-    const field = document.createElement('div');
-    field.className = 'field';
-
-    const label = document.createElement('label');
-    label.className = 'field-label';
-    label.textContent = 'Nombre';
-    label.setAttribute('for', 'profile-edit-name-input');
-    field.appendChild(label);
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.id = 'profile-edit-name-input';
-    input.className = 'input';
-    input.setAttribute('data-cy', 'profile-input-nombre');
-    input.setAttribute('maxlength', '100');
-    input.setAttribute('aria-label', 'Nombre');
-    input.value = this.currentName;
-    input.disabled = this.saving;
-    input.addEventListener('input', () => {
-      this.currentName = input.value;
-      this.updatePreview();
-    });
-    this.nameInput = input;
-    field.appendChild(input);
-
-    return field;
-  }
-
   private buildActions(): HTMLElement {
     const actions = document.createElement('div');
     actions.className = 'actions';
@@ -320,14 +303,14 @@ class ProfileEditDialogElement extends BaseElement {
     return actions;
   }
 
-  /** Botón "Guardar": muestra un spinner en vez del texto mientras `handleSave()` está en curso (AC-042). */
+  /** Botón "Guardar": deshabilitado sin foto nueva elegida, o mientras `handleSave()` está en curso (AC-042). */
   private buildSaveButton(): HTMLButtonElement {
     const saveBtn = document.createElement('button');
     saveBtn.type = 'button';
     saveBtn.className = 'action action--primary';
     if (this.saving) saveBtn.classList.add('is-saving');
     saveBtn.setAttribute('data-cy', 'profile-btn-guardar-perfil');
-    saveBtn.disabled = this.saving;
+    saveBtn.disabled = this.saving || !this.avatarFile;
     saveBtn.setAttribute('aria-busy', this.saving ? 'true' : 'false');
     if (this.saving) {
       saveBtn.setAttribute('aria-label', 'Guardando…');
@@ -355,7 +338,7 @@ class ProfileEditDialogElement extends BaseElement {
 
     dialog.appendChild(this.buildPreview());
     dialog.appendChild(this.buildChangePhotoControl());
-    dialog.appendChild(this.buildNameField());
+    dialog.appendChild(this.buildUsernameControl());
     dialog.appendChild(this.buildActions());
 
     return dialog;

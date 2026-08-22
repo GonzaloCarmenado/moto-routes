@@ -17,6 +17,7 @@ import { openUsernameEditDialog } from '../auth/username-edit-dialog.element.js'
 import { getApiBaseUrl } from '../shared/http/api-config.js';
 import type { ISessionRepository } from '../shared/models/session.repository.js';
 import { APP_EVENTS, dispatchAppEvent } from '../shared/app-events.js';
+import { resolveAccountAvatarUrl } from './account-avatar-cache.js';
 
 const EMPTY_AUTH_STATE: AuthSectionState = { status: 'logged-out' };
 
@@ -31,15 +32,31 @@ export interface ProfileAccountControllerOptions {
 /** Estado de cuenta de Perfil + sus manejadores, ver JSDoc del fichero. */
 export class ProfileAccountController {
   state: AuthSectionState = EMPTY_AUTH_STATE;
+  /**
+   * Avatar de cuenta ya descargado y cacheado (ver `account-avatar-cache.ts`),
+   * o `null` sin sesión activa, sin avatar configurado, o si la última
+   * descarga falló (`identidad-cuenta`, ADR-055). Se resuelve aparte de
+   * `state`: `user-auth` (`AuthSectionState`/`loadAuthSectionState`) no
+   * cambia con este proyecto (ver proposal.md, Modified Capabilities).
+   */
+  avatarUrl: string | null = null;
 
   constructor(private readonly options: ProfileAccountControllerOptions) {}
 
-  /** Recarga `state` desde el backend (o lo deja en logged-out sin sesión) y notifica el cambio. */
+  /** Recarga `state` y `avatarUrl` desde el backend (o los deja vacíos sin sesión) y notifica el cambio. */
   async refresh(): Promise<void> {
     const sessionRepo = this.options.getSessionRepository();
     if (!sessionRepo) return;
     this.state = await loadAuthSectionState(getApiBaseUrl(), sessionRepo);
+    this.avatarUrl = await this.resolveAvatarUrl(sessionRepo);
     this.options.onChange();
+  }
+
+  private async resolveAvatarUrl(sessionRepo: ISessionRepository): Promise<string | null> {
+    if (this.state.status !== 'logged-in') return null;
+    const session = await sessionRepo.get();
+    if (!session) return null;
+    return resolveAccountAvatarUrl(getApiBaseUrl(), session.token);
   }
 
   private async handleOpenLogin(): Promise<void> {
@@ -64,16 +81,27 @@ export class ProfileAccountController {
     await openForgotPasswordDialog({ apiBaseUrl: getApiBaseUrl() });
   }
 
-  private async handleEditUsername(): Promise<void> {
+  /**
+   * Abre el diálogo compartido de edición de username (`username-edit-dialog`,
+   * sin cambios — ver `unificar-perfil-cuenta`) — invocado desde dentro de
+   * "Editar perfil" (`profile-edit-dialog.element.ts`), no desde un botón
+   * propio en la pantalla principal: un único punto de edición de identidad,
+   * a petición explícita del usuario. Devuelve el username ya actualizado si
+   * se guardó, o `null` si se canceló/no hay sesión — para que el diálogo
+   * que lo invoca pueda refrescar su propia previsualización.
+   */
+  async handleEditUsername(): Promise<string | null> {
     const sessionRepo = this.options.getSessionRepository();
-    if (!sessionRepo) return;
+    if (!sessionRepo) return null;
     const session = await sessionRepo.get();
-    if (!session) return;
+    if (!session) return null;
 
     const currentUsername = this.state.status === 'logged-in' ? this.state.username : null;
     const result = await openUsernameEditDialog({ apiBaseUrl: getApiBaseUrl(), token: session.token, currentUsername });
+    if (result.action !== 'saved') return null;
 
-    if (result.action === 'saved') await this.refresh();
+    await this.refresh();
+    return this.state.status === 'logged-in' ? this.state.username : null;
   }
 
   private async handleLogout(): Promise<void> {
@@ -81,6 +109,7 @@ export class ProfileAccountController {
     if (!sessionRepo) return;
     await sessionRepo.clear();
     this.state = EMPTY_AUTH_STATE;
+    this.avatarUrl = null;
     this.options.onChange();
   }
 
@@ -91,7 +120,6 @@ export class ProfileAccountController {
       onOpenRegister: () => { void this.handleOpenRegister(); },
       onOpenForgotPassword: () => { void this.handleOpenForgotPassword(); },
       onLogout: () => { void this.handleLogout(); },
-      onEditUsername: () => { void this.handleEditUsername(); },
     });
   }
 }

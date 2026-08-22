@@ -3,8 +3,6 @@
 import type { Profile } from '../../../src/shared/models/profile.types.js';
 import type { Route } from '../../../src/shared/models/route.types.js';
 
-const SAMPLE_PHOTO = 'cypress/fixtures/photo-sample.jpg';
-
 function buildSeedRoute(overrides: Partial<Route> = {}): Route {
   return {
     id: crypto.randomUUID(),
@@ -24,8 +22,6 @@ function buildSeedRoute(overrides: Partial<Route> = {}): Route {
 
 function buildProfile(overrides: Partial<Profile> = {}): Profile {
   return {
-    avatarPath: null,
-    name: null,
     vehicleType: null,
     vehicleMake: null,
     vehicleModel: null,
@@ -69,12 +65,13 @@ describe('Perfil - Navegación, avatar/nombre, vehículo (vPIC) y estadísticas'
     cy.get('[data-cy="nav-rutas"]').should('not.have.class', 'nav-item--active');
   });
 
-  it('shows the avatar/name placeholders and empty vehicle/stats states for a fresh profile (AC-001..AC-003, AC-015, AC-031)', () => {
+  it('shows the avatar placeholder, no name and empty vehicle/stats states for a fresh profile without session (AC-001, AC-002, AC-015, AC-031, unificar-perfil-cuenta)', () => {
     cy.visit('/');
     openProfile();
 
     cy.get('[data-cy="profile-avatar-placeholder"]').should('exist');
-    cy.get('[data-cy="profile-name"]').should('be.visible').and('contain', 'Motorista sin nombre');
+    cy.get('[data-cy="profile-name"]').should('have.text', '');
+    cy.get('[data-cy="profile-btn-editar-perfil"]').should('not.exist');
     cy.get('[data-cy="profile-vehicle-empty"]').should('be.visible').and('contain', 'Sin vehículo configurado');
     // La fila nueva "Mis logros" (sistema-logros) empuja las Estadísticas
     // fuera del viewport inicial en el tamaño móvil de este test — scroll
@@ -83,47 +80,16 @@ describe('Perfil - Navegación, avatar/nombre, vehículo (vPIC) y estadísticas'
     cy.get('[data-cy="profile-stats-empty"]').scrollIntoView().should('be.visible').and('contain', 'Todavía no hay rutas completadas');
   });
 
-  it('edits the profile (photo + live preview + name) and persists both together (AC-004, AC-005, AC-009)', () => {
-    cy.visitWithSeed({ profile: buildProfile({ name: 'Marc' }) });
-    openProfile();
-    cy.get('[data-cy="profile-name"]').should('contain', 'Marc');
-
-    cy.get('[data-cy="profile-btn-editar-perfil"]').click();
-
-    // Previsualización en vivo: el modal refleja el nombre recién escrito sin guardar (AC-005)
-    cy.get('[data-cy="profile-input-nombre"]').clear().type('Marc Nuevo');
-    cy.get('[data-cy="profile-name"]').should('contain', 'Marc Nuevo');
-
-    // Cambiar foto desde Galería (mismo patrón Cámara/Galería que <photo-capture>, AC-006)
-    cy.get('[data-cy="profile-btn-cambiar-foto"]').click();
-    cy.get('[data-cy="profile-menu-galeria"]').click();
-    cy.get('[data-cy="photo-capture-input-file"]').selectFile(SAMPLE_PHOTO, { force: true });
-
-    cy.get('[data-cy="profile-btn-guardar-perfil"]').click();
-
-    // El modal se cierra y la vista refleja los datos actualizados, con la foto renderizada (AC-009)
-    cy.get('[data-cy="profile-input-nombre"]').should('not.exist');
-    cy.get('[data-cy="profile-name"]').should('contain', 'Marc Nuevo');
-    cy.get('[data-cy="profile-avatar-editar"] img').should('exist');
-  });
-
-  it('cancelling the profile edit persists nothing (AC-011)', () => {
-    cy.visitWithSeed({ profile: buildProfile({ name: 'Marc' }) });
-    openProfile();
-
-    cy.get('[data-cy="profile-btn-editar-perfil"]').click();
-    cy.get('[data-cy="profile-input-nombre"]').clear().type('Otro Nombre');
-    cy.get('[data-cy="profile-btn-cancelar-perfil"]').click();
-
-    cy.get('[data-cy="profile-input-nombre"]').should('not.exist');
-    cy.get('[data-cy="profile-name"]').should('contain', 'Marc').and('not.contain', 'Otro Nombre');
-  });
+  // El nombre mostrado (el `username` de la cuenta) y la subida/descarga del
+  // avatar de cuenta ahora se prueban contra el backend real en
+  // `avatar-identidad.cy.ts` (unificar-perfil-cuenta, tasks.md 6.1-6.3) — este
+  // archivo se queda solo con lo puramente local (vehículo, estadísticas).
 
   it('configures a vehicle from scratch through the vPIC cascade type → make → model, with the make search/curation (AC-016..AC-019, AC-021, AC-040, AC-041)', () => {
     cy.intercept('GET', '**/GetMakesForVehicleType/**', { fixture: 'vpic-makes-motorcycle.json' }).as('getMakes');
     cy.intercept('GET', '**/GetModelsForMakeIdYear/**', { fixture: 'vpic-models-honda.json' }).as('getModels');
 
-    cy.visitWithSeed({ profile: buildProfile({ name: 'Marc' }) });
+    cy.visitWithSeed({ profile: buildProfile() });
     openProfile();
 
     cy.get('[data-cy="profile-vehicle-empty"]').should('be.visible');
@@ -171,7 +137,6 @@ describe('Perfil - Navegación, avatar/nombre, vehículo (vPIC) y estadísticas'
     cy.intercept('GET', '**/GetModelsForMakeIdYear/**', { fixture: 'vpic-models-honda.json' }).as('getModels');
 
     const profile = buildProfile({
-      name: 'Marc',
       vehicleType: 'motorcycle',
       vehicleMake: 'HONDA',
       vehicleModel: 'CB500X',
@@ -195,7 +160,7 @@ describe('Perfil - Navegación, avatar/nombre, vehículo (vPIC) y estadísticas'
     cy.intercept('GET', '**/GetMakesForVehicleType/**', { fixture: 'vpic-makes-motorcycle.json' }).as('getMakes');
     cy.intercept('GET', '**/GetModelsForMakeIdYear/**', { fixture: 'vpic-models-honda.json' }).as('getModels');
 
-    cy.visitWithSeed({ profile: buildProfile({ name: 'Marc' }) });
+    cy.visitWithSeed({ profile: buildProfile() });
     openProfile();
     cy.get('[data-cy="profile-btn-editar-vehiculo"]').click();
 
@@ -217,7 +182,6 @@ describe('Perfil - Navegación, avatar/nombre, vehículo (vPIC) y estadísticas'
     cy.intercept('GET', '**/GetMakesForVehicleType/**', { forceNetworkError: true });
 
     const profile = buildProfile({
-      name: 'Marc',
       vehicleType: 'motorcycle',
       vehicleMake: 'HONDA',
       vehicleModel: 'CB500X',

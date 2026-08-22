@@ -98,7 +98,7 @@ describe('Nombre de usuario - registro, bloqueo de cuentas existentes y edición
 
     cy.get('[data-cy="auth-dialog-login"]').should('not.exist');
     cy.get('[data-cy="username-gate"]').should('not.exist');
-    cy.get('[data-cy="auth-section-cuenta"]').should('contain', username);
+    cy.get('[data-cy="profile-name"]').should('contain', username);
 
     cy.get('[data-cy="nav-grabar"]').click();
     cy.get('[data-cy="cockpit-master-btn"]').should('be.visible');
@@ -136,7 +136,7 @@ describe('Nombre de usuario - registro, bloqueo de cuentas existentes y edición
     cy.get('[data-cy="cockpit-master-btn"]').should('be.visible');
 
     openProfile();
-    cy.get('[data-cy="auth-section-cuenta"]').should('contain', newUsername);
+    cy.get('[data-cy="profile-name"]').should('contain', newUsername);
   });
 
   it('editar el username desde Perfil: éxito con uno disponible y rechazo por uno ya en uso (7.3)', () => {
@@ -155,29 +155,37 @@ describe('Nombre de usuario - registro, bloqueo de cuentas existentes y edición
         loginViaUi(emailA);
         cy.get('[data-cy="auth-dialog-login"]').should('not.exist');
         openProfile();
-        cy.get('[data-cy="auth-section-cuenta"]').should('contain', usernameA);
+        cy.get('[data-cy="profile-name"]').should('contain', usernameA);
+
+        // Un único botón "Editar" en la pantalla principal — el username se edita desde dentro de "Editar perfil" (unificar-perfil-cuenta).
+        cy.get('[data-cy="profile-btn-editar-perfil"]').click();
+        cy.get('[data-cy="profile-btn-editar-username"]').click();
+        cy.get('[data-cy="username-edit-dialog"]').should('be.visible');
 
         // Rechazo por username ya en uso (de la cuenta B): el diálogo permanece abierto, sin cambiar el username mostrado.
-        cy.get('[data-cy="auth-btn-editar-username"]').click();
-        cy.get('[data-cy="username-edit-dialog"]').should('be.visible');
         cy.get('[data-cy="username-form-input"]').clear();
         cy.get('[data-cy="username-form-input"]').type(usernameB);
         cy.get('[data-cy="username-form-btn-guardar"]').click();
         cy.get('[data-cy="username-form-error"]').should('be.visible');
         cy.get('[data-cy="username-edit-dialog"]').should('exist');
 
-        // Cancelar sin guardar: el username no cambia.
+        // Cancelar sin guardar: el username no cambia, "Editar perfil" sigue abierto detrás.
         cy.get('[data-cy="username-edit-dialog-btn-cancelar"]').click();
         cy.get('[data-cy="username-edit-dialog"]').should('not.exist');
-        cy.get('[data-cy="auth-section-cuenta"]').should('contain', usernameA);
+        cy.get('[data-cy="profile-edit-dialog-overlay"]').should('exist');
 
-        // Éxito con uno disponible: se refleja de inmediato en Perfil.
-        cy.get('[data-cy="auth-btn-editar-username"]').click();
+        // Éxito con uno disponible, sin volver a abrir "Editar perfil".
+        const newUsername = uniqueTestUsername();
+        cy.get('[data-cy="profile-btn-editar-username"]').click();
         cy.get('[data-cy="username-form-input"]').clear();
-        cy.get('[data-cy="username-form-input"]').type(uniqueTestUsername());
+        cy.get('[data-cy="username-form-input"]').type(newUsername);
         cy.get('[data-cy="username-form-btn-guardar"]').click();
         cy.get('[data-cy="username-edit-dialog"]').should('not.exist');
-        cy.get('[data-cy="auth-section-cuenta"]').should('not.contain', usernameA);
+
+        // Cerrar "Editar perfil" ("Cancelar" solo descarta la foto elegida, nunca un username ya guardado) y comprobarlo en la pantalla principal.
+        cy.get('[data-cy="profile-btn-cancelar-perfil"]').click();
+        cy.get('[data-cy="profile-edit-dialog-overlay"]').should('not.exist');
+        cy.get('[data-cy="profile-name"]').should('contain', newUsername).and('not.contain', usernameA);
       });
     });
   });

@@ -19,11 +19,11 @@ describe('buildProfileHeader', () => {
     expect(placeholder).not.toBeNull();
   });
 
-  it('shows the default placeholder text when name is null (AC-003)', () => {
+  it('shows no name text when name is null, without any placeholder (unificar-perfil-cuenta, ADR-055)', () => {
     const header = buildProfileHeader({ avatarUrl: null, name: null });
 
     const nameEl = header.querySelector('.profile-name');
-    expect(nameEl?.textContent).toBe('Motorista sin nombre');
+    expect(nameEl?.textContent).toBe('');
   });
 
   it('shows the given name as-is when present', () => {

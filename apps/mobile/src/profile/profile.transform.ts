@@ -1,40 +1,13 @@
 /**
- * Funciones puras de transformación para el dominio `profile`: nombre a
- * mostrar con marcador de posición, saneado del campo de nombre y cálculo
- * de estadísticas agregadas a partir de las rutas ya cargadas. Sin
- * dependencias de repositorio, `Date` ni DOM — la carga de datos vive en
- * `profile.service.ts` (Paso 12).
+ * Funciones puras de transformación para el dominio `profile`: cálculo de
+ * estadísticas agregadas a partir de las rutas ya cargadas. Sin dependencias
+ * de repositorio, `Date` ni DOM — la carga de datos vive en
+ * `profile.service.ts` (Paso 12). El nombre mostrado en Perfil ya no vive
+ * aquí: es el `username` de la cuenta, sin saneado ni marcador de posición
+ * propios (`unificar-perfil-cuenta`, ADR-055).
  */
 import type { Route } from '../shared/models/index.js';
-import { sanitizeText } from '../shared/utils/text.js';
 import { buildRouteDisplayName } from '../shared/utils/route-naming.js';
-
-const PROFILE_NAME_MAX_LENGTH = 100;
-
-/** Texto de marcador de posición cuando el usuario no ha configurado ningún nombre (AC-003). */
-export const DEFAULT_PROFILE_NAME = 'Motorista sin nombre';
-
-/**
- * Resuelve el nombre a mostrar en pantalla: el nombre guardado si existe y
- * no está vacío/en blanco, o un marcador de posición en caso contrario.
- * @param name - Nombre guardado del perfil, o `null` si nunca se configuró.
- * @returns El nombre a mostrar (nunca vacío).
- */
-export function resolveDisplayName(name: string | null): string {
-  if (name?.trim()) return name;
-  return DEFAULT_PROFILE_NAME;
-}
-
-/**
- * Sanea el campo de nombre de perfil antes de persistirlo: recorta espacios
- * en los extremos y trunca al límite de 100 caracteres (AC-008, AC-009),
- * mismo límite y regla que `sanitizeRouteName` de `cockpit.transform.ts`.
- * @param raw - Texto tal como lo escribió el usuario en el modal.
- * @returns El nombre saneado.
- */
-export function sanitizeProfileName(raw: string): string {
-  return sanitizeText(raw, PROFILE_NAME_MAX_LENGTH);
-}
 
 /** Estadísticas agregadas de todas las rutas completadas del usuario. */
 export interface ProfileStats {

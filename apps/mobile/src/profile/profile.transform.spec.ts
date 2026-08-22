@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveDisplayName, sanitizeProfileName, computeProfileStats } from './profile.transform.js';
-import { sanitizeText } from '../shared/utils/text.js';
+import { computeProfileStats } from './profile.transform.js';
 import type { Route } from '../shared/models/index.js';
 
 /** Construye una `Route` completa a partir de un subconjunto de overrides, para no repetir todos los campos en cada test. */
@@ -20,35 +19,6 @@ function buildRoute(overrides: Partial<Route>): Route {
     isFavorite: overrides.isFavorite ?? false,
   };
 }
-
-describe('resolveDisplayName', () => {
-  it('should return the placeholder when name is null', () => {
-    expect(resolveDisplayName(null)).toBe('Motorista sin nombre');
-  });
-
-  it('should return the placeholder when name is an empty string', () => {
-    expect(resolveDisplayName('')).toBe('Motorista sin nombre');
-  });
-
-  it('should return the placeholder when name is only whitespace', () => {
-    expect(resolveDisplayName('   ')).toBe('Motorista sin nombre');
-  });
-
-  it('should return the given name as-is when present', () => {
-    expect(resolveDisplayName('Marc')).toBe('Marc');
-  });
-});
-
-describe('sanitizeProfileName', () => {
-  it('should delegate in sanitizeText with a 100 character limit', () => {
-    const raw = `  ${'a'.repeat(150)}  `;
-    expect(sanitizeProfileName(raw)).toBe(sanitizeText(raw, 100));
-  });
-
-  it('should trim surrounding whitespace', () => {
-    expect(sanitizeProfileName('  Marc  ')).toBe('Marc');
-  });
-});
 
 describe('computeProfileStats', () => {
   it('should return null when there are no routes at all', () => {

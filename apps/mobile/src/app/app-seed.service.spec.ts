@@ -91,8 +91,6 @@ describe('applyCypressSeed', () => {
 
   it('seeds the profile repository when the seed JSON includes a profile', () => {
     const profile: Profile = {
-      avatarPath: null,
-      name: 'Marc',
       vehicleType: 'motorcycle',
       vehicleMake: 'Honda',
       vehicleModel: 'CB500X',

@@ -6,13 +6,15 @@ export type { SqlDb };
 
 /** Perfil vacío por defecto, usado como base del coalescido cuando no se ha guardado nada todavía. */
 const EMPTY_PROFILE: Profile = {
-  avatarPath: null,
-  name: null,
   vehicleType: null,
   vehicleMake: null,
   vehicleModel: null,
 };
 
+// `avatar_path`/`name` se mantienen en el esquema (nunca `DROP COLUMN`, mismo
+// patrón aditivo-only que `ensurePreviewPolylineColumn` en
+// sqlite-route.repository.ts) aunque ya no se lean ni escriban — ver
+// unificar-perfil-cuenta, ADR-055.
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS profile (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -35,8 +37,6 @@ interface ProfileRow {
 
 function rowToProfile(r: ProfileRow): Profile {
   return {
-    avatarPath: r.avatar_path ?? null,
-    name: r.name ?? null,
     vehicleType: (r.vehicle_type as Profile['vehicleType']) ?? null,
     vehicleMake: r.vehicle_make ?? null,
     vehicleModel: r.vehicle_model ?? null,
@@ -84,25 +84,27 @@ export class SqliteProfileRepository implements IProfileRepository {
   async save(patch: CreateProfile): Promise<Profile> {
     await this.ensureSchema();
 
-    const existing = (await this.get()) ?? EMPTY_PROFILE;
+    const rows = await this.db.select('SELECT * FROM profile WHERE id = 1');
+    const existingRow = (rows[0] as unknown as ProfileRow | undefined) ?? null;
+    const existing = existingRow ? rowToProfile(existingRow) : EMPTY_PROFILE;
 
     // Coalescido por campo: 'campo' in patch distingue "no incluido en el patch"
     // (conserva el valor existente) de "incluido explícitamente" (sobrescribe,
     // incluso a null si así se pasa) — ver JSDoc de IProfileRepository.save().
     const merged: Profile = {
-      avatarPath: 'avatarPath' in patch ? (patch.avatarPath ?? null) : existing.avatarPath,
-      name: 'name' in patch ? (patch.name ?? null) : existing.name,
       vehicleType: 'vehicleType' in patch ? (patch.vehicleType ?? null) : existing.vehicleType,
       vehicleMake: 'vehicleMake' in patch ? (patch.vehicleMake ?? null) : existing.vehicleMake,
       vehicleModel: 'vehicleModel' in patch ? (patch.vehicleModel ?? null) : existing.vehicleModel,
     };
 
+    // avatar_path/name se conservan tal cual estaban (columnas muertas, ver
+    // ADR-055) — nunca se vuelven a escribir desde aquí.
     // INSERT OR REPLACE (nunca INSERT simple): la fila id=1 ya existe a partir del
     // segundo save(), y un INSERT normal fallaría por violar la PRIMARY KEY.
     await this.db.execute(
       `INSERT OR REPLACE INTO profile (id, avatar_path, name, vehicle_type, vehicle_make, vehicle_model)
        VALUES (1, ?, ?, ?, ?, ?)`,
-      [merged.avatarPath, merged.name, merged.vehicleType, merged.vehicleMake, merged.vehicleModel],
+      [existingRow?.avatar_path ?? null, existingRow?.name ?? null, merged.vehicleType, merged.vehicleMake, merged.vehicleModel],
     );
 
     return merged;

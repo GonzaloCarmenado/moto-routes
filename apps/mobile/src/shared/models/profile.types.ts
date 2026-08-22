@@ -3,6 +3,9 @@
  * Entidad pura — sin dependencias de DOM, Tauri ni ningún framework.
  * El perfil es singleton: no existe autenticación ni multi-usuario en el
  * proyecto, así que solo existe una fila de perfil local (ver `perfil-usuario.md`).
+ * Nombre y avatar dejaron de vivir aquí (`unificar-perfil-cuenta`, ADR-055):
+ * el nombre mostrado es el `username` de la cuenta y el avatar se sube/
+ * descarga del servidor — este tipo solo conserva el vehículo, puramente local.
  */
 
 /** Tipo de vehículo del perfil: moto o coche — nunca ambos a la vez. */
@@ -10,10 +13,6 @@ export type VehicleType = 'motorcycle' | 'car';
 
 /** Perfil de usuario guardado (entidad de lectura). Todos los campos son opcionales por diseño: cualquiera de ellos puede no estar configurado todavía. */
 export interface Profile {
-  /** Ruta local del archivo de avatar (ver `photo-storage.service.ts`) — `null` si no se ha configurado ningún avatar. */
-  avatarPath: string | null;
-  /** Nombre elegido por el usuario — `null` si no se ha configurado ningún nombre. */
-  name: string | null;
   /** Tipo del vehículo guardado — `null` si no hay ningún vehículo configurado. */
   vehicleType: VehicleType | null;
   /** Marca del vehículo guardado — `null` si no hay ningún vehículo configurado. */

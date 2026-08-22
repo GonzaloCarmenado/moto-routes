@@ -18,18 +18,19 @@ import type { IProfileRepository } from '../shared/models/profile.repository.js'
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { ISessionRepository } from '../shared/models/session.repository.js';
 import type { VehicleType } from '../shared/models/profile.types.js';
-import { loadProfile, loadRouteStats, applyProfileEditResult, saveVehicle, type ProfileViewModel } from './profile.service.js';
+import { loadProfile, loadRouteStats, saveAccountAvatar, saveVehicle, type ProfileViewModel } from './profile.service.js';
 import type { ProfileStats } from './profile.transform.js';
 import { buildProfileHeader } from './profile-header.js';
 import { openProfileEditDialog } from './profile-edit-dialog.element.js';
 import { openVehicleEditDialog } from './profile-vehicle-dialog.element.js';
 import { VEHICLE_TYPE_LABELS } from './profile-vehicle-dialog-fields.js';
 import { formatDuration } from '../shared/utils/format.js';
+import { getApiBaseUrl } from '../shared/http/api-config.js';
 import { ProfileAccountController } from './profile-account.js';
 import { buildAchievementsLink } from './profile-achievements-link.js';
 import styles from './profile.element.css?inline';
 
-const EMPTY_VIEW_MODEL: ProfileViewModel = { avatarUrl: null, name: null, vehicle: null };
+const EMPTY_VIEW_MODEL: ProfileViewModel = { vehicle: null };
 
 /**
  * Vehículo con los tres campos garantizados no nulos — a diferencia del tipo
@@ -141,27 +142,29 @@ class ProfileView extends BaseElement {
   }
 
   /**
-   * Tarjeta única de identidad: avatar+nombre local (siempre editable,
-   * independiente de la sesión) y, justo debajo, el estado de cuenta —
-   * antes eran dos bloques sin relación visual (avatar arriba, "Cuenta" al
-   * final de la pantalla); ahora comparten una sola tarjeta ("Identidad
-   * unificada", propuesta elegida sobre las otras dos exploradas en el
-   * pitch de diseño).
+   * Tarjeta única de identidad: avatar+nombre de cuenta (el `username`,
+   * sin sesión no se muestra nada — ver `unificar-perfil-cuenta`, ADR-055)
+   * y, justo debajo, el estado de cuenta — antes eran dos bloques sin
+   * relación visual (avatar arriba, "Cuenta" al final de la pantalla);
+   * ahora comparten una sola tarjeta ("Identidad unificada", propuesta
+   * elegida sobre las otras dos exploradas en el pitch de diseño).
    */
   private buildIdentityCard(): HTMLElement {
     const card = document.createElement('div');
     card.className = 'identity-card';
+    const accountState = this.account.state;
+    const loggedIn = accountState.status === 'logged-in';
 
     const profile = document.createElement('div');
     profile.className = 'identity-card__profile';
     profile.appendChild(
       buildProfileHeader({
-        avatarUrl: this.viewModel.avatarUrl,
-        name: this.viewModel.name,
-        onAvatarClick: () => { void this.handleEditProfile(); },
+        avatarUrl: loggedIn ? this.account.avatarUrl : null,
+        name: accountState.status === 'logged-in' ? accountState.username : null,
+        ...(loggedIn ? { onAvatarClick: (): void => { void this.handleEditProfile(); } } : {}),
       }),
     );
-    profile.appendChild(this.buildEditProfileButton());
+    if (loggedIn) profile.appendChild(this.buildEditProfileButton());
     card.appendChild(profile);
 
     const divider = document.createElement('div');
@@ -182,22 +185,25 @@ class ProfileView extends BaseElement {
     return btn;
   }
 
-  /** Abre el modal "Editar perfil" (AC-004) y, si se guarda, refresca la vista sin recargar la página (AC-009). */
+  /** Abre el modal "Editar perfil" (AC-004) y, si se guarda, refresca el avatar de cuenta sin recargar la página (AC-009). */
   private async handleEditProfile(): Promise<void> {
-    const profileRepo = this._profileRepository;
-    if (!profileRepo) return;
+    const sessionRepo = this._sessionRepository;
+    const accountState = this.account.state;
+    if (!sessionRepo || accountState.status !== 'logged-in') return;
+    const session = await sessionRepo.get();
+    if (!session) return;
 
-    const result = await openProfileEditDialog({
-      avatarUrl: this.viewModel.avatarUrl,
-      name: this.viewModel.name,
-      onSave: async (saveResult) => {
-        await applyProfileEditResult(profileRepo, saveResult);
+    // account.refresh() ya dispara onChange() -> this.render() al terminar
+    // (ver ProfileAccountController) — no hace falta un render explícito aquí.
+    await openProfileEditDialog({
+      avatarUrl: this.account.avatarUrl,
+      username: accountState.username,
+      onSave: async ({ avatarFile }) => {
+        await saveAccountAvatar(getApiBaseUrl(), session.token, avatarFile);
+        await this.account.refresh();
       },
+      onEditUsername: () => this.account.handleEditUsername(),
     });
-
-    if (result === 'saved') {
-      await this.fetchAndRender();
-    }
   }
 
   private buildVehicleSection(): HTMLElement {

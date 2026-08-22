@@ -68,6 +68,31 @@
   background: var(--amber-soft);
 }
 
+.username-control {
+  display: flex;
+  justify-content: center;
+}
+
+.username-edit-btn {
+  min-width: var(--hitbox-min);
+  min-height: var(--hitbox-min);
+  padding: 0 var(--space-4);
+  border-radius: var(--r-sm);
+  border: none;
+  background: transparent;
+  color: var(--amber);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.username-edit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .photo-menu {
   position: absolute;
   top: 100%;
@@ -108,34 +133,6 @@
 .menu-item:hover {
   background: var(--amber-soft);
   color: var(--amber);
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.field-label {
-  font-family: var(--font-ui);
-  font-size: 13px;
-  color: var(--ink-soft);
-}
-
-.input {
-  min-height: var(--hitbox-min);
-  border-radius: var(--r-sm);
-  border: 1px solid var(--line);
-  background: var(--panel-sunken);
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: 15px;
-  padding: 0 var(--space-3);
-}
-
-.input:focus {
-  outline: 2px solid var(--amber);
-  outline-offset: 1px;
 }
 
 .actions {
