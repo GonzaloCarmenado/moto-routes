@@ -1,4 +1,5 @@
 /**
+ * @packageDocumentation
  * Controlador de la sección "Cuenta" dentro de Perfil: resuelve y mantiene el
  * `AuthSectionState` y expone los manejadores de login/registro/recuperar
  * contraseña/cerrar sesión/editar username. Extraído de `profile.element.ts`
@@ -19,8 +20,11 @@ import { APP_EVENTS, dispatchAppEvent } from '../shared/app-events.js';
 
 const EMPTY_AUTH_STATE: AuthSectionState = { status: 'logged-out' };
 
+/** Dependencias inyectadas al construir el controlador, ver {@link ProfileAccountController}. */
 export interface ProfileAccountControllerOptions {
+  /** Repositorio de sesión activo, o `null` si todavía no está listo (p. ej. SQLite no inicializado). */
   getSessionRepository: () => ISessionRepository | null;
+  /** Notifica al contenedor (`profile.element.ts`) que debe volver a renderizar tras un cambio de estado. */
   onChange: () => void;
 }
 
@@ -30,6 +34,7 @@ export class ProfileAccountController {
 
   constructor(private readonly options: ProfileAccountControllerOptions) {}
 
+  /** Recarga `state` desde el backend (o lo deja en logged-out sin sesión) y notifica el cambio. */
   async refresh(): Promise<void> {
     const sessionRepo = this.options.getSessionRepository();
     if (!sessionRepo) return;
@@ -79,6 +84,7 @@ export class ProfileAccountController {
     this.options.onChange();
   }
 
+  /** Construye la sección "Cuenta" a partir del `state` actual, con sus manejadores ya cableados. */
   build(): HTMLElement {
     return buildAuthSection(this.state, {
       onOpenLogin: () => { void this.handleOpenLogin(); },

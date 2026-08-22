@@ -1,4 +1,5 @@
 /**
+ * @packageDocumentation
  * Web Component `<username-edit-dialog>`: envuelve `<username-form>`
  * (Grupo 5, componente compartido) con overlay, título y botón "Cancelar" —
  * el formulario en sí nunca incluye cancelar por diseño (ver
@@ -11,12 +12,17 @@ import { USERNAME_FORM_SUCCESS_EVENT, type UsernameFormSuccessDetail } from './u
 import './username-form.element.js';
 import styles from './username-edit-dialog.element.css?inline';
 
+/** Opciones para abrir el diálogo, ver {@link openUsernameEditDialog}. */
 export interface UsernameEditDialogOptions {
+  /** Base URL de la API, ya resuelta (ver `shared/http/api-config.ts`). */
   apiBaseUrl: string;
+  /** Token de sesión de la cuenta autenticada, para el `PATCH /api/auth/username`. */
   token: string;
+  /** Username actual de la cuenta, o `null` si todavía no tiene ninguno fijado. */
   currentUsername: string | null;
 }
 
+/** Resultado de cerrar el diálogo: guardado con éxito o cancelado sin cambios. */
 export type UsernameEditDialogResult = { action: 'saved'; username: string } | { action: 'cancelled' };
 
 class UsernameEditDialogElement extends BaseElement {

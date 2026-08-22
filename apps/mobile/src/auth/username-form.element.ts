@@ -1,4 +1,5 @@
 /**
+ * @packageDocumentation
  * Web Component `<username-form>`: campo + validación + envío del nombre de
  * usuario, sin overlay ni botón de cancelar — pieza compartida entre la
  * pantalla de bloqueo (`app.element.ts`, no descartable) y el diálogo de
