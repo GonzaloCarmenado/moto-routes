@@ -114,7 +114,12 @@ describe('Subida/borrado real de fotos de ruta contra el backend', () => {
 
   it('añadir una foto a una ruta sincronizada la sube al servidor; borrarla la borra también del servidor', () => {
     const email = uniqueTestEmail('subida');
-    const route = buildSeedRoute({ name: `Ruta foto real ${String(Date.now())}` });
+    // duration explícita por debajo de 3600s: el default de buildSeedRoute coincide
+    // con el umbral del logro real "ruta_larga_60" (ver achievements.go), y
+    // conceder ese logro al sincronizar la ruta muestra achievement-unlock-overlay,
+    // que tapa el click de photo-thumbnail más abajo -- mismo patrón de colisión ya
+    // documentado en achievement-unlock.cy.ts.
+    const route = buildSeedRoute({ name: `Ruta foto real ${String(Date.now())}`, duration: 600 });
 
     registerVerifiedAccountViaApi(email).then((token) => {
       uploadRouteViaApi(token, route).then(() => {
