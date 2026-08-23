@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { createCockpitService, type GpsProvider, type StorageProvider, type ForegroundServiceProvider } from './cockpit.service.js';
 import { MemoryRouteRepository } from '../shared/repositories/memory-route.repository.js';
+import { APP_EVENTS } from '../shared/app-events.js';
 
 function createMockGps(): GpsProvider {
   return {
@@ -509,6 +510,20 @@ describe('createCockpitService with repository', () => {
     const saved = await repo.getById(routeId);
     expect(saved).not.toBeNull();
     expect(saved!.status).toBe('active');
+  });
+
+  it('never dispatches route-saved when the recording is discarded (subida-automatica-rutas debe ignorar rutas descartadas)', async () => {
+    const service = createCockpitService(gps, createMockStorage(), repo);
+    const handler = vi.fn();
+    window.addEventListener(APP_EVENTS.ROUTE_SAVED, handler);
+
+    service.startRecording();
+    service.prepareStop();
+    service.discardStop();
+    await Promise.resolve();
+
+    expect(handler).not.toHaveBeenCalled();
+    window.removeEventListener(APP_EVENTS.ROUTE_SAVED, handler);
   });
 
   it('should persist an active route row immediately when recording starts, before it is stopped (regression: photos captured mid-recording violated the photos.route_id FOREIGN KEY because no route row existed yet)', async () => {

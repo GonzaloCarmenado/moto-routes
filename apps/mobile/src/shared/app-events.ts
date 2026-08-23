@@ -18,6 +18,7 @@ export const APP_EVENTS = {
   VIEW_FRIENDS: 'view-friends',
   BACK_TO_LIST: 'back-to-list',
   AUTH_LOGGED_IN: 'auth-logged-in',
+  ROUTE_SAVED: 'route-saved',
 } as const;
 
 /** Forma del `detail` de cada evento. `undefined` = evento sin payload. */
@@ -34,6 +35,12 @@ export interface AppEventDetailMap {
    * a `app-root` re-comprobar el bloqueo por username sin fijar (nombre-usuario,
    * design.md Decisión 3) sin esperar al próximo arranque de la app. */
   'auth-logged-in': undefined;
+  /** Despachado desde `cockpit-persist.service.ts::persistRouteOnStop` solo cuando
+   * el guardado local de la ruta recién grabada resuelve con éxito — nunca si
+   * falla, nunca desde `persistRouteOnStart`. `cockpit` no sabe nada de auth/nube
+   * (separación de dominios ya existente); `app-root` escucha esto para intentar
+   * la subida automática (ver subida-automatica-rutas, design.md D1). */
+  'route-saved': { routeId: string };
 }
 
 /** Nombre de evento de navegación (clave de `AppEventDetailMap`). */

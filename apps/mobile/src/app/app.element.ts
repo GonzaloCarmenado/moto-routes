@@ -32,6 +32,7 @@ import { listenForNotificationTaps } from '../shared/services/notification-tap.s
 import { reregisterDeviceTokenAfterRefresh } from '../shared/services/device-token.service.js';
 import { getPendingTapScreen, clearPendingTapScreen } from '../shared/tauri/commands.js';
 import { applyCypressSeed } from './app-seed.service.js';
+import { handleRouteSaved } from './app-route-upload.js';
 import type { NavBarActiveView } from '../shared/nav-bar/nav-bar.element.js';
 import { fetchCurrentUser } from '../auth/auth-api.service.js';
 import '../auth/username-form.element.js';
@@ -91,6 +92,11 @@ class AppRoot extends BaseElement {
   private readonly onBackToList = (): void => { this.showView('routes'); };
   /** Re-comprueba el bloqueo por username sin fijar tras un login interactivo — ver `checkUsernameGate()`. */
   private readonly onAuthLoggedIn = (): void => { void this.checkUsernameGate(); };
+  /** Intenta la subida automática de una ruta recién guardada — ver `app-route-upload.ts` (subida-automatica-rutas). */
+  private readonly onRouteSaved = (e: Event): void => {
+    const { routeId } = (e as CustomEvent<AppEventDetailMap['route-saved']>).detail;
+    void handleRouteSaved({ apiBaseUrl: getApiBaseUrl(), sessionRepository: this.sessionRepo, repository: this.repo, routeId });
+  };
   private unlistenNotificationTap: (() => void) | null = null;
 
   connectedCallback(): void {
@@ -103,6 +109,7 @@ class AppRoot extends BaseElement {
     window.addEventListener(APP_EVENTS.VIEW_FRIENDS, this.onViewFriends);
     window.addEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
     window.addEventListener(APP_EVENTS.AUTH_LOGGED_IN, this.onAuthLoggedIn);
+    window.addEventListener(APP_EVENTS.ROUTE_SAVED, this.onRouteSaved);
     // Tocar una notificación push de invitación abre la app directamente en
     // Invitaciones (notificaciones-push-fcm) — dispara el mismo evento
     // `VIEW_SHARING` que el icono de invitaciones del listado (no basta con
@@ -125,6 +132,7 @@ class AppRoot extends BaseElement {
     window.removeEventListener(APP_EVENTS.VIEW_FRIENDS, this.onViewFriends);
     window.removeEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
     window.removeEventListener(APP_EVENTS.AUTH_LOGGED_IN, this.onAuthLoggedIn);
+    window.removeEventListener(APP_EVENTS.ROUTE_SAVED, this.onRouteSaved);
     this.unlistenNotificationTap?.();
   }
 
