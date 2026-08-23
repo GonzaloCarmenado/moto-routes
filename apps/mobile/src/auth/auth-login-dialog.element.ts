@@ -86,8 +86,9 @@ class AuthLoginDialogElement extends BaseElement {
     this.render();
 
     try {
-      const { token } = await loginAccount(this.options.apiBaseUrl, email, password);
-      await this.options.sessionRepository.save({ token, email });
+      const { token, refreshToken, expiresIn } = await loginAccount(this.options.apiBaseUrl, email, password);
+      const expiresAt = Date.now() + expiresIn * 1000;
+      await this.options.sessionRepository.save({ token, email, refreshToken, expiresAt });
       // Fire-and-forget: el permiso/registro de notificaciones nunca debe
       // retrasar el cierre del diálogo de login (best-effort, ver JSDoc del
       // propio servicio).

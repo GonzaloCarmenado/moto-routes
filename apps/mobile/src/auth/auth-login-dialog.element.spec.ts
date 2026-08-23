@@ -43,9 +43,10 @@ describe('openLoginDialog', () => {
     vi.clearAllMocks();
   });
 
-  it('login correcto guarda la sesión, cierra el diálogo y resuelve "logged-in"', async () => {
-    vi.mocked(loginAccount).mockResolvedValue({ token: 'jwt-token' });
+  it('login correcto guarda la sesión (con refreshToken/expiresAt), cierra el diálogo y resuelve "logged-in"', async () => {
+    vi.mocked(loginAccount).mockResolvedValue({ token: 'jwt-token', refreshToken: 'refresh-abc', expiresIn: 1800 });
     const sessionRepository = new MemorySessionRepository();
+    const before = Date.now();
 
     const resultPromise = openLoginDialog({ apiBaseUrl: 'http://localhost:8080', sessionRepository });
     const dialog = getDialog();
@@ -55,7 +56,11 @@ describe('openLoginDialog', () => {
     await flush();
 
     expect(await resultPromise).toBe('logged-in');
-    await expect(sessionRepository.get()).resolves.toEqual({ token: 'jwt-token', email: 'rider@example.com' });
+    const saved = await sessionRepository.get();
+    expect(saved?.token).toBe('jwt-token');
+    expect(saved?.email).toBe('rider@example.com');
+    expect(saved?.refreshToken).toBe('refresh-abc');
+    expect(saved?.expiresAt).toBeGreaterThanOrEqual(before + 1800 * 1000);
     expect(document.body.querySelector('auth-login-dialog')).toBeNull();
     expect(registerDeviceTokenAfterLogin).toHaveBeenCalledWith('http://localhost:8080', { token: 'jwt-token', email: 'rider@example.com' });
   });

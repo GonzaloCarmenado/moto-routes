@@ -1,3 +1,5 @@
+import type { ISessionRepository } from '../models/session.repository.js';
+
 /**
  * Causa de un fallo de `fetchJson` al consultar una API:
  * - `network`: la petición no pudo completarse (fallo de red, DNS, CORS...).
@@ -33,6 +35,18 @@ export class ExternalApiError extends Error {
 }
 
 /**
+ * Renovación silenciosa de sesión para `fetchJson` (ver
+ * renovacion-token-sesion, ADR-057). `refresh` es estructuralmente
+ * `refreshSession` de `auth/auth-api.service.ts` — se recibe por inyección
+ * en vez de importarla directamente para no crear un ciclo de imports
+ * (`auth-api.service.ts` ya importa `fetchJson` de este mismo módulo).
+ */
+export interface SessionRefreshOptions {
+  sessionRepository: ISessionRepository;
+  refresh: (refreshToken: string) => Promise<{ token: string; refreshToken: string; expiresIn: number }>;
+}
+
+/**
  * Opciones aceptadas por `fetchJson`.
  */
 export interface FetchJsonOptions {
@@ -57,6 +71,15 @@ export interface FetchJsonOptions {
    * siempre asumieron éxito implícito.
    */
   checkStatus?: boolean;
+  /**
+   * Si se pasa, un 401 con `checkStatus: true` intenta renovar el access
+   * token con el refresh token guardado antes de propagar el error, y
+   * repite esta misma petición una vez con el token nuevo (ver
+   * renovacion-token-sesion). Sin `refreshToken` guardado, o si la
+   * renovación también falla, se limpia la sesión y el 401 original se
+   * propaga tal cual — sin este parámetro, comportamiento idéntico a hoy.
+   */
+  sessionRefresh?: SessionRefreshOptions;
 }
 
 /** Timeout aplicado por defecto cuando no se especifica `options.timeoutMs`. */
@@ -77,6 +100,43 @@ function buildRequestInit(controller: AbortController, options?: FetchJsonOption
 /** Una respuesta 204 (p. ej. DELETE) o con Content-Length "0" no tiene cuerpo -- llamar a `response.json()` sobre ella lanzaría por JSON inválido. */
 function hasEmptyBody(response: Response): boolean {
   return response.status === 204 || response.headers?.get('content-length') === '0';
+}
+
+/**
+ * Intenta renovar la sesión y repetir la petición original una vez. Sin
+ * refreshToken guardado, o si la renovación falla, limpia la sesión y
+ * devuelve `succeeded: false` para que el 401 original se propague tal cual
+ * (ver JSDoc de `sessionRefresh` en `FetchJsonOptions`).
+ */
+async function tryRefreshAndRetry<T>(url: string, options: FetchJsonOptions): Promise<{ succeeded: boolean; value?: T }> {
+  const refreshOptions = options.sessionRefresh;
+  if (!refreshOptions) return { succeeded: false };
+
+  const session = await refreshOptions.sessionRepository.get();
+  if (!session?.refreshToken) return { succeeded: false };
+
+  let newAccessToken: string;
+  try {
+    const refreshed = await refreshOptions.refresh(session.refreshToken);
+    await refreshOptions.sessionRepository.save({
+      token: refreshed.token,
+      email: session.email,
+      refreshToken: refreshed.refreshToken,
+      expiresAt: Date.now() + refreshed.expiresIn * 1000,
+    });
+    newAccessToken = refreshed.token;
+  } catch {
+    await refreshOptions.sessionRepository.clear();
+    return { succeeded: false };
+  }
+
+  const { sessionRefresh: _sessionRefresh, ...retryOptions } = options;
+  void _sessionRefresh;
+  const value = await fetchJson<T>(url, {
+    ...retryOptions,
+    headers: { ...options.headers, Authorization: `Bearer ${newAccessToken}` },
+  });
+  return { succeeded: true, value };
 }
 
 /**
@@ -129,6 +189,10 @@ export async function fetchJson<T>(url: string, options?: FetchJsonOptions): Pro
     }
 
     if (options?.checkStatus && !response.ok) {
+      const retry = response.status === 401 && options.sessionRefresh
+        ? await tryRefreshAndRetry<T>(url, options)
+        : { succeeded: false as const };
+      if (retry.succeeded) return retry.value as T;
       throw new ExternalApiError(
         'http-error',
         `Request to ${url} failed with status ${String(response.status)}`,

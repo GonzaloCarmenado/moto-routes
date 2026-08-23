@@ -1,4 +1,4 @@
-import { fetchJson, ExternalApiError } from './external-api.service.js';
+import { fetchJson, ExternalApiError, type SessionRefreshOptions } from './external-api.service.js';
 import type { Route, RoutePoint, RouteStop } from '../models/route.types.js';
 
 /**
@@ -141,13 +141,19 @@ interface UpsertRouteResponse {
  * a carretera cuando el map-matching la tocó) para que el llamador pueda
  * repintar el mapa sin una segunda petición.
  */
-export async function uploadRoute(apiBaseUrl: string, token: string, payload: UploadRoutePayload): Promise<UploadedRoutePoint[]> {
+export async function uploadRoute(
+  apiBaseUrl: string,
+  token: string,
+  payload: UploadRoutePayload,
+  sessionRefresh?: SessionRefreshOptions,
+): Promise<UploadedRoutePoint[]> {
   const { route, points, stops } = payload;
   try {
     const response = await fetchJson<UpsertRouteResponse>(`${apiBaseUrl}/api/routes`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       checkStatus: true,
+      ...(sessionRefresh ? { sessionRefresh } : {}),
       body: {
         id: route.id,
         created_at: route.createdAt,
@@ -182,11 +188,12 @@ export async function uploadRoute(apiBaseUrl: string, token: string, payload: Up
 }
 
 /** `GET /api/routes` — resúmenes de las rutas del usuario autenticado. */
-export async function fetchCloudRoutes(apiBaseUrl: string, token: string): Promise<CloudRouteSummary[]> {
+export async function fetchCloudRoutes(apiBaseUrl: string, token: string, sessionRefresh?: SessionRefreshOptions): Promise<CloudRouteSummary[]> {
   try {
     const response = await fetchJson<CloudRouteSummaryResponse[]>(`${apiBaseUrl}/api/routes`, {
       headers: { Authorization: `Bearer ${token}` },
       checkStatus: true,
+      ...(sessionRefresh ? { sessionRefresh } : {}),
     });
     return response.map(toCloudRouteSummary);
   } catch (err) {
@@ -228,11 +235,17 @@ export async function exportRouteGPX(apiBaseUrl: string, token: string, id: stri
 }
 
 /** `GET /api/routes/{id}` — detalle completo (puntos+paradas) de una ruta del usuario autenticado. */
-export async function fetchCloudRouteDetail(apiBaseUrl: string, token: string, id: string): Promise<CloudRouteDetail> {
+export async function fetchCloudRouteDetail(
+  apiBaseUrl: string,
+  token: string,
+  id: string,
+  sessionRefresh?: SessionRefreshOptions,
+): Promise<CloudRouteDetail> {
   try {
     const response = await fetchJson<CloudRouteDetailResponse>(`${apiBaseUrl}/api/routes/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
       checkStatus: true,
+      ...(sessionRefresh ? { sessionRefresh } : {}),
     });
     return {
       ...toCloudRouteSummary(response),

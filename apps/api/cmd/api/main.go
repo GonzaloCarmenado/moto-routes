@@ -27,13 +27,28 @@ import (
 	"github.com/crzverde/moto-routes/apps/api/internal/stoptypes"
 )
 
-// tokenTTL es la duración de validez de un token de sesión emitido en login.
-const tokenTTL = 24 * time.Hour
+// accessTokenTTL es la duración de validez del access token de sesión emitido
+// en login/refresh — corta a propósito, pensada para renovarse sola sin que
+// el usuario lo note (ver renovacion-token-sesion, ADR-057). refreshTokenTTL
+// es la duración del refresh token asociado, mucho más larga: es el único
+// componente de la sesión con estado y revocable.
+const (
+	accessTokenTTL  = 30 * time.Minute
+	refreshTokenTTL = 60 * 24 * time.Hour
+)
 
 // Límite de intentos de login fallidos por email: 5 intentos cada 15 minutos.
 const (
 	loginRateLimitMaxAttempts = 5
 	loginRateLimitWindow      = 15 * time.Minute
+)
+
+// Límite de canjes de refresh token por token: más alto que login porque el
+// refresco es automático (una vez por apertura de app o expiración del
+// access token), no tecleado por un humano.
+const (
+	refreshRateLimitMaxAttempts = 20
+	refreshRateLimitWindow      = 15 * time.Minute
 )
 
 // Límite de solicitudes de verificación de email por dirección: 3 cada 15 minutos.
@@ -113,7 +128,9 @@ func main() {
 	userStore := auth.PostgresUserStore{Pool: pool}
 	verificationTokenStore := auth.PostgresVerificationTokenStore{Pool: pool}
 	passwordResetTokenStore := auth.PostgresPasswordResetTokenStore{Pool: pool}
-	tokenIssuer := auth.TokenIssuer{Secret: cfg.TokenSigningKey, TTL: tokenTTL}
+	refreshTokenStore := auth.PostgresRefreshTokenStore{Pool: pool}
+	tokenIssuer := auth.TokenIssuer{Secret: cfg.TokenSigningKey, TTL: accessTokenTTL}
+	refreshIssuer := auth.RefreshTokenIssuer{Store: refreshTokenStore, TTL: refreshTokenTTL}
 	resendSender := email.ResendSender{APIKey: cfg.ResendAPIKey, From: cfg.ResendFromAddress}
 	deviceTokenStore := notifications.PostgresDeviceTokenStore{Pool: pool}
 	notifier := buildNotifier(ctx, cfg.FCMServiceAccountJSON, deviceTokenStore)
@@ -130,6 +147,7 @@ func main() {
 	loginRateLimiter := auth.NewLoginRateLimiter(loginRateLimitMaxAttempts, loginRateLimitWindow)
 	verificationRequestRateLimiter := auth.NewLoginRateLimiter(verificationRequestRateLimitMaxAttempts, verificationRequestRateLimitWindow)
 	registerRateLimiter := auth.NewLoginRateLimiter(registerRateLimitMaxAttempts, registerRateLimitWindow)
+	refreshRateLimiter := auth.NewLoginRateLimiter(refreshRateLimitMaxAttempts, refreshRateLimitWindow)
 
 	// httpmw.PublicCORS en las rutas que apps/mobile llama por fetch() cross-origin
 	// (localhost:1420 -> localhost:8080) — gap real encontrado verificando
@@ -142,8 +160,15 @@ func main() {
 		auth.RateLimitedRegisterHandler(userStore, verificationTokenStore, resendSender, cfg.PublicAPIBaseURL, registerRateLimiter).ServeHTTP)
 	router.With(httpmw.PublicCORS).Options("/api/auth/register", func(http.ResponseWriter, *http.Request) {})
 
-	router.With(httpmw.PublicCORS).Post("/api/auth/login", auth.RateLimitedLoginHandler(userStore, tokenIssuer, loginRateLimiter).ServeHTTP)
+	router.With(httpmw.PublicCORS).Post("/api/auth/login", auth.RateLimitedLoginHandler(userStore, tokenIssuer, refreshIssuer, loginRateLimiter).ServeHTTP)
 	router.With(httpmw.PublicCORS).Options("/api/auth/login", func(http.ResponseWriter, *http.Request) {})
+
+	router.With(httpmw.PublicCORS).Post("/api/auth/refresh",
+		auth.RateLimitedRefreshHandler(refreshTokenStore, tokenIssuer, refreshTokenTTL, refreshRateLimiter).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/auth/refresh", func(http.ResponseWriter, *http.Request) {})
+
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/auth/logout", auth.LogoutHandler(refreshTokenStore).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/auth/logout", func(http.ResponseWriter, *http.Request) {})
 
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/auth/me", auth.MeHandler(userStore).ServeHTTP)
 	router.With(httpmw.PublicCORS).Options("/api/auth/me", func(http.ResponseWriter, *http.Request) {})

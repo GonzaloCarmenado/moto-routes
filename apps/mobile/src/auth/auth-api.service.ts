@@ -1,4 +1,4 @@
-import { fetchJson, ExternalApiError } from '../shared/http/external-api.service.js';
+import { fetchJson, ExternalApiError, type SessionRefreshOptions } from '../shared/http/external-api.service.js';
 
 /**
  * Causa de un fallo al llamar a los endpoints de autenticación de `apps/api`.
@@ -63,6 +63,12 @@ function mapRegisterStatus(status: number, message: string): AuthApiErrorKind {
   return 'unknown';
 }
 
+function mapRefreshStatus(status: number): AuthApiErrorKind {
+  if (status === 401) return 'unauthorized';
+  if (status === 429) return 'rate-limited';
+  return 'unknown';
+}
+
 function mapUsernameStatus(status: number): AuthApiErrorKind {
   if (status === 401) return 'unauthorized';
   if (status === 409) return 'username-taken';
@@ -109,18 +115,61 @@ export async function registerAccount(
 
 export interface LoginResult {
   token: string;
+  /** Refresh token de vida larga, canjeable por un access token nuevo sin contraseña (renovacion-token-sesion). */
+  refreshToken: string;
+  /** Segundos de validez de `token` desde el momento del login. */
+  expiresIn: number;
+}
+
+interface LoginResponse {
+  token: string;
+  refresh_token: string;
+  expires_in: number;
 }
 
 /** `POST /api/auth/login` — ver `mapLoginStatus` para el mapeo de errores. */
 export async function loginAccount(apiBaseUrl: string, email: string, password: string): Promise<LoginResult> {
   try {
-    return await fetchJson<LoginResult>(`${apiBaseUrl}/api/auth/login`, {
+    const response = await fetchJson<LoginResponse>(`${apiBaseUrl}/api/auth/login`, {
       method: 'POST',
       body: { email, password },
       checkStatus: true,
     });
+    return { token: response.token, refreshToken: response.refresh_token, expiresIn: response.expires_in };
   } catch (err) {
     throw toAuthApiError(err, mapLoginStatus);
+  }
+}
+
+/** `POST /api/auth/refresh` — canjea un refresh token vigente por un access token nuevo, sin contraseña. Ver `mapRefreshStatus` para el mapeo de errores. */
+export async function refreshSession(apiBaseUrl: string, refreshToken: string): Promise<LoginResult> {
+  try {
+    const response = await fetchJson<LoginResponse>(`${apiBaseUrl}/api/auth/refresh`, {
+      method: 'POST',
+      body: { refresh_token: refreshToken },
+      checkStatus: true,
+    });
+    return { token: response.token, refreshToken: response.refresh_token, expiresIn: response.expires_in };
+  } catch (err) {
+    throw toAuthApiError(err, mapRefreshStatus);
+  }
+}
+
+/**
+ * `POST /api/auth/logout` — revoca el refresh token server-side (best-effort:
+ * nunca lanza, ni en un fallo de red, porque el logout siempre debe
+ * completarse desde el punto de vista del usuario; la sesión local se limpia
+ * igualmente en el llamador aunque esta llamada falle).
+ */
+export async function logoutAccount(apiBaseUrl: string, token: string, refreshToken: string): Promise<void> {
+  try {
+    await fetchJson(`${apiBaseUrl}/api/auth/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: { refresh_token: refreshToken },
+    });
+  } catch {
+    // best-effort — ver comentario de cabecera.
   }
 }
 
@@ -159,12 +208,21 @@ interface CurrentUserResponse {
   username: string | null;
 }
 
-/** `GET /api/auth/me` — ver `mapMeStatus` para el mapeo de errores. */
-export async function fetchCurrentUser(apiBaseUrl: string, token: string): Promise<CurrentUser> {
+/**
+ * `GET /api/auth/me` — ver `mapMeStatus` para el mapeo de errores. Con
+ * `sessionRefresh`, un 401 intenta renovar la sesión y reintenta una vez
+ * antes de fallar (ver renovacion-token-sesion).
+ */
+export async function fetchCurrentUser(
+  apiBaseUrl: string,
+  token: string,
+  sessionRefresh?: SessionRefreshOptions,
+): Promise<CurrentUser> {
   try {
     const response = await fetchJson<CurrentUserResponse>(`${apiBaseUrl}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
       checkStatus: true,
+      ...(sessionRefresh ? { sessionRefresh } : {}),
     });
     return { id: response.id, email: response.email, emailVerified: response.email_verified, username: response.username };
   } catch (err) {

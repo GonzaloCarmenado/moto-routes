@@ -1,4 +1,5 @@
 import { fetchCurrentUser, AuthApiError } from './auth-api.service.js';
+import { buildSessionRefresh } from './session-refresh.service.js';
 import type { ISessionRepository } from '../shared/models/session.repository.js';
 
 export type AuthSectionState = { status: 'logged-out' } | { status: 'logged-in'; email: string; username: string | null };
@@ -21,7 +22,7 @@ export async function loadAuthSectionState(
   if (!session) return { status: 'logged-out' };
 
   try {
-    const user = await fetchCurrentUser(apiBaseUrl, session.token);
+    const user = await fetchCurrentUser(apiBaseUrl, session.token, buildSessionRefresh(apiBaseUrl, sessionRepository));
     return { status: 'logged-in', email: user.email, username: user.username };
   } catch (err) {
     if (err instanceof AuthApiError && err.kind === 'unauthorized') {
