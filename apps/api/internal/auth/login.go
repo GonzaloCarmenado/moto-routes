@@ -70,9 +70,9 @@ func LoginHandler(store UserStore, issuer TokenIssuer, refreshIssuer RefreshToke
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(loginResponse{
-				Token:        token,
-				RefreshToken: refreshToken,
-				ExpiresIn:    int64(issuer.TTL.Seconds()),
-			})
+			Token:        token,
+			RefreshToken: refreshToken,
+			ExpiresIn:    int64(issuer.TTL.Seconds()),
+		})
 	})
 }
