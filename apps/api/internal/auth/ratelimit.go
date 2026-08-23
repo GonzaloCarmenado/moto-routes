@@ -68,8 +68,8 @@ func (r *statusRecorder) WriteHeader(status int) {
 
 // RateLimitedLoginHandler envuelve LoginHandler aplicando el límite de
 // intentos fallidos por email antes de procesar la petición.
-func RateLimitedLoginHandler(store UserStore, issuer TokenIssuer, limiter *LoginRateLimiter) http.Handler {
-	inner := LoginHandler(store, issuer)
+func RateLimitedLoginHandler(store UserStore, issuer TokenIssuer, refreshIssuer RefreshTokenIssuer, limiter *LoginRateLimiter) http.Handler {
+	inner := LoginHandler(store, issuer, refreshIssuer)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rawBody, err := io.ReadAll(r.Body)
@@ -92,6 +92,38 @@ func RateLimitedLoginHandler(store UserStore, issuer TokenIssuer, limiter *Login
 
 		if req.Email != "" && rec.status == http.StatusUnauthorized {
 			limiter.RecordFailure(req.Email)
+		}
+	})
+}
+
+// RateLimitedRefreshHandler envuelve RefreshHandler aplicando el límite de
+// intentos fallidos por refresh token antes de procesar la petición — mismo
+// patrón que RateLimitedLoginHandler, con el propio valor del refresh token
+// como clave (no hay email en esta petición).
+func RateLimitedRefreshHandler(store RefreshTokenStore, issuer TokenIssuer, refreshTTL time.Duration, limiter *LoginRateLimiter) http.Handler {
+	inner := RefreshHandler(store, issuer, refreshTTL)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rawBody, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(rawBody))
+
+		var req refreshRequest
+		_ = json.Unmarshal(rawBody, &req)
+
+		if req.RefreshToken != "" && !limiter.Allowed(req.RefreshToken) {
+			writeError(w, http.StatusTooManyRequests, "too many refresh attempts, try again later")
+			return
+		}
+
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		inner.ServeHTTP(rec, r)
+
+		if req.RefreshToken != "" && rec.status == http.StatusUnauthorized {
+			limiter.RecordFailure(req.RefreshToken)
 		}
 	})
 }

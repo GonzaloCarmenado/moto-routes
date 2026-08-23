@@ -31,7 +31,7 @@ describe('loadAuthSectionState', () => {
     const state = await loadAuthSectionState('http://localhost:8080', sessionRepository);
 
     expect(state).toEqual({ status: 'logged-in', email: 'rider@example.com', username: 'rider42' });
-    expect(fetchCurrentUser).toHaveBeenCalledWith('http://localhost:8080', 'jwt-token');
+    expect(fetchCurrentUser).toHaveBeenCalledWith('http://localhost:8080', 'jwt-token', expect.objectContaining({ sessionRepository }));
   });
 
   it('con sesión guardada y válida pero sin username fijado, devuelve logged-in con username null', async () => {

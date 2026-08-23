@@ -14,6 +14,7 @@ import { openLoginDialog } from '../auth/auth-login-dialog.element.js';
 import { openRegisterDialog } from '../auth/auth-register-dialog.element.js';
 import { openForgotPasswordDialog } from '../auth/auth-forgot-password-dialog.element.js';
 import { openUsernameEditDialog } from '../auth/username-edit-dialog.element.js';
+import { logoutAccount } from '../auth/auth-api.service.js';
 import { getApiBaseUrl } from '../shared/http/api-config.js';
 import type { ISessionRepository } from '../shared/models/session.repository.js';
 import { APP_EVENTS, dispatchAppEvent } from '../shared/app-events.js';
@@ -104,9 +105,20 @@ export class ProfileAccountController {
     return this.state.status === 'logged-in' ? this.state.username : null;
   }
 
+  /**
+   * Revoca el refresh token server-side antes de limpiar la sesión local
+   * (renovacion-token-sesion) — best-effort: `logoutAccount` nunca lanza
+   * (ver su JSDoc), así que un fallo de red no impide que el logout se
+   * complete visiblemente para el usuario. Sin `refreshToken` guardado
+   * (sesión en formato viejo), no hay nada que revocar.
+   */
   private async handleLogout(): Promise<void> {
     const sessionRepo = this.options.getSessionRepository();
     if (!sessionRepo) return;
+    const session = await sessionRepo.get();
+    if (session?.refreshToken) {
+      await logoutAccount(getApiBaseUrl(), session.token, session.refreshToken);
+    }
     await sessionRepo.clear();
     this.state = EMPTY_AUTH_STATE;
     this.avatarUrl = null;

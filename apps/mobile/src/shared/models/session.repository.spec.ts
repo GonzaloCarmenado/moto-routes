@@ -35,4 +35,15 @@ export function registerSessionRepositoryTests(getRepo: () => ISessionRepository
   it('should not throw when clear() is called with no session saved', async () => {
     await expect(getRepo().clear()).resolves.toBeUndefined();
   });
+
+  it('should persist and retrieve refreshToken and expiresAt alongside the rest of the session', async () => {
+    await getRepo().save({ token: 'jwt-token', email: 'rider@example.com', refreshToken: 'refresh-abc', expiresAt: 1700000000000 });
+
+    await expect(getRepo().get()).resolves.toEqual({
+      token: 'jwt-token',
+      email: 'rider@example.com',
+      refreshToken: 'refresh-abc',
+      expiresAt: 1700000000000,
+    });
+  });
 }

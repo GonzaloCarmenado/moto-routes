@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { uploadRoute, fetchCloudRoutes, fetchCloudRouteDetail, exportRouteGPX, RouteCloudApiError } from './route-cloud-api.service.js';
 import type { Route, RoutePoint, RouteStop } from '../models/route.types.js';
+import { MemorySessionRepository } from '../repositories/memory-session.repository.js';
 
 const BASE_URL = 'http://localhost:8080';
 const TOKEN = 'jwt-token';
@@ -100,6 +101,20 @@ describe('uploadRoute', () => {
     const promise = uploadRoute(BASE_URL, TOKEN, { route: sampleRoute, points: samplePoints, stops: sampleStops });
 
     await expect(promise).rejects.toMatchObject({ kind: 'network' });
+  });
+
+  it('con sessionRefresh, un 401 renueva la sesión y reintenta antes de fallar', async () => {
+    const refresh = vi.fn().mockResolvedValue({ token: 'jwt-new', refreshToken: 'refresh-new', expiresIn: 1800 });
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: TOKEN, email: 'rider@example.com', refreshToken: 'refresh-old', expiresAt: 1 });
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({ error: 'expired' }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ id: 'route-1', points: [] }) }));
+
+    const result = await uploadRoute(BASE_URL, TOKEN, { route: sampleRoute, points: samplePoints, stops: sampleStops }, { sessionRepository, refresh });
+
+    expect(result).toEqual([]);
+    expect(refresh).toHaveBeenCalledWith('refresh-old');
   });
 });
 

@@ -14,6 +14,11 @@ vi.mock('../shared/feedback/route-upload-snackbar.js', () => ({
 }));
 import { showRouteUploadSnackbar } from '../shared/feedback/route-upload-snackbar.js';
 
+vi.mock('../auth/session-refresh.service.js', () => ({
+  ensureFreshSession: vi.fn((_apiBaseUrl: string, _repo: unknown, session: unknown) => Promise.resolve(session)),
+}));
+import { ensureFreshSession } from '../auth/session-refresh.service.js';
+
 const ROUTE: Route = {
   id: 'route-1',
   createdAt: '2026-08-23T10:00:00.000Z',
@@ -68,6 +73,21 @@ describe('handleRouteSaved', () => {
     expect(showRouteUploadSnackbar).toHaveBeenCalledWith('Subiendo ruta…');
     expect(uploadRouteToCloud).toHaveBeenCalledWith('http://localhost:8080', { token: 'jwt-token', email: 'me@example.com' }, repository, ROUTE);
     expect(succeed).toHaveBeenCalledOnce();
+  });
+
+  it('renueva la sesión de forma proactiva antes de subir, si hace falta (renovacion-token-sesion)', async () => {
+    const expiredSession = { token: 'jwt-old', email: 'me@example.com', refreshToken: 'refresh-old', expiresAt: 1 };
+    const refreshedSession = { token: 'jwt-new', email: 'me@example.com', refreshToken: 'refresh-new', expiresAt: Date.now() + 60000 };
+    const sessionRepository = createSessionRepository(expiredSession);
+    const repository = createRepository();
+    vi.mocked(showRouteUploadSnackbar).mockReturnValue({ succeed: vi.fn(), fail: vi.fn() });
+    vi.mocked(uploadRouteToCloud).mockResolvedValue([]);
+    vi.mocked(ensureFreshSession).mockResolvedValue(refreshedSession);
+
+    await handleRouteSaved({ apiBaseUrl: 'http://localhost:8080', sessionRepository, repository, routeId: 'route-1' });
+
+    expect(ensureFreshSession).toHaveBeenCalledWith('http://localhost:8080', sessionRepository, expiredSession);
+    expect(uploadRouteToCloud).toHaveBeenCalledWith('http://localhost:8080', refreshedSession, repository, ROUTE);
   });
 
   it('a failed upload transitions the snackbar to fail(), without throwing', async () => {

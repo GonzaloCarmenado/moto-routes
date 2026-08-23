@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { fetchJson, ExternalApiError } from './external-api.service.js';
+import { MemorySessionRepository } from '../repositories/memory-session.repository.js';
 
 describe('fetchJson', () => {
   afterEach(() => {
@@ -239,5 +240,92 @@ describe('fetchJson', () => {
 
     expect(result).toBeUndefined();
     expect(jsonSpy).not.toHaveBeenCalled();
+  });
+
+  describe('con sessionRefresh, en un 401 con checkStatus', () => {
+    async function seedSession(): Promise<MemorySessionRepository> {
+      const repo = new MemorySessionRepository();
+      await repo.save({ token: 'jwt-old', email: 'rider@example.com', refreshToken: 'refresh-old', expiresAt: 1 });
+      return repo;
+    }
+
+    it('renueva el access token y repite la petición original una vez, sin que el llamador vea el 401', async () => {
+      const sessionRepository = await seedSession();
+      const refresh = vi.fn().mockResolvedValue({ token: 'jwt-new', refreshToken: 'refresh-new', expiresIn: 1800 });
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({ error: 'expired' }) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ data: 'ok' }) });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await fetchJson<{ data: string }>('https://example.com/x', {
+        checkStatus: true,
+        headers: { Authorization: 'Bearer jwt-old' },
+        sessionRefresh: { sessionRepository, refresh },
+      });
+
+      expect(result).toEqual({ data: 'ok' });
+      expect(refresh).toHaveBeenCalledWith('refresh-old');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const [, secondInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+      expect((secondInit.headers as Record<string, string>).Authorization).toBe('Bearer jwt-new');
+    });
+
+    it('persiste el access/refresh token nuevo en el repositorio de sesión', async () => {
+      const sessionRepository = await seedSession();
+      const refresh = vi.fn().mockResolvedValue({ token: 'jwt-new', refreshToken: 'refresh-new', expiresIn: 1800 });
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({ error: 'expired' }) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({}) }));
+
+      await fetchJson('https://example.com/x', {
+        checkStatus: true,
+        sessionRefresh: { sessionRepository, refresh },
+      });
+
+      await expect(sessionRepository.get()).resolves.toMatchObject({ token: 'jwt-new', refreshToken: 'refresh-new', email: 'rider@example.com' });
+    });
+
+    it('si la renovación también falla, limpia la sesión y deja propagar el 401 original', async () => {
+      const sessionRepository = await seedSession();
+      const refresh = vi.fn().mockRejectedValue(new ExternalApiError('http-error', 'invalid refresh token', 401));
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, json: () => Promise.resolve({ error: 'expired' }) }));
+
+      const promise = fetchJson('https://example.com/x', {
+        checkStatus: true,
+        sessionRefresh: { sessionRepository, refresh },
+      });
+
+      await expect(promise).rejects.toMatchObject({ kind: 'http-error', status: 401 });
+      await expect(sessionRepository.get()).resolves.toBeNull();
+    });
+
+    it('sin refreshToken guardado (sesión en formato viejo), no intenta renovar y deja propagar el 401', async () => {
+      const sessionRepository = new MemorySessionRepository();
+      await sessionRepository.save({ token: 'jwt-old', email: 'rider@example.com' });
+      const refresh = vi.fn();
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, json: () => Promise.resolve({ error: 'expired' }) }));
+
+      const promise = fetchJson('https://example.com/x', {
+        checkStatus: true,
+        sessionRefresh: { sessionRepository, refresh },
+      });
+
+      await expect(promise).rejects.toMatchObject({ kind: 'http-error', status: 401 });
+      expect(refresh).not.toHaveBeenCalled();
+    });
+
+    it('en un error que no es 401, nunca intenta renovar', async () => {
+      const sessionRepository = await seedSession();
+      const refresh = vi.fn();
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({ error: 'boom' }) }));
+
+      const promise = fetchJson('https://example.com/x', {
+        checkStatus: true,
+        sessionRefresh: { sessionRepository, refresh },
+      });
+
+      await expect(promise).rejects.toMatchObject({ kind: 'http-error', status: 500 });
+      expect(refresh).not.toHaveBeenCalled();
+    });
   });
 });

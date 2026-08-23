@@ -6,8 +6,11 @@ import {
   requestEmailVerification,
   fetchCurrentUser,
   setUsername,
+  refreshSession,
+  logoutAccount,
   AuthApiError,
 } from './auth-api.service.js';
+import { MemorySessionRepository } from '../shared/repositories/memory-session.repository.js';
 
 const BASE_URL = 'http://localhost:8080';
 
@@ -94,12 +97,16 @@ describe('loginAccount', () => {
     vi.unstubAllGlobals();
   });
 
-  it('devuelve el token en un login correcto (200)', async () => {
-    stubFetch({ ok: true, status: 200, json: () => Promise.resolve({ token: 'jwt-token' }) });
+  it('devuelve token/refreshToken/expiresIn en un login correcto (200)', async () => {
+    stubFetch({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ token: 'jwt-token', refresh_token: 'refresh-abc', expires_in: 1800 }),
+    });
 
     const result = await loginAccount(BASE_URL, 'rider@example.com', 'correct-horse-battery');
 
-    expect(result).toEqual({ token: 'jwt-token' });
+    expect(result).toEqual({ token: 'jwt-token', refreshToken: 'refresh-abc', expiresIn: 1800 });
   });
 
   it('lanza AuthApiError kind "invalid-credentials" en 401', async () => {
@@ -202,6 +209,25 @@ describe('fetchCurrentUser', () => {
 
     await expect(promise).rejects.toMatchObject({ kind: 'unauthorized' });
   });
+
+  it('con sessionRefresh, un 401 renueva el token y reintenta antes de fallar', async () => {
+    const refresh = vi.fn().mockResolvedValue({ token: 'jwt-new', refreshToken: 'refresh-new', expiresIn: 1800 });
+    const sessionRepository = new MemorySessionRepository();
+    await sessionRepository.save({ token: 'jwt-old', email: 'rider@example.com', refreshToken: 'refresh-old', expiresAt: 1 });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({ error: 'expired' }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ id: 1, email: 'rider@example.com', email_verified: true, username: 'rider42' }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchCurrentUser(BASE_URL, 'jwt-old', { sessionRepository, refresh });
+
+    expect(result.username).toBe('rider42');
+    expect(refresh).toHaveBeenCalledWith('refresh-old');
+  });
 });
 
 describe('setUsername', () => {
@@ -252,5 +278,63 @@ describe('setUsername', () => {
     const promise = setUsername(BASE_URL, 'jwt-token', 'newname');
 
     await expect(promise).rejects.toMatchObject({ kind: 'rate-limited' });
+  });
+});
+
+describe('refreshSession', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('devuelve token/refreshToken/expiresIn en un canje correcto (200)', async () => {
+    stubFetch({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ token: 'jwt-token-new', refresh_token: 'refresh-new', expires_in: 1800 }),
+    });
+
+    const result = await refreshSession(BASE_URL, 'refresh-old');
+
+    expect(result).toEqual({ token: 'jwt-token-new', refreshToken: 'refresh-new', expiresIn: 1800 });
+  });
+
+  it('lanza AuthApiError kind "unauthorized" en 401 (expirado, revocado o inexistente)', async () => {
+    stubFetch({ ok: false, status: 401, json: () => Promise.resolve({ error: 'invalid refresh token' }) });
+
+    const promise = refreshSession(BASE_URL, 'refresh-old');
+
+    await expect(promise).rejects.toMatchObject({ kind: 'unauthorized' });
+  });
+
+  it('lanza AuthApiError kind "rate-limited" en 429', async () => {
+    stubFetch({ ok: false, status: 429, json: () => Promise.resolve({ error: 'too many refresh attempts' }) });
+
+    const promise = refreshSession(BASE_URL, 'refresh-old');
+
+    await expect(promise).rejects.toMatchObject({ kind: 'rate-limited' });
+  });
+});
+
+describe('logoutAccount', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('llama a POST /api/auth/logout con el refresh token y el access token actual', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await logoutAccount(BASE_URL, 'jwt-token', 'refresh-old');
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${BASE_URL}/api/auth/logout`);
+    expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer jwt-token');
+    expect(JSON.parse(init.body as string)).toEqual({ refresh_token: 'refresh-old' });
+  });
+
+  it('nunca lanza, ni siquiera si la petición falla', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+
+    await expect(logoutAccount(BASE_URL, 'jwt-token', 'refresh-old')).resolves.toBeUndefined();
   });
 });

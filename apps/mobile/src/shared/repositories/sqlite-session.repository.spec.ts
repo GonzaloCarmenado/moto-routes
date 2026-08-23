@@ -14,7 +14,13 @@ function createMockDb(): SqlDb {
         return Promise.resolve({ rowsAffected: 0 });
       }
       if (upper.startsWith('INSERT OR REPLACE')) {
-        row = { id: 1, token: params?.[0] ?? null, email: params?.[1] ?? null };
+        row = {
+          id: 1,
+          token: params?.[0] ?? null,
+          email: params?.[1] ?? null,
+          refresh_token: params?.[2] ?? null,
+          expires_at: params?.[3] ?? null,
+        };
         return Promise.resolve({ rowsAffected: 1 });
       }
       if (upper.startsWith('DELETE')) {
@@ -23,7 +29,15 @@ function createMockDb(): SqlDb {
       }
       return Promise.resolve({ rowsAffected: 0 });
     }),
-    select: vi.fn(() => Promise.resolve(row ? [row] : [])),
+    select: vi.fn((sql: string) => {
+      // PRAGMA table_info se usa para detectar columnas ya migradas — se
+      // responde como si refresh_token/expires_at ya existieran, así el
+      // mock no dispara ALTER TABLE de más en cada test.
+      if (sql.trim().toUpperCase().startsWith('PRAGMA TABLE_INFO')) {
+        return Promise.resolve([{ name: 'refresh_token' }, { name: 'expires_at' }]);
+      }
+      return Promise.resolve(row ? [row] : []);
+    }),
   };
 }
 
