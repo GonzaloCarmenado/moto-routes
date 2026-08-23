@@ -4,6 +4,7 @@ import '../routes/list/route-list.element.js';
 import '../routes/detail/route-detail.element.js';
 import '../routes/sharing/route-sharing.element.js';
 import '../achievements/achievement-list.element.js';
+import '../friends/friends-view.element.js';
 import '../profile/profile.element.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { IProfileRepository } from '../shared/models/profile.repository.js';
@@ -40,7 +41,7 @@ import { USERNAME_FORM_SUCCESS_EVENT } from '../auth/username-form.types.js';
  * `username-gate` es una séptima vista sin acceso desde `nav-bar` (ver nombre-usuario,
  * design.md Decisión 3): se muestra en vez de `cockpit` al arrancar si la cuenta con
  * sesión activa todavía no tiene username fijado, bloqueando el resto de la app. */
-type AppView = 'cockpit' | 'routes' | 'detail' | 'profile' | 'sharing' | 'achievements' | 'username-gate';
+type AppView = 'cockpit' | 'routes' | 'detail' | 'profile' | 'sharing' | 'achievements' | 'friends' | 'username-gate';
 
 /**
  * Traduce las 6 vistas internas de `app-root` que sí tienen barra de
@@ -51,7 +52,7 @@ type AppView = 'cockpit' | 'routes' | 'detail' | 'profile' | 'sharing' | 'achiev
  */
 function navViewFor(view: Exclude<AppView, 'username-gate'>): NavBarActiveView {
   if (view === 'detail' || view === 'sharing') return 'routes';
-  if (view === 'achievements') return 'profile';
+  if (view === 'achievements' || view === 'friends') return 'profile';
   return view;
 }
 
@@ -66,6 +67,7 @@ class AppRoot extends BaseElement {
   private profileEl: HTMLElement | null = null;
   private sharingEl: HTMLElement | null = null;
   private achievementsEl: HTMLElement | null = null;
+  private friendsEl: HTMLElement | null = null;
   private navBarEl: HTMLElement | null = null;
   private usernameGateEl: HTMLElement | null = null;
   /** `true` mientras la cuenta con sesión activa no tiene username fijado —
@@ -85,6 +87,7 @@ class AppRoot extends BaseElement {
   };
   private readonly onViewSharing = (): void => { this.showView('sharing'); };
   private readonly onViewAchievements = (): void => { this.showView('achievements'); };
+  private readonly onViewFriends = (): void => { this.showView('friends'); };
   private readonly onBackToList = (): void => { this.showView('routes'); };
   /** Re-comprueba el bloqueo por username sin fijar tras un login interactivo — ver `checkUsernameGate()`. */
   private readonly onAuthLoggedIn = (): void => { void this.checkUsernameGate(); };
@@ -97,6 +100,7 @@ class AppRoot extends BaseElement {
     window.addEventListener(APP_EVENTS.VIEW_ROUTE, this.onViewRoute);
     window.addEventListener(APP_EVENTS.VIEW_SHARING, this.onViewSharing);
     window.addEventListener(APP_EVENTS.VIEW_ACHIEVEMENTS, this.onViewAchievements);
+    window.addEventListener(APP_EVENTS.VIEW_FRIENDS, this.onViewFriends);
     window.addEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
     window.addEventListener(APP_EVENTS.AUTH_LOGGED_IN, this.onAuthLoggedIn);
     // Tocar una notificación push de invitación abre la app directamente en
@@ -118,6 +122,7 @@ class AppRoot extends BaseElement {
     window.removeEventListener(APP_EVENTS.VIEW_ROUTE, this.onViewRoute);
     window.removeEventListener(APP_EVENTS.VIEW_SHARING, this.onViewSharing);
     window.removeEventListener(APP_EVENTS.VIEW_ACHIEVEMENTS, this.onViewAchievements);
+    window.removeEventListener(APP_EVENTS.VIEW_FRIENDS, this.onViewFriends);
     window.removeEventListener(APP_EVENTS.BACK_TO_LIST, this.onBackToList);
     window.removeEventListener(APP_EVENTS.AUTH_LOGGED_IN, this.onAuthLoggedIn);
     this.unlistenNotificationTap?.();
@@ -162,20 +167,30 @@ class AppRoot extends BaseElement {
     return routeDetail;
   }
 
-  /** Extraído de `render()` por el mismo motivo que `buildRouteDetailView()`. */
-  private buildRouteSharingView(): HTMLElement {
-    const sharing = document.createElement('route-sharing') as HTMLElement & { sessionRepository: ISessionRepository };
-    sharing.sessionRepository = this.sessionRepo;
-    sharing.className = 'app-view';
-    return sharing;
+  /**
+   * Construye una vista cuyo único dato de entrada es `sessionRepository`
+   * (`route-sharing`, `achievement-list`, `friends-view`) — factorizado de
+   * `render()` para no repetir el mismo patrón de 4 líneas tres veces.
+   */
+  private buildSessionOnlyView(tagName: string): HTMLElement {
+    const el = document.createElement(tagName) as HTMLElement & { sessionRepository: ISessionRepository };
+    el.sessionRepository = this.sessionRepo;
+    el.className = 'app-view';
+    return el;
   }
 
-  /** Extraído de `render()` por el mismo motivo que `buildRouteSharingView()`. */
-  private buildAchievementListView(): HTMLElement {
-    const achievements = document.createElement('achievement-list') as HTMLElement & { sessionRepository: ISessionRepository };
-    achievements.sessionRepository = this.sessionRepo;
-    achievements.className = 'app-view';
-    return achievements;
+  /** Extraído de `render()` para mantener su recuento de sentencias bajo el límite del proyecto. */
+  private buildProfileView(): HTMLElement {
+    const profile = document.createElement('profile-view') as HTMLElement & {
+      repository: IRouteRepository;
+      profileRepository: IProfileRepository;
+      sessionRepository: ISessionRepository;
+    };
+    profile.repository = this.repo;
+    profile.profileRepository = this.profileRepo;
+    profile.sessionRepository = this.sessionRepo;
+    profile.className = 'app-view';
+    return profile;
   }
 
   /**
@@ -346,25 +361,21 @@ class AppRoot extends BaseElement {
     this.routeDetailEl = routeDetail;
     this.appendChild(routeDetail);
 
-    const profile = document.createElement('profile-view') as HTMLElement & {
-      repository: IRouteRepository;
-      profileRepository: IProfileRepository;
-      sessionRepository: ISessionRepository;
-    };
-    profile.repository = this.repo;
-    profile.profileRepository = this.profileRepo;
-    profile.sessionRepository = this.sessionRepo;
-    profile.className = 'app-view';
+    const profile = this.buildProfileView();
     this.profileEl = profile;
     this.appendChild(profile);
 
-    const sharing = this.buildRouteSharingView();
+    const sharing = this.buildSessionOnlyView('route-sharing');
     this.sharingEl = sharing;
     this.appendChild(sharing);
 
-    const achievements = this.buildAchievementListView();
+    const achievements = this.buildSessionOnlyView('achievement-list');
     this.achievementsEl = achievements;
     this.appendChild(achievements);
+
+    const friends = this.buildSessionOnlyView('friends-view');
+    this.friendsEl = friends;
+    this.appendChild(friends);
 
     this.navBarEl = document.createElement('nav-bar');
     this.appendChild(this.navBarEl);
@@ -382,6 +393,7 @@ class AppRoot extends BaseElement {
     if (this.profileEl) this.profileEl.style.display = view === 'profile' ? '' : 'none';
     if (this.sharingEl) this.sharingEl.style.display = view === 'sharing' ? '' : 'none';
     if (this.achievementsEl) this.achievementsEl.style.display = view === 'achievements' ? '' : 'none';
+    if (this.friendsEl) this.friendsEl.style.display = view === 'friends' ? '' : 'none';
     if (this.usernameGateEl) this.usernameGateEl.style.display = view === 'username-gate' ? '' : 'none';
     if (this.navBarEl) {
       if (view === 'username-gate') {

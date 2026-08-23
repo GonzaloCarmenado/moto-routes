@@ -65,6 +65,19 @@ func (s *fakeUserStore) FindUserByEmail(_ context.Context, email string) (Stored
 	return user, nil
 }
 
+func (s *fakeUserStore) FindUserByUsername(_ context.Context, username string) (StoredUser, error) {
+	id, exists := s.byUsername[strings.ToLower(username)]
+	if !exists {
+		return StoredUser{}, ErrUserNotFound
+	}
+	for _, user := range s.byEmail {
+		if user.ID == id {
+			return user, nil
+		}
+	}
+	return StoredUser{}, ErrUserNotFound
+}
+
 func (s *fakeUserStore) FindUserByID(_ context.Context, id int64) (StoredUser, error) {
 	for _, user := range s.byEmail {
 		if user.ID == id {

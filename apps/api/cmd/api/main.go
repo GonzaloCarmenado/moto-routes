@@ -15,6 +15,7 @@ import (
 	"github.com/crzverde/moto-routes/apps/api/internal/avatar"
 	"github.com/crzverde/moto-routes/apps/api/internal/config"
 	"github.com/crzverde/moto-routes/apps/api/internal/email"
+	"github.com/crzverde/moto-routes/apps/api/internal/friends"
 	"github.com/crzverde/moto-routes/apps/api/internal/httpmw"
 	"github.com/crzverde/moto-routes/apps/api/internal/mapmatch"
 	"github.com/crzverde/moto-routes/apps/api/internal/migrate"
@@ -64,6 +65,12 @@ const (
 const (
 	routeShareRateLimitMaxAttempts = 5
 	routeShareRateLimitWindow      = 15 * time.Minute
+)
+
+// Límite de solicitudes de amistad por username destino: 5 cada 15 minutos.
+const (
+	friendRequestRateLimitMaxAttempts = 5
+	friendRequestRateLimitWindow      = 15 * time.Minute
 )
 
 // mapMatchHTTPTimeout acota cada llamada a OSRM (por bloque de puntos, ver
@@ -214,6 +221,26 @@ func main() {
 
 	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/device-tokens", notifications.RegisterDeviceTokenHandler(deviceTokenStore).ServeHTTP)
 	router.With(httpmw.PublicCORS).Options("/api/device-tokens", func(http.ResponseWriter, *http.Request) {})
+
+	friendStore := friends.PostgresFriendshipStore{Pool: pool}
+	friendRequestRateLimiter := auth.NewLoginRateLimiter(friendRequestRateLimitMaxAttempts, friendRequestRateLimitWindow)
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/friends",
+		friends.RateLimitedCreateRequestHandler(friendStore, userStore, friendRequestRateLimiter).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/friends", func(http.ResponseWriter, *http.Request) {})
+
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/friends/received", friends.ListReceivedHandler(friendStore).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/friends/received", func(http.ResponseWriter, *http.Request) {})
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/friends/sent", friends.ListSentHandler(friendStore).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/friends/sent", func(http.ResponseWriter, *http.Request) {})
+
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/friends", friends.ListFriendsHandler(friendStore).ServeHTTP)
+
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/friends/{id}/accept", friends.AcceptHandler(friendStore).ServeHTTP)
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/friends/{id}/decline", friends.DeclineHandler(friendStore).ServeHTTP)
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Post("/api/friends/{id}/revoke", friends.RevokeHandler(friendStore).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/friends/{id}/accept", func(http.ResponseWriter, *http.Request) {})
+	router.With(httpmw.PublicCORS).Options("/api/friends/{id}/decline", func(http.ResponseWriter, *http.Request) {})
+	router.With(httpmw.PublicCORS).Options("/api/friends/{id}/revoke", func(http.ResponseWriter, *http.Request) {})
 
 	log.Printf("listening on %s", cfg.ServerAddress)
 	if err := http.ListenAndServe(cfg.ServerAddress, router); err != nil {

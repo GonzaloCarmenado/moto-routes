@@ -14,6 +14,7 @@
  * `getPhotoUrl` dentro de `loadProfile`).
  */
 import { BaseElement } from '../shared/base-element.js';
+import { APP_EVENTS } from '../shared/app-events.js';
 import type { IProfileRepository } from '../shared/models/profile.repository.js';
 import type { IRouteRepository } from '../shared/models/route.repository.js';
 import type { ISessionRepository } from '../shared/models/session.repository.js';
@@ -28,6 +29,8 @@ import { formatDuration } from '../shared/utils/format.js';
 import { getApiBaseUrl } from '../shared/http/api-config.js';
 import { ProfileAccountController } from './profile-account.js';
 import { buildAchievementsLink } from './profile-achievements-link.js';
+import { buildFriendsLink } from './profile-friends-link.js';
+import { countPendingFriendRequests } from './profile-friends-count.js';
 import styles from './profile.element.css?inline';
 
 const EMPTY_VIEW_MODEL: ProfileViewModel = { vehicle: null };
@@ -52,6 +55,7 @@ class ProfileView extends BaseElement {
   private _loading = false;
   private viewModel: ProfileViewModel = EMPTY_VIEW_MODEL;
   private stats: ProfileStats | null = null;
+  private _pendingFriendRequests = 0;
   private readonly account = new ProfileAccountController({
     getSessionRepository: (): ISessionRepository | null => this._sessionRepository,
     onChange: (): void => { this.render(); },
@@ -83,12 +87,24 @@ class ProfileView extends BaseElement {
    */
   set sessionRepository(repo: ISessionRepository | null) {
     this._sessionRepository = repo;
-    if (repo) void this.account.refresh();
+    if (repo) {
+      void this.account.refresh();
+      void this.fetchPendingFriendRequests();
+    }
   }
 
   get sessionRepository(): ISessionRepository | null {
     return this._sessionRepository;
   }
+
+  /**
+   * Un login interactivo dentro de una sesión de app ya abierta no
+   * re-dispara el setter de `sessionRepository` (misma referencia de
+   * objeto) — sin este listener, el badge de "Amigos" se quedaría en 0
+   * hasta el próximo arranque en frío. Mismo evento que ya usa
+   * `app.element.ts` para re-comprobar el bloqueo de username tras login.
+   */
+  private readonly onAuthLoggedIn = (): void => { void this.fetchPendingFriendRequests(); };
 
   constructor() {
     super();
@@ -101,7 +117,23 @@ class ProfileView extends BaseElement {
     }
     if (this._sessionRepository) {
       void this.account.refresh();
+      void this.fetchPendingFriendRequests();
     }
+    window.addEventListener(APP_EVENTS.AUTH_LOGGED_IN, this.onAuthLoggedIn);
+  }
+
+  disconnectedCallback(): void {
+    window.removeEventListener(APP_EVENTS.AUTH_LOGGED_IN, this.onAuthLoggedIn);
+  }
+
+  /**
+   * Independiente del resto de la pantalla, mismo criterio que
+   * `account.refresh()`: la sección "Amigos" no depende de `repository`/
+   * `profileRepository`, solo de la sesión.
+   */
+  private async fetchPendingFriendRequests(): Promise<void> {
+    this._pendingFriendRequests = await countPendingFriendRequests(getApiBaseUrl(), await this._sessionRepository?.get() ?? null);
+    this.render();
   }
 
   private async fetchAndRender(): Promise<void> {
@@ -135,6 +167,7 @@ class ProfileView extends BaseElement {
     } else {
       screen.appendChild(this.buildIdentityCard());
       screen.appendChild(buildAchievementsLink());
+      screen.appendChild(buildFriendsLink(this._pendingFriendRequests));
       screen.appendChild(this.buildVehicleSection());
       screen.appendChild(this.buildStatsSection());
     }

@@ -189,3 +189,49 @@ func TestPostgresUserStore_MarkEmailVerifiedPersists(t *testing.T) {
 		t.Fatal("expected FindUserByID to report EmailVerified true after marking it")
 	}
 }
+
+func TestPostgresUserStore_FindUserByUsernameRoundTrip(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	created, err := store.CreateUser(ctx, "rider@example.com", "hashed-value", "rider1")
+	if err != nil {
+		t.Fatalf("unexpected error creating user: %v", err)
+	}
+
+	found, err := store.FindUserByUsername(ctx, "rider1")
+	if err != nil {
+		t.Fatalf("unexpected error finding user by username: %v", err)
+	}
+	if found.ID != created.ID || found.Email != "rider@example.com" {
+		t.Fatalf("unexpected stored user: %+v", found)
+	}
+}
+
+func TestPostgresUserStore_FindUserByUsernameIsCaseInsensitive(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	created, err := store.CreateUser(ctx, "rider@example.com", "hashed-value", "rider1")
+	if err != nil {
+		t.Fatalf("unexpected error creating user: %v", err)
+	}
+
+	found, err := store.FindUserByUsername(ctx, "RIDER1")
+	if err != nil {
+		t.Fatalf("unexpected error finding user by username case-insensitively: %v", err)
+	}
+	if found.ID != created.ID {
+		t.Fatalf("expected to find user %d, got %d", created.ID, found.ID)
+	}
+}
+
+func TestPostgresUserStore_FindUnknownUsernameReturnsErrUserNotFound(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	_, err := store.FindUserByUsername(ctx, "ghost")
+	if !errors.Is(err, ErrUserNotFound) {
+		t.Fatalf("expected ErrUserNotFound, got %v", err)
+	}
+}

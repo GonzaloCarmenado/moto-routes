@@ -57,6 +57,23 @@ func (s PostgresUserStore) FindUserByEmail(ctx context.Context, email string) (S
 	return user, nil
 }
 
+// FindUserByUsername busca la cuenta por username sin distinguir
+// mayúsculas/minúsculas, traduciendo "sin filas" a ErrUserNotFound.
+func (s PostgresUserStore) FindUserByUsername(ctx context.Context, username string) (StoredUser, error) {
+	var user StoredUser
+	err := s.Pool.QueryRow(ctx,
+		"SELECT id, email, password_hash, email_verified, username FROM users WHERE lower(username) = lower($1)",
+		username,
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.EmailVerified, &user.Username)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return StoredUser{}, ErrUserNotFound
+		}
+		return StoredUser{}, err
+	}
+	return user, nil
+}
+
 // FindUserByID busca la cuenta por id, traduciendo "sin filas" a ErrUserNotFound.
 func (s PostgresUserStore) FindUserByID(ctx context.Context, id int64) (StoredUser, error) {
 	var user StoredUser
