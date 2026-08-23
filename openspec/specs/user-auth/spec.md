@@ -63,6 +63,13 @@ La app SHALL permitir a un usuario con sesión activa y nombre de usuario ya fij
 - **WHEN** un usuario con sesión activa intenta guardar un nombre de usuario vacío desde su perfil
 - **THEN** la app rechaza la acción sin llamar al servidor, sin cambiar el nombre de usuario actual
 
+### Requirement: La app normaliza las mayúsculas a minúsculas al escribir un nombre de usuario
+La app SHALL transformar automáticamente a minúsculas cualquier letra mayúscula que el usuario escriba en el campo de nombre de usuario, tanto al fijarlo por primera vez como al editarlo — el formato solo permite minúsculas, y la app no debe rechazar la entrada ni exigir que el usuario la corrija a mano.
+
+#### Scenario: Escribir un nombre de usuario con mayúsculas se normaliza en vivo
+- **WHEN** un usuario escribe un nombre de usuario con alguna letra mayúscula, en cualquiera de los dos flujos (fijarlo por primera vez o editarlo)
+- **THEN** el campo muestra el texto ya transformado a minúsculas, y al guardar se envía el nombre de usuario en minúsculas
+
 ### Requirement: Login emite un token de sesión válido
 La API SHALL verificar el email y la contraseña recibidos contra la cuenta registrada; si coinciden y la cuenta tiene el email verificado, SHALL emitir un token de sesión. Si las credenciales no coinciden, SHALL rechazar la petición sin revelar si el email existe o no. Si las credenciales coinciden pero la cuenta no tiene el email verificado, SHALL rechazar la petición indicando que hace falta verificar el email.
 

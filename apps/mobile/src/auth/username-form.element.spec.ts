@@ -112,4 +112,21 @@ describe('username-form', () => {
     const { root } = mount();
     expect(root.querySelector('[data-cy="username-form-btn-cancelar"]')).toBeNull();
   });
+
+  it('transforma las mayúsculas a minúsculas mientras el usuario escribe', () => {
+    const { root } = mount();
+    setInput(input(root), 'GonzaloC');
+    expect(input(root).value).toBe('gonzaloc');
+  });
+
+  it('envío con mayúsculas normaliza a minúsculas antes de llamar a setUsername', async () => {
+    vi.mocked(setUsername).mockResolvedValue(undefined);
+    const { root } = mount();
+
+    setInput(input(root), 'NewName');
+    submitBtn(root).click();
+    await flush();
+
+    expect(setUsername).toHaveBeenCalledWith('http://localhost:8080', 'jwt-token', 'newname');
+  });
 });
