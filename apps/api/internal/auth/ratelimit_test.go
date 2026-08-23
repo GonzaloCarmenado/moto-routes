@@ -9,7 +9,8 @@ import (
 
 func doRateLimitedLogin(t *testing.T, store UserStore, issuer TokenIssuer, limiter *LoginRateLimiter, email, password string) int {
 	t.Helper()
-	rec := doLoginVia(t, RateLimitedLoginHandler(store, issuer, limiter), email, password)
+	refreshIssuer := RefreshTokenIssuer{Store: newFakeRefreshTokenStore(), TTL: time.Hour}
+	rec := doLoginVia(t, RateLimitedLoginHandler(store, issuer, refreshIssuer, limiter), email, password)
 	return rec.Code
 }
 

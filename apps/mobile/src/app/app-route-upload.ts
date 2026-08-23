@@ -15,6 +15,7 @@ import type { ISessionRepository } from '../shared/models/session.repository.js'
 import { uploadRouteToCloud } from '../routes/detail/route-detail-cloud.service.js';
 import { showRouteUploadSnackbar } from '../shared/feedback/route-upload-snackbar.js';
 import { toErrorMessage } from '../shared/utils/errors.js';
+import { ensureFreshSession } from '../auth/session-refresh.service.js';
 
 export interface HandleRouteSavedOptions {
   apiBaseUrl: string;
@@ -25,11 +26,16 @@ export interface HandleRouteSavedOptions {
 
 /** Ver el comentario de cabecera de este fichero para el criterio completo. */
 export async function handleRouteSaved(options: HandleRouteSavedOptions): Promise<void> {
-  const session = await options.sessionRepository.get();
-  if (!session) return;
+  const stored = await options.sessionRepository.get();
+  if (!stored) return;
 
   const route = await options.repository.getById(options.routeId);
   if (!route) return;
+
+  // Renovación proactiva (renovacion-token-sesion): una ruta larga puede
+  // grabarse durante más tiempo del que dura el access token — se renueva
+  // antes de la subida en vez de esperar a que falle con 401 primero.
+  const session = await ensureFreshSession(options.apiBaseUrl, options.sessionRepository, stored);
 
   const snackbar = showRouteUploadSnackbar('Subiendo ruta…');
   try {

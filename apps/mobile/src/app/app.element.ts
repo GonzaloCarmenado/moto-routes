@@ -34,7 +34,7 @@ import { getPendingTapScreen, clearPendingTapScreen } from '../shared/tauri/comm
 import { applyCypressSeed } from './app-seed.service.js';
 import { handleRouteSaved } from './app-route-upload.js';
 import type { NavBarActiveView } from '../shared/nav-bar/nav-bar.element.js';
-import { fetchCurrentUser } from '../auth/auth-api.service.js';
+import { resolveUsernameGateSession } from './app-username-gate.js';
 import '../auth/username-form.element.js';
 import { USERNAME_FORM_SUCCESS_EVENT } from '../auth/username-form.types.js';
 
@@ -275,14 +275,8 @@ class AppRoot extends BaseElement {
    */
   private async checkUsernameGate(): Promise<void> {
     if (this.usernameGateActive) return;
-    const session = await this.sessionRepo.get();
-    if (!session) return;
-    try {
-      const currentUser = await fetchCurrentUser(getApiBaseUrl(), session.token);
-      if (currentUser.username === null) this.showUsernameGate(session);
-    } catch {
-      // Sin conexión u otro fallo: se comprobará de nuevo en el próximo arranque/login.
-    }
+    const session = await resolveUsernameGateSession({ apiBaseUrl: getApiBaseUrl(), sessionRepository: this.sessionRepo });
+    if (session) this.showUsernameGate(session);
   }
 
   // Decide primero por isTauri() (en vez de por éxito/fracaso del intento de SQLite)

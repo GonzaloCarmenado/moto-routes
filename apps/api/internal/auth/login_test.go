@@ -12,7 +12,8 @@ import (
 
 func doLogin(t *testing.T, store UserStore, issuer TokenIssuer, email, password string) *httptest.ResponseRecorder {
 	t.Helper()
-	return doLoginVia(t, LoginHandler(store, issuer), email, password)
+	refreshIssuer := RefreshTokenIssuer{Store: newFakeRefreshTokenStore(), TTL: time.Hour}
+	return doLoginVia(t, LoginHandler(store, issuer, refreshIssuer), email, password)
 }
 
 func doLoginVia(t *testing.T, handler http.Handler, email, password string) *httptest.ResponseRecorder {
@@ -47,15 +48,49 @@ func TestLoginHandler_ValidCredentialsReturnAToken(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	var body map[string]string
+	var body map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("failed to decode response body: %v", err)
 	}
 	if body["token"] == "" {
 		t.Fatal("expected a non-empty token in the response")
 	}
-	if _, err := issuer.Verify(body["token"]); err != nil {
+	if _, err := issuer.Verify(body["token"].(string)); err != nil {
 		t.Fatalf("expected the issued token to verify: %v", err)
+	}
+	if body["refresh_token"] == "" {
+		t.Fatal("expected a non-empty refresh_token in the response")
+	}
+	if body["refresh_token"] == body["token"] {
+		t.Fatal("expected the refresh token to be distinct from the access token")
+	}
+}
+
+func TestLoginHandler_ValidCredentialsReturnExpiresIn(t *testing.T) {
+	store := newFakeUserStore()
+	doRegister(t, store, "rider@example.com", "correct-horse-battery")
+	user, err := store.FindUserByEmail(context.Background(), "rider@example.com")
+	if err != nil {
+		t.Fatalf("unexpected error looking up seeded user: %v", err)
+	}
+	if err := store.MarkEmailVerified(context.Background(), user.ID); err != nil {
+		t.Fatalf("unexpected error marking email verified: %v", err)
+	}
+	issuer := TokenIssuer{Secret: []byte("test-secret"), TTL: 30 * time.Minute}
+	refreshIssuer := RefreshTokenIssuer{Store: newFakeRefreshTokenStore(), TTL: time.Hour}
+
+	rec := doLoginVia(t, LoginHandler(store, issuer, refreshIssuer), "rider@example.com", "correct-horse-battery")
+
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+	expiresIn, ok := body["expires_in"].(float64)
+	if !ok {
+		t.Fatalf("expected a numeric expires_in field, got %v", body["expires_in"])
+	}
+	if expiresIn != (30 * time.Minute).Seconds() {
+		t.Fatalf("expected expires_in to be %v seconds, got %v", (30 * time.Minute).Seconds(), expiresIn)
 	}
 }
 
