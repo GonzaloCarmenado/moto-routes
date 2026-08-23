@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { uploadAccountAvatar, fetchAccountAvatar, AvatarApiError } from './avatar-api.service.js';
+import { uploadAccountAvatar, fetchAccountAvatar, resolveUserAvatarUrl, AvatarApiError } from './avatar-api.service.js';
 
 const BASE_URL = 'http://localhost:8080';
 const TOKEN = 'jwt-token';
@@ -98,6 +98,49 @@ describe('fetchAccountAvatar', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
 
     const promise = fetchAccountAvatar(BASE_URL, TOKEN);
+
+    await expect(promise).rejects.toMatchObject({ kind: 'network' });
+  });
+});
+
+describe('resolveUserAvatarUrl', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('llama GET a /api/users/{username}/avatar y devuelve una object URL del Blob', async () => {
+    const avatarBlob = new Blob(['png bytes'], { type: 'application/octet-stream' });
+    const fetchMock = stubFetch({ ok: true, status: 200, blob: () => Promise.resolve(avatarBlob) });
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:other-account-avatar');
+
+    const result = await resolveUserAvatarUrl(BASE_URL, TOKEN, 'otherrider');
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${BASE_URL}/api/users/otherrider/avatar`);
+    expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer jwt-token');
+    expect(result).toBe('blob:other-account-avatar');
+  });
+
+  it('devuelve null en 404 (sin avatar configurado) en vez de lanzar', async () => {
+    stubFetch({ ok: false, status: 404, json: () => Promise.resolve({ error: 'no avatar configured for this account' }) });
+
+    const result = await resolveUserAvatarUrl(BASE_URL, TOKEN, 'noavatar');
+
+    expect(result).toBeNull();
+  });
+
+  it('lanza AvatarApiError kind "unauthorized" en 401', async () => {
+    stubFetch({ ok: false, status: 401, json: () => Promise.resolve({ error: 'missing or invalid token' }) });
+
+    const promise = resolveUserAvatarUrl(BASE_URL, TOKEN, 'otherrider');
+
+    await expect(promise).rejects.toMatchObject({ kind: 'unauthorized' });
+  });
+
+  it('lanza AvatarApiError kind "network" sin conexión', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+
+    const promise = resolveUserAvatarUrl(BASE_URL, TOKEN, 'otherrider');
 
     await expect(promise).rejects.toMatchObject({ kind: 'network' });
   });

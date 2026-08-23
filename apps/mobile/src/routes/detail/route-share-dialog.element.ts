@@ -1,23 +1,29 @@
 /**
- * Web Component `<route-share-dialog>`: modal "Compartir ruta" — email del
- * destinatario, `POST /api/route-shares`. El backend responde siempre el
- * mismo mensaje genérico exista o no la cuenta (anti-enumeración, ver
- * design.md D2 de `compartir-ruta`) — este diálogo no distingue nada, solo
- * muestra ese mismo mensaje. La única validación hecha en cliente es "no
- * puedes compartir contigo mismo" (comparando contra el email de la sesión
- * activa, ya conocido por el propio usuario — no es una fuga de información).
+ * Web Component `<route-share-dialog>`: modal "Compartir ruta" — selector de
+ * cuenta por username (`<friend-selector>`, ver selector-amigos),
+ * `POST /api/route-shares`. El backend responde siempre el mismo mensaje
+ * genérico exista o no la cuenta (anti-enumeración, ver design.md D2 de
+ * `compartir-ruta`) — este diálogo no distingue nada, solo muestra ese mismo
+ * mensaje. La validación "no puedes compartir contigo mismo" se hace en
+ * cliente por partida doble: el propio `<friend-selector>` ya excluye la
+ * cuenta propia de sus resultados (`excludeUsername`), y `handleSubmit`
+ * repite la comprobación como defensa en profundidad — mismo criterio que
+ * `friends-view.element.ts`.
  */
 import { BaseElement } from '../../shared/base-element.js';
 import { createInvitation } from '../../shared/http/route-sharing-api.service.js';
+import { fetchCurrentUser } from '../../auth/auth-api.service.js';
 import { toErrorMessage } from '../../shared/utils/errors.js';
+import '../../shared/friend-selector/friend-selector.element.js';
+import { FRIEND_SELECTOR_SELECTED_EVENT, type FriendSelectorSelectedDetail } from '../../shared/friend-selector/friend-selector.element.js';
 import styles from './route-share-dialog.element.css?inline';
+
+type FriendSelectorEl = HTMLElement & { apiBaseUrl: string; token: string; excludeUsername: string | null };
 
 export interface RouteShareDialogOptions {
   apiBaseUrl: string;
   token: string;
   routeId: string;
-  /** Email de la sesión activa, para la validación "no compartir contigo mismo". */
-  ownEmail: string;
 }
 
 class RouteShareDialogElement extends BaseElement {
@@ -27,6 +33,9 @@ class RouteShareDialogElement extends BaseElement {
   private step: 'form' | 'sent' = 'form';
   private submitting = false;
   private error: string | null = null;
+  private ownUsername: string | null = null;
+  private selectedUsername: string | null = null;
+  private selectorEl: FriendSelectorEl | null = null;
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.key === 'Escape' && !this.submitting) this.close('cancelled');
@@ -49,8 +58,28 @@ class RouteShareDialogElement extends BaseElement {
     this.options = options;
     this.previouslyFocused = document.activeElement as HTMLElement | null;
     this.render();
-    this.shadowRoot?.querySelector<HTMLInputElement>('.input')?.focus();
+    this.selectorEl?.shadowRoot?.querySelector<HTMLInputElement>('[data-cy="friend-selector-input"]')?.focus();
+    this.resolveOwnUsername(options);
     return new Promise((resolve) => { this.onResolve = resolve; });
+  }
+
+  /**
+   * Resuelve el username propio en segundo plano, sin bloquear el primer
+   * render ni destruir el `<friend-selector>` ya montado (a diferencia de
+   * `this.render()`, que lo sustituiría por uno nuevo vacío en mitad de una
+   * búsqueda — mismo motivo documentado en `friends-view.element.ts`).
+   */
+  private resolveOwnUsername(options: RouteShareDialogOptions): void {
+    fetchCurrentUser(options.apiBaseUrl, options.token)
+      .then((user) => {
+        this.ownUsername = user.username;
+        if (this.selectorEl) this.selectorEl.excludeUsername = this.ownUsername;
+      })
+      .catch(() => {
+        // Sin username propio disponible, el selector simplemente no excluye
+        // ninguna cuenta — la defensa en profundidad de handleSubmit sigue
+        // aplicando en cuanto se resuelva.
+      });
   }
 
   private close(result: 'sent' | 'cancelled'): void {
@@ -60,11 +89,17 @@ class RouteShareDialogElement extends BaseElement {
     this.remove();
   }
 
+  private handleFriendSelected(detail: FriendSelectorSelectedDetail): void {
+    this.selectedUsername = detail.username;
+    this.error = null;
+  }
+
   private async handleSubmit(): Promise<void> {
     if (!this.options || this.submitting) return;
-    const email = this.shadowRoot?.querySelector<HTMLInputElement>('[data-cy="route-share-input-email"]')?.value.trim() ?? '';
+    const username = this.selectedUsername;
+    if (!username) return;
 
-    if (email.toLowerCase() === this.options.ownEmail.toLowerCase()) {
+    if (this.ownUsername && username.toLowerCase() === this.ownUsername.toLowerCase()) {
       this.error = 'No puedes compartir una ruta contigo mismo';
       this.render();
       return;
@@ -75,7 +110,7 @@ class RouteShareDialogElement extends BaseElement {
     this.render();
 
     try {
-      await createInvitation(this.options.apiBaseUrl, this.options.token, this.options.routeId, email);
+      await createInvitation(this.options.apiBaseUrl, this.options.token, this.options.routeId, username);
       this.step = 'sent';
     } catch (err) {
       this.error = toErrorMessage(err, 'No se ha podido enviar la invitación');
@@ -106,10 +141,10 @@ class RouteShareDialogElement extends BaseElement {
 
     const message = document.createElement('p');
     message.className = 'message';
-    message.textContent = 'Introduce el email de la cuenta con la que quieres compartir una copia de esta ruta.';
+    message.textContent = 'Busca el nombre de usuario de la cuenta con la que quieres compartir una copia de esta ruta.';
     dialog.appendChild(message);
 
-    dialog.appendChild(this.buildEmailField());
+    dialog.appendChild(this.buildUsernameField());
 
     if (this.error) {
       const errorEl = document.createElement('p');
@@ -123,18 +158,24 @@ class RouteShareDialogElement extends BaseElement {
     return dialog;
   }
 
-  private buildEmailField(): HTMLElement {
+  private buildUsernameField(): HTMLElement {
     const field = document.createElement('div');
     field.className = 'field';
     const label = document.createElement('label');
     label.className = 'field-label';
-    label.textContent = 'Email';
+    label.textContent = 'Nombre de usuario';
     field.appendChild(label);
-    const input = document.createElement('input');
-    input.type = 'email';
-    input.className = 'input';
-    input.setAttribute('data-cy', 'route-share-input-email');
-    field.appendChild(input);
+
+    const selector = document.createElement('friend-selector') as FriendSelectorEl;
+    selector.apiBaseUrl = this.options?.apiBaseUrl ?? '';
+    selector.token = this.options?.token ?? '';
+    selector.excludeUsername = this.ownUsername;
+    selector.addEventListener(FRIEND_SELECTOR_SELECTED_EVENT, (event) => {
+      this.handleFriendSelected((event as CustomEvent<FriendSelectorSelectedDetail>).detail);
+    });
+    this.selectorEl = selector;
+    field.appendChild(selector);
+
     return field;
   }
 
@@ -196,6 +237,7 @@ class RouteShareDialogElement extends BaseElement {
 
   protected render(): void {
     if (!this.options) return;
+    this.selectorEl = null;
     const content = this.step === 'sent' ? this.buildSentStep() : this.buildFormStep();
     this.renderShadow(styles, this.buildOverlay(), content);
   }

@@ -54,3 +54,28 @@ func TestRateLimitedLoginHandler_SuccessfulLoginIsNotRateLimited(t *testing.T) {
 		t.Fatalf("expected 200 for a correct login, got %d", status)
 	}
 }
+
+func TestLoginRateLimiter_RecordCountsAgainstTheLimit(t *testing.T) {
+	limiter := NewLoginRateLimiter(3, time.Minute)
+
+	for i := 0; i < 3; i++ {
+		if !limiter.Allowed("user-42") {
+			t.Fatalf("attempt %d: expected key to still be allowed", i+1)
+		}
+		limiter.Record("user-42")
+	}
+
+	if limiter.Allowed("user-42") {
+		t.Fatal("expected key to be blocked after reaching the limit via Record")
+	}
+}
+
+func TestLoginRateLimiter_RecordFailureIsStillAnAlias(t *testing.T) {
+	limiter := NewLoginRateLimiter(1, time.Minute)
+
+	limiter.RecordFailure("user-1")
+
+	if limiter.Allowed("user-1") {
+		t.Fatal("expected RecordFailure to still count against the limit")
+	}
+}

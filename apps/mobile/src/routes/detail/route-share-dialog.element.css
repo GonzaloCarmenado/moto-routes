@@ -46,22 +46,6 @@
   flex-direction: column;
 }
 
-.input {
-  min-height: var(--hitbox-min);
-  border-radius: var(--r-sm);
-  border: 1px solid var(--line);
-  background: var(--panel-sunken);
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: 15px;
-  padding: 0 var(--space-3);
-}
-
-.input:focus {
-  outline: 2px solid var(--amber);
-  outline-offset: 1px;
-}
-
 .error {
   font-family: var(--font-ui);
   font-size: 13px;

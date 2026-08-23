@@ -23,8 +23,8 @@ import (
 const routeShareInviteEvent = "route_share_invite"
 
 type createInvitationRequest struct {
-	RouteID string `json:"route_id"`
-	Email   string `json:"email"`
+	RouteID  string `json:"route_id"`
+	Username string `json:"username"`
 }
 
 type genericMessageResponse struct {
@@ -49,12 +49,12 @@ func CreateInvitationHandler(shareStore Store, routeStore routes.Store, userStor
 			apihttp.WriteError(w, http.StatusBadRequest, "invalid request body")
 			return
 		}
-		if req.RouteID == "" || req.Email == "" {
-			apihttp.WriteError(w, http.StatusBadRequest, "route_id and email are required")
+		if req.RouteID == "" || req.Username == "" {
+			apihttp.WriteError(w, http.StatusBadRequest, "route_id and username are required")
 			return
 		}
 
-		tryCreateInvitation(r.Context(), shareStore, routeStore, userStore, notifier, userID, req.RouteID, req.Email)
+		tryCreateInvitation(r.Context(), shareStore, routeStore, userStore, notifier, userID, req.RouteID, req.Username)
 
 		apihttp.WriteJSON(w, http.StatusOK, genericMessageResponse{Message: invitationCreatedMessage})
 	})
@@ -73,7 +73,7 @@ func CreateInvitationHandler(shareStore Store, routeStore routes.Store, userStor
 // bloqueantes) y porque así es determinísticamente testeable sin
 // sincronización adicional; el coste de latencia real es el de un POST HTTP
 // a FCM, aceptable para una acción de baja frecuencia como compartir una ruta.
-func tryCreateInvitation(ctx context.Context, shareStore Store, routeStore routes.Store, userStore auth.UserStore, notifier notifications.Notifier, fromUserID int64, routeID, email string) {
+func tryCreateInvitation(ctx context.Context, shareStore Store, routeStore routes.Store, userStore auth.UserStore, notifier notifications.Notifier, fromUserID int64, routeID, username string) {
 	route, err := routeStore.GetByIDForUser(ctx, fromUserID, routeID)
 	if err != nil {
 		log.Printf("route sharing: failed to look up route %s: %v", routeID, err)
@@ -83,7 +83,7 @@ func tryCreateInvitation(ctx context.Context, shareStore Store, routeStore route
 		return
 	}
 
-	toUser, err := userStore.FindUserByEmail(ctx, email)
+	toUser, err := userStore.FindUserByUsername(ctx, username)
 	if err != nil {
 		return
 	}
@@ -110,7 +110,7 @@ func tryCreateInvitation(ctx context.Context, shareStore Store, routeStore route
 }
 
 // RateLimitedCreateInvitationHandler envuelve CreateInvitationHandler
-// limitando invitaciones repetidas al mismo email en poco tiempo — mismo
+// limitando invitaciones repetidas al mismo username en poco tiempo — mismo
 // patrón que RateLimitedRequestPasswordResetHandler.
 func RateLimitedCreateInvitationHandler(shareStore Store, routeStore routes.Store, userStore auth.UserStore, notifier notifications.Notifier, limiter *auth.LoginRateLimiter) http.Handler {
 	inner := CreateInvitationHandler(shareStore, routeStore, userStore, notifier)
@@ -126,12 +126,12 @@ func RateLimitedCreateInvitationHandler(shareStore Store, routeStore routes.Stor
 		var req createInvitationRequest
 		_ = json.Unmarshal(rawBody, &req)
 
-		if req.Email != "" && !limiter.Allowed(req.Email) {
-			apihttp.WriteError(w, http.StatusTooManyRequests, "too many invitations sent to this email, try again later")
+		if req.Username != "" && !limiter.Allowed(req.Username) {
+			apihttp.WriteError(w, http.StatusTooManyRequests, "too many invitations sent to this username, try again later")
 			return
 		}
-		if req.Email != "" {
-			limiter.RecordFailure(req.Email)
+		if req.Username != "" {
+			limiter.RecordFailure(req.Username)
 		}
 
 		inner.ServeHTTP(w, r)

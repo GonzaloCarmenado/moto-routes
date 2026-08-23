@@ -22,23 +22,23 @@ describe('createInvitation', () => {
     vi.unstubAllGlobals();
   });
 
-  it('envía route_id y email con el Bearer del token', async () => {
+  it('envía route_id y username con el Bearer del token', async () => {
     const fetchMock = stubFetch({ ok: true, status: 200, json: () => Promise.resolve({ message: 'ok' }) });
 
-    await createInvitation(BASE_URL, TOKEN, 'route-1', 'friend@example.com');
+    await createInvitation(BASE_URL, TOKEN, 'route-1', 'friend1');
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`${BASE_URL}/api/route-shares`);
     expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer jwt-token');
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body['route_id']).toBe('route-1');
-    expect(body['email']).toBe('friend@example.com');
+    expect(body['username']).toBe('friend1');
   });
 
   it('lanza RouteSharingApiError kind "too-many-requests" en 429', async () => {
     stubFetch({ ok: false, status: 429, json: () => Promise.resolve({ error: 'too many invitations' }) });
 
-    await expect(createInvitation(BASE_URL, TOKEN, 'route-1', 'friend@example.com')).rejects.toMatchObject({
+    await expect(createInvitation(BASE_URL, TOKEN, 'route-1', 'friend1')).rejects.toMatchObject({
       kind: 'too-many-requests',
     });
   });
@@ -46,7 +46,7 @@ describe('createInvitation', () => {
   it('lanza RouteSharingApiError kind "unauthorized" en 401', async () => {
     stubFetch({ ok: false, status: 401, json: () => Promise.resolve({ error: 'missing or invalid token' }) });
 
-    await expect(createInvitation(BASE_URL, TOKEN, 'route-1', 'friend@example.com')).rejects.toMatchObject({
+    await expect(createInvitation(BASE_URL, TOKEN, 'route-1', 'friend1')).rejects.toMatchObject({
       kind: 'unauthorized',
     });
   });

@@ -35,8 +35,11 @@ import {
 import { buildActionButton, buildFriendsPanel, buildReceivedPanel, buildSentPanel } from './friends-panels.js';
 import '../shared/tab-bar/tab-bar.element.js';
 import type { TabBarTab } from '../shared/tab-bar/tab-bar.element.js';
+import '../shared/friend-selector/friend-selector.element.js';
+import { FRIEND_SELECTOR_SELECTED_EVENT, type FriendSelectorSelectedDetail } from '../shared/friend-selector/friend-selector.element.js';
 
 type TabBarEl = HTMLElement & { tabs: TabBarTab[] };
+type FriendSelectorEl = HTMLElement & { apiBaseUrl: string; token: string; excludeUsername: string | null };
 
 class FriendsView extends BaseElement {
   private _sessionRepository: ISessionRepository | null = null;
@@ -49,6 +52,7 @@ class FriendsView extends BaseElement {
   private _busyId: string | null = null;
   private _sending = false;
   private _sendError: string | null = null;
+  private _selectedUsername: string | null = null;
   private _fetchToken = 0;
 
   set sessionRepository(repo: ISessionRepository | null) {
@@ -107,12 +111,24 @@ class FriendsView extends BaseElement {
     this.render();
   }
 
+  // No llama a this.render() aquí: el propio <friend-selector> ya se
+  // re-renderiza a sí mismo tras emitir la selección (mostrando el username
+  // elegido en su input como confirmación visual) — un render aquí lo
+  // sustituiría por una instancia nueva y vacía en mitad de ese mismo ciclo
+  // síncrono, perdiendo esa confirmación.
+  private handleFriendSelected(detail: FriendSelectorSelectedDetail): void {
+    this._selectedUsername = detail.username;
+    this._sendError = null;
+  }
+
   private async handleSend(): Promise<void> {
     if (!this._session || this._sending) return;
-    const input = this.shadowRoot?.querySelector<HTMLInputElement>('[data-cy="friends-input-username"]');
-    const username = input?.value.trim() ?? '';
+    const username = this._selectedUsername;
     if (!username) return;
 
+    // Defensa en profundidad: el propio selector ya excluye la cuenta propia
+    // de sus resultados (excludeUsername), pero este chequeo se mantiene por
+    // si acaso llega igualmente (ver tasks.md 5.2).
     if (this._ownUsername && username.toLowerCase() === this._ownUsername.toLowerCase()) {
       this._sendError = 'No puedes enviarte una solicitud de amistad a ti mismo';
       this.render();
@@ -126,7 +142,7 @@ class FriendsView extends BaseElement {
     try {
       await sendFriendRequest(getApiBaseUrl(), this._session.token, username);
       showToast('Si la cuenta existe, se le ha enviado la solicitud', 'success');
-      if (input) input.value = '';
+      this._selectedUsername = null;
       await this.fetchAndRender();
     } catch (err) {
       this._sendError = toErrorMessage(err, 'No se ha podido enviar la solicitud');
@@ -192,11 +208,14 @@ class FriendsView extends BaseElement {
     label.className = 'field-label';
     label.textContent = 'Nombre de usuario';
     field.appendChild(label);
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'input';
-    input.setAttribute('data-cy', 'friends-input-username');
-    field.appendChild(input);
+    const selector = document.createElement('friend-selector') as FriendSelectorEl;
+    selector.apiBaseUrl = getApiBaseUrl();
+    selector.token = this._session?.token ?? '';
+    selector.excludeUsername = this._ownUsername;
+    selector.addEventListener(FRIEND_SELECTOR_SELECTED_EVENT, (event) => {
+      this.handleFriendSelected((event as CustomEvent<FriendSelectorSelectedDetail>).detail);
+    });
+    field.appendChild(selector);
     form.appendChild(field);
 
     if (this._sendError) {

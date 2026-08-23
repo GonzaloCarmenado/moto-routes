@@ -1,0 +1,55 @@
+## 1. Backend — búsqueda de usuarios
+
+- [x] 1.1 Test rojo + implementación: `auth.UserStore` (interfaz) gana `SearchUsernames(ctx, query string, limit int) ([]string, error)`; `PostgresUserStore` lo implementa con `ILIKE '%'||query||'%'` case-insensitive, orden alfabético, `LIMIT`. Test de integración real contra Postgres (mismo patrón que `postgres_store_test.go`), incluido el caso de más coincidencias que el límite.
+- [x] 1.2 Test rojo + implementación: `LoginRateLimiter` gana un método `Record(key string)` (mismo cuerpo que `RecordFailure` hoy) — `RecordFailure` pasa a ser un alias que lo llama, para no leer "RecordFailure" en un sitio donde no hubo ningún fallo (una búsqueda nunca falla, solo cuenta contra el límite).
+- [x] 1.3 Test rojo + implementación: nuevo paquete `internal/userdirectory`, `SearchHandler(store auth.UserStore)` — lee `q` de la query string, exige `RequireAuth` (userID del contexto), longitud mínima 1 en servidor (el mínimo de 2 es solo del cliente), limita resultados a 10, responde un array JSON de usernames.
+- [x] 1.4 Test rojo + implementación: `RateLimitedSearchHandler` — mismo patrón que `RateLimitedRefreshHandler`, clave = `userID` (no hay body que leer, se obtiene del contexto tras `RequireAuth`), 30/minuto.
+- [x] 1.5 Wiring en `main.go`: `GET /api/users/search`, protegido con `RequireAuth`.
+
+## 2. Backend — avatar de otra cuenta
+
+- [x] 2.1 Test rojo + implementación: `internal/avatar/handler.go` extrae la lógica de servir el blob cifrado de `DownloadAvatarHandler` a una función interna reutilizable, parametrizada por `userID` (sin cambiar el comportamiento ni la firma pública de `DownloadAvatarHandler`).
+- [x] 2.2 Test rojo + implementación: nuevo `DownloadUserAvatarHandler(store auth.UserStore, blobStore, encryptionKey)` — resuelve `{username}` de la ruta vía `FindUserByUsername`, sirve el mismo blob que el avatar propio; 404 uniforme tanto si el username no existe como si existe pero no tiene avatar.
+- [x] 2.3 Wiring en `main.go`: `GET /api/users/{username}/avatar`, protegido con `RequireAuth`.
+
+## 3. Backend — migrar compartir-rutas de email a username
+
+- [x] 3.1 Test rojo + implementación: `internal/routesharing/handler.go` — `createInvitationRequest` cambia `Email` por `Username`; `tryCreateInvitation` resuelve con `auth.UserStore.FindUserByUsername` en vez de `FindUserByEmail`. Mismo comportamiento anti-enumeración, mismo rechazo de auto-invitación, mismo rate limiting (clave pasa de email a username).
+- [x] 3.2 Revisar `route_shares` (tabla/columnas) — confirmar que no persiste el email del invitado en ningún sitio que ahora quede huérfano; si lo hace, evaluar si hace falta migración (no se asume, se comprueba el esquema real primero). Confirmado: `0008_create_route_shares.sql` solo tiene `from_user_id`/`to_user_id` (FKs a `users.id`), ningún email persistido — sin migración necesaria.
+- [x] 3.3 Actualizar los tests Go existentes de `routesharing` que construían la petición con `email` — pasan a `username`, mismos casos cubiertos.
+
+## 4. Frontend — componente `<friend-selector>`
+
+- [x] 4.1 Test rojo + implementación: `shared/http/user-search-api.service.ts` — `searchUsers(apiBaseUrl, token, query)`, mapeo de errores mismo criterio que `friends-api.service.ts` (401/429/network/unknown).
+- [x] 4.2 Test rojo + implementación: `shared/http/avatar-api.service.ts` (o servicio nuevo si no encaja) gana `resolveUserAvatarUrl(apiBaseUrl, token, username)` — mismo patrón que la resolución de avatar propio ya existente, apuntando al endpoint nuevo de avatar ajeno.
+- [x] 4.3 Test rojo + implementación: `shared/friend-selector/friend-selector.element.ts` — input de búsqueda con debounce (300ms, mínimo 2 caracteres en cliente), lista de resultados con avatar (fallback al icono placeholder, extraído a `shared/icons/avatar-placeholder-icon.ts` para que `profile-header.ts` y `friend-selector.element.ts` lo reutilicen sin que `shared/` importe de un dominio — ver nota de arquitectura abajo) y username, evento `FRIEND_SELECTOR_SELECTED_EVENT` al elegir uno.
+- [x] 4.4 Test rojo + implementación: propiedad `excludeUsername` — filtra ese username de los resultados mostrados, sin llamada de red aparte.
+- [x] 4.5 Test rojo + implementación: estado vacío ("sin resultados") y estado de error de red, sin bloquear el resto del componente.
+- [x] 4.6 `data-cy` en cada elemento interactivo/localizable (`friend-selector-input`, `friend-selector-result`, `friend-selector-empty`, `friend-selector-error`), añadidos al crear cada uno.
+
+**Nota de arquitectura (decisión tomada durante `apply`, sin ADR nueva):** `buildAvatarPlaceholder` vivía en `profile/profile-header.ts` (un dominio). `shared/` nunca importa de un dominio (regla ya establecida en `renovacion-token-sesion`), así que se extrajo a `shared/icons/avatar-placeholder-icon.ts` — `profile-header.ts` ahora importa de `shared/` en vez de al revés. Comportamiento idéntico (mismo data-cy, mismos atributos SVG), verificado con los tests existentes de `profile-header.spec.ts` sin modificar.
+
+## 5. Frontend — adopción en amigos
+
+- [x] 5.1 Test rojo + implementación: `friends-view.element.ts` sustituye el input de texto exacto de `buildSendForm()` por `<friend-selector excludeUsername="...">`, escuchando `FRIEND_SELECTOR_SELECTED_EVENT` para completar `handleSend()` con el username elegido.
+- [x] 5.2 Confirmar que el chequeo de autoexclusión existente (comparar contra `_ownUsername`) sigue funcionando como defensa en profundidad aunque el selector ya excluya la propia cuenta de los resultados. Verificado con test dedicado que simula el evento de selección con el propio username directamente (bypaseando el filtro del selector) y confirma que `handleSend()` lo sigue rechazando.
+
+## 6. Frontend — adopción en compartir-rutas
+
+- [x] 6.1 Test rojo + implementación: `route-share-dialog.element.ts` sustituye el `<input type="email">` por `<friend-selector excludeUsername="...">`. `ownEmail` (opción del diálogo) se elimina — el diálogo resuelve su propio username vía `fetchCurrentUser` (mismo patrón que `friends-view.element.ts`), en segundo plano tras el primer render para no bloquear la apertura ni destruir el `<friend-selector>` a mitad de una búsqueda.
+- [x] 6.2 Test rojo + implementación: `shared/http/route-sharing-api.service.ts` cambia el payload de invitación de `email` a `username`.
+- [x] 6.3 Actualizar los tests Vitest existentes de `route-share-dialog.element.spec.ts` (y `route-detail-share.spec.ts`, que pasaba `ownEmail`) que construían el escenario con un input de email — pasan al nuevo flujo de selector.
+
+## 7. Verificación end-to-end
+
+- [x] 7.1 Cypress nuevo (`cypress/e2e/friends/friend-selector.cy.ts`, backend real): buscar un username parcial muestra resultados con avatar/placeholder; seleccionar uno completa el envío de la solicitud (ya cubierto por `friends.cy.ts`, ahora conducido por el selector); la propia cuenta nunca aparece en los resultados. Corregido en el camino: la imagen Docker de `apps/api` corría el código anterior a este cambio (bug real, requiere `docker compose build api && docker compose up -d api` tras cada cambio de backend), y `uniqueTestUsername(prefix)` incrustaba un segundo timestamp encima de un `prefix` ya único, agotando los 20 caracteres antes del contador y produciendo colisiones de username reales.
+- [x] 7.2 Cypress: el mismo selector, en el diálogo de compartir ruta, crea una invitación por username en vez de por email — actualizado `route-sharing.cy.ts` (incluida una prueba de defensa en profundidad: la propia cuenta nunca aparece como destino).
+- [x] 7.3 Cypress: límite de búsquedas por cuenta (rate limit) — sin precedente de test de rate limit vía Cypress en este repo (todos existentes son a nivel Go); implementado con peticiones directas (`cy.request`) contra el servidor real desplegado, verificando el wiring de `main.go` que un test Go con fakes no cubre.
+- [x] 7.4 Verificación manual en dispositivo Android real (`75fe536b`, APK debug, hash `dist/`↔APK verificado en cada build — dos vueltas de build necesarias cada vez, gotcha ya documentado en `memory/context.md`). **Dos bugs reales encontrados y corregidos, invisibles en Vitest/Cypress**: (1) `friend-selector.element.ts` llamaba a `this.render()` (`renderShadow`, teardown completo) en cada tecla — destruía y recreaba el `<input>`, perdiendo el foco y cerrando el teclado de Android; corregido con el mismo patrón ya establecido en `route-list.element.ts::updateBodyOnly` (actualización parcial de solo la sección de resultados, `<input>` nunca se destruye), con test de regresión nuevo. (2) el campo no forzaba minúsculas — mismo bug ya conocido y corregido antes para `username-form.element.ts` (el teclado de Android capitaliza la primera letra); corregido con idéntico patrón (`toLowerCase()` en vivo en el propio input) + `autocapitalize="none"`/`autocorrect="off"`/`spellcheck=false`, con test de regresión nuevo. Un tercer problema reportado ("la conexión falla") era un error de la propia sesión de verificación, no del código: un `adb kill-server` durante la depuración de CDP se llevó por delante el túnel `adb reverse tcp:8080` — restaurado, sin cambio de código. Verificado de punta a punta tras ambos fixes: búsqueda funciona, resultados tocables, sin perder el teclado al escribir varias letras seguidas, mayúsculas se normalizan solas. Confirmado por el usuario ("perfecto").
+
+## 8. Cierre
+
+- [x] 8.1 Suite completa en verde: `tsc --noEmit` limpio, `eslint src/ --max-warnings 0` limpio, Vitest **1407/1407**, Cypress **101/101** (suite completa, no solo lo nuevo), `go build ./...`/`go vet ./...` limpios, `go test ./...` todos los paquetes en verde, `gofmt -l` verificado archivo por archivo de los 15 ficheros Go tocados (CRLF-stripped, no solo confiar en el listado completo — ver gotcha real de sesiones anteriores, `memory/metrics/events.jsonl`).
+- [x] 8.2 `openspec sync` de los tres deltas (`selector-amigos`, `amigos`, `compartir-rutas`) a `openspec/specs/` — capability nueva `selector-amigos` creada, `amigos`/`compartir-rutas` con su requirement modificado (RENAMED incluido en `compartir-rutas`). `openspec validate --all --strict`: 29/29 en verde.
+- [x] 8.3 Revisar el diff completo buscando secretos antes de abrir la PR — ninguno encontrado (solo la constante de test ya compartida `correct-horse-battery`, reutilizada tal cual en todos los specs Cypress existentes). De paso, revertidos los artefactos de build de `apps/mobile/src-tauri/gen/android/` y el ruido CRLF de `Cargo.toml` que la verificación en dispositivo había dejado en el working tree — no son parte del cambio real.
+- [x] 8.4 Actualizar `memory/context.md` (estado actual, resultado de la verificación manual del grupo 7, los 4 bugs reales encontrados). ADR-058 ya escrita en `design.md`; sin ADR nueva pese a la decisión de extraer `avatar-placeholder-icon.ts` a `shared/` — mismo principio ya establecido (no un principio nuevo), documentado en `tasks.md` 4.3/4.6 y en `memory/context.md`, no requiere entrada propia en `decisions.md`.

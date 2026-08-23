@@ -63,18 +63,19 @@ interface AcceptResponse {
 }
 
 /**
- * `POST /api/route-shares` — invita a otra cuenta (por email) a recibir una
- * copia de una ruta ya sincronizada. La respuesta es siempre genérica en el
- * servidor (nunca revela si el email existe) — este servicio solo propaga
- * errores de red/sesión/límite de invitaciones, no de "email no encontrado".
+ * `POST /api/route-shares` — invita a otra cuenta (por username, elegida con
+ * el selector de búsqueda, ver selector-amigos) a recibir una copia de una
+ * ruta ya sincronizada. La respuesta es siempre genérica en el servidor
+ * (nunca revela si el username existe) — este servicio solo propaga errores
+ * de red/sesión/límite de invitaciones, no de "username no encontrado".
  */
-export async function createInvitation(apiBaseUrl: string, token: string, routeId: string, email: string): Promise<void> {
+export async function createInvitation(apiBaseUrl: string, token: string, routeId: string, username: string): Promise<void> {
   try {
     await fetchJson(`${apiBaseUrl}/api/route-shares`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       checkStatus: true,
-      body: { route_id: routeId, email },
+      body: { route_id: routeId, username },
     });
   } catch (err) {
     throw toRouteSharingApiError(err);

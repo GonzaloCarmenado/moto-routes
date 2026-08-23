@@ -67,6 +67,10 @@ type UserStore interface {
 	// distinguir mayúsculas/minúsculas (mismo criterio que el índice único
 	// de unicidad, ver 0012_add_users_username.sql).
 	FindUserByUsername(ctx context.Context, username string) (StoredUser, error)
+	// SearchUsernames busca usernames que contienen query (coincidencia
+	// parcial, sin distinguir mayúsculas/minúsculas), en orden alfabético,
+	// acotado a limit resultados (ver selector-amigos, design.md).
+	SearchUsernames(ctx context.Context, query string, limit int) ([]string, error)
 	// MarkEmailVerified marca la cuenta indicada como verificada. No hace
 	// nada si ya lo estaba.
 	MarkEmailVerified(ctx context.Context, id int64) error

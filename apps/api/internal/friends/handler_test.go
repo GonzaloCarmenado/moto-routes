@@ -108,6 +108,10 @@ func (f *fakeUserStore) FindUserByID(_ context.Context, id int64) (auth.StoredUs
 	return auth.StoredUser{}, auth.ErrUserNotFound
 }
 
+func (f *fakeUserStore) SearchUsernames(_ context.Context, _ string, _ int) ([]string, error) {
+	return nil, nil
+}
+
 func (f *fakeUserStore) MarkEmailVerified(_ context.Context, _ int64) error { return nil }
 
 func (f *fakeUserStore) UpdatePasswordHash(_ context.Context, _ int64, _ string) error { return nil }

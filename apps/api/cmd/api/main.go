@@ -25,6 +25,7 @@ import (
 	"github.com/crzverde/moto-routes/apps/api/internal/routes"
 	"github.com/crzverde/moto-routes/apps/api/internal/routesharing"
 	"github.com/crzverde/moto-routes/apps/api/internal/stoptypes"
+	"github.com/crzverde/moto-routes/apps/api/internal/userdirectory"
 )
 
 // accessTokenTTL es la duración de validez del access token de sesión emitido
@@ -86,6 +87,13 @@ const (
 const (
 	friendRequestRateLimitMaxAttempts = 5
 	friendRequestRateLimitWindow      = 15 * time.Minute
+)
+
+// Límite de búsquedas de usuarios por cuenta autenticada: 30 cada minuto (ver
+// selector-amigos, design.md — clave userID, no término de búsqueda).
+const (
+	userSearchRateLimitMaxAttempts = 30
+	userSearchRateLimitWindow      = time.Minute
 )
 
 // mapMatchHTTPTimeout acota cada llamada a OSRM (por bloque de puntos, ver
@@ -266,6 +274,15 @@ func main() {
 	router.With(httpmw.PublicCORS).Options("/api/friends/{id}/accept", func(http.ResponseWriter, *http.Request) {})
 	router.With(httpmw.PublicCORS).Options("/api/friends/{id}/decline", func(http.ResponseWriter, *http.Request) {})
 	router.With(httpmw.PublicCORS).Options("/api/friends/{id}/revoke", func(http.ResponseWriter, *http.Request) {})
+
+	userSearchRateLimiter := auth.NewLoginRateLimiter(userSearchRateLimitMaxAttempts, userSearchRateLimitWindow)
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/users/search",
+		userdirectory.RateLimitedSearchHandler(userStore, userSearchRateLimiter).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/users/search", func(http.ResponseWriter, *http.Request) {})
+
+	router.With(httpmw.PublicCORS, auth.RequireAuth(tokenIssuer)).Get("/api/users/{username}/avatar",
+		avatar.DownloadUserAvatarHandler(userStore, blobStore, cfg.PhotoEncryptionKey).ServeHTTP)
+	router.With(httpmw.PublicCORS).Options("/api/users/{username}/avatar", func(http.ResponseWriter, *http.Request) {})
 
 	log.Printf("listening on %s", cfg.ServerAddress)
 	if err := http.ListenAndServe(cfg.ServerAddress, router); err != nil {

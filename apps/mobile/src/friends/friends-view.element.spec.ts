@@ -13,6 +13,7 @@ import {
 import type * as FriendsApiService from '../shared/http/friends-api.service.js';
 import { fetchCurrentUser } from '../auth/auth-api.service.js';
 import type * as AuthApiService from '../auth/auth-api.service.js';
+import { FRIEND_SELECTOR_SELECTED_EVENT } from '../shared/friend-selector/friend-selector.element.js';
 import './friends-view.element.js';
 
 vi.mock('../shared/http/friends-api.service.js', async (importOriginal) => {
@@ -55,6 +56,18 @@ async function mountWithSession(): Promise<{ el: HTMLElement; root: ShadowRoot; 
   return { el, root: el.shadowRoot!, sessionRepository };
 }
 
+/**
+ * Simula la selección de un candidato en `<friend-selector>` despachando su
+ * evento de selección directamente sobre el elemento, sin conducir su propio
+ * flujo interno de búsqueda con debounce (ya cubierto por los tests propios
+ * de `friend-selector.element.spec.ts`) — este spec solo verifica que
+ * `friends-view` reacciona correctamente al evento del contrato.
+ */
+function selectFriend(root: ShadowRoot, username: string): void {
+  const selector = root.querySelector('friend-selector')!;
+  selector.dispatchEvent(new CustomEvent(FRIEND_SELECTOR_SELECTED_EVENT, { detail: { username }, bubbles: true, composed: true }));
+}
+
 describe('friends-view', () => {
   afterEach(() => {
     document.body.querySelectorAll('friends-view').forEach((el) => { el.remove(); });
@@ -78,10 +91,9 @@ describe('friends-view', () => {
     expect(card?.textContent).toContain('friend1');
   });
 
-  it('sending a friend request by username calls sendFriendRequest and clears the input', async () => {
+  it('sending a friend request by the username selected in friend-selector calls sendFriendRequest', async () => {
     const { root } = await mountWithSession();
-    const input = root.querySelector<HTMLInputElement>('[data-cy="friends-input-username"]')!;
-    input.value = 'friend1';
+    selectFriend(root, 'friend1');
 
     root.querySelector<HTMLButtonElement>('[data-cy="friends-btn-enviar"]')!.click();
     await flush();
@@ -89,10 +101,12 @@ describe('friends-view', () => {
     expect(sendFriendRequest).toHaveBeenCalledWith(expect.any(String), 'jwt-token', 'friend1');
   });
 
-  it('sending a request to the own username is rejected on the client, without calling sendFriendRequest', async () => {
+  it('sending a request to the own username is rejected on the client as defense in depth, without calling sendFriendRequest', async () => {
     const { root } = await mountWithSession();
-    const input = root.querySelector<HTMLInputElement>('[data-cy="friends-input-username"]')!;
-    input.value = 'me';
+    // El propio <friend-selector> ya excluye la cuenta propia de sus
+    // resultados (excludeUsername) — este evento simula que llegara igual,
+    // para probar la defensa en profundidad de friends-view (tasks.md 5.2).
+    selectFriend(root, 'me');
 
     root.querySelector<HTMLButtonElement>('[data-cy="friends-btn-enviar"]')!.click();
     await flush();
@@ -101,12 +115,11 @@ describe('friends-view', () => {
     expect(root.querySelector('[data-cy="friends-send-error"]')?.textContent).toContain('a ti mismo');
   });
 
-  it('a network failure while sending a request shows an inline error and keeps the input value', async () => {
+  it('a network failure while sending a request shows an inline error and re-enables the send button', async () => {
     vi.mocked(sendFriendRequest).mockRejectedValue(new Error('Network error'));
 
     const { root } = await mountWithSession();
-    const input = root.querySelector<HTMLInputElement>('[data-cy="friends-input-username"]')!;
-    input.value = 'friend1';
+    selectFriend(root, 'friend1');
 
     root.querySelector<HTMLButtonElement>('[data-cy="friends-btn-enviar"]')!.click();
     await flush();
@@ -249,7 +262,7 @@ describe('friends-view', () => {
     expect(listSentRequests).not.toHaveBeenCalled();
     expect(listFriends).not.toHaveBeenCalled();
     expect(fetchCurrentUser).not.toHaveBeenCalled();
-    expect(el.shadowRoot!.querySelector('[data-cy="friends-input-username"]')).toBeNull();
+    expect(el.shadowRoot!.querySelector('friend-selector')).toBeNull();
     expect(el.shadowRoot!.querySelector('[data-cy="friends-empty-amigos"]')).not.toBeNull();
   });
 });
