@@ -1,19 +1,19 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { openProfileEditDialog } from './profile-edit-dialog.element.js';
+import { openProfileEditDialog, type ProfileEditDialogOptions } from './profile-edit-dialog.element.js';
 import { pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
 import type * as PhotoCaptureAdapter from '../shared/services/photo-capture-adapter.service.js';
-import { savePhotoFile } from '../shared/services/photo-storage.service.js';
+
+/** Abre el diálogo con `onEditUsername` por defecto (no-op, `null`) salvo que el test lo sobrescriba explícitamente. */
+function open(options: Omit<ProfileEditDialogOptions, 'onEditUsername'> & Partial<Pick<ProfileEditDialogOptions, 'onEditUsername'>>): Promise<'saved' | 'cancelled'> {
+  return openProfileEditDialog({ onEditUsername: vi.fn().mockResolvedValue(null), ...options });
+}
 
 vi.mock('../shared/services/photo-capture-adapter.service.js', async (importOriginal) => {
   const actual = await importOriginal<typeof PhotoCaptureAdapter>();
   return { ...actual, captureFromCamera: vi.fn(), pickFromGallery: vi.fn() };
 });
-
-vi.mock('../shared/services/photo-storage.service.js', () => ({
-  savePhotoFile: vi.fn(),
-}));
 
 // `?inline` (usado por el propio componente en producción) no sirve para
 // inspeccionar el CSS fuente bajo Vitest — se lee el fichero directamente,
@@ -27,16 +27,16 @@ function getDialog(): HTMLElement {
   return el as HTMLElement;
 }
 
-function nameInput(dialog: HTMLElement): HTMLInputElement {
-  return dialog.shadowRoot!.querySelector('[data-cy="profile-input-nombre"]') as HTMLInputElement;
-}
-
 function previewImg(dialog: HTMLElement): HTMLImageElement | null {
   return dialog.shadowRoot!.querySelector('.preview img');
 }
 
 function previewName(dialog: HTMLElement): string | null {
   return dialog.shadowRoot!.querySelector('.preview .profile-name')?.textContent ?? null;
+}
+
+function saveBtn(dialog: HTMLElement): HTMLButtonElement {
+  return dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]')!;
 }
 
 async function flush(): Promise<void> {
@@ -49,24 +49,24 @@ afterEach(() => {
 });
 
 describe('openProfileEditDialog (AC-004 a AC-013, AC-037, AC-038)', () => {
-  it('mounts the dialog with the name input prefilled and the preview showing the current avatar/name (AC-005)', () => {
-    void openProfileEditDialog({ avatarUrl: 'blob:current-avatar', name: 'Marc', onSave: vi.fn() });
+  it('mounts the dialog with the preview showing the current account avatar/username, no name input (AC-005)', () => {
+    void open({ avatarUrl: 'blob:current-avatar', username: 'rider42', onSave: vi.fn() });
     const dialog = getDialog();
 
-    expect(nameInput(dialog).value).toBe('Marc');
     expect(previewImg(dialog)?.getAttribute('src')).toBe('blob:current-avatar');
-    expect(previewName(dialog)).toBe('Marc');
+    expect(previewName(dialog)).toBe('rider42');
+    expect(dialog.shadowRoot!.querySelector('[data-cy="profile-input-nombre"]')).toBeNull();
   });
 
-  it('sets maxlength="100" on the name input (AC-008)', () => {
-    void openProfileEditDialog({ avatarUrl: null, name: null, onSave: vi.fn() });
+  it('"Guardar" starts disabled until a new photo is chosen — there is nothing else to save', () => {
+    void open({ avatarUrl: 'blob:current-avatar', username: 'rider42', onSave: vi.fn() });
     const dialog = getDialog();
 
-    expect(nameInput(dialog).getAttribute('maxlength')).toBe('100');
+    expect(saveBtn(dialog).disabled).toBe(true);
   });
 
   it('clicking "Cambiar foto" opens a menu with Cámara/Galería options (AC-006)', () => {
-    void openProfileEditDialog({ avatarUrl: null, name: null, onSave: vi.fn() });
+    void open({ avatarUrl: null, username: null, onSave: vi.fn() });
     const dialog = getDialog();
 
     const changePhotoBtn = dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-cambiar-foto"]');
@@ -79,89 +79,62 @@ describe('openProfileEditDialog (AC-004 a AC-013, AC-037, AC-038)', () => {
     expect(dialog.shadowRoot!.querySelector('[data-cy="profile-menu-galeria"]')).not.toBeNull();
   });
 
-  it('choosing "Galería" updates the preview <img> with a new blob: URL immediately, without calling savePhotoFile yet (AC-007)', async () => {
+  it('choosing "Galería" updates the preview <img> with a new blob: URL immediately and enables "Guardar" (AC-007)', async () => {
     const file = new File(['x'], 'foto.jpg', { type: 'image/jpeg' });
     vi.mocked(pickFromGallery).mockResolvedValue([file]);
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:new-photo');
 
-    void openProfileEditDialog({ avatarUrl: null, name: null, onSave: vi.fn() });
+    void open({ avatarUrl: null, username: null, onSave: vi.fn() });
     const dialog = getDialog();
     dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-cambiar-foto"]')?.click();
     dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-menu-galeria"]')?.click();
     await flush();
 
     expect(previewImg(dialog)?.getAttribute('src')).toBe('blob:new-photo');
-    expect(savePhotoFile).not.toHaveBeenCalled();
+    expect(saveBtn(dialog).disabled).toBe(false);
   });
 
-  it('clicking "Guardar" after choosing a photo and typing a name calls savePhotoFile once and onSave with the resolved avatarPath and the raw name (AC-009)', async () => {
+  it('clicking "Guardar" after choosing a photo calls onSave with the chosen file (AC-009)', async () => {
     const file = new File(['x'], 'foto.jpg', { type: 'image/jpeg' });
     vi.mocked(pickFromGallery).mockResolvedValue([file]);
-    vi.mocked(savePhotoFile).mockResolvedValue('/app-data/photos/avatar-1.jpg');
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:new-photo');
     const onSave = vi.fn().mockResolvedValue(undefined);
 
-    const openPromise = openProfileEditDialog({ avatarUrl: null, name: null, onSave });
+    const openPromise = open({ avatarUrl: null, username: null, onSave });
     const dialog = getDialog();
     dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-cambiar-foto"]')?.click();
     dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-menu-galeria"]')?.click();
     await flush();
 
-    const input = nameInput(dialog);
-    input.value = 'Marc Nuevo';
-    input.dispatchEvent(new Event('input'));
-    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]')?.click();
+    saveBtn(dialog).click();
     await flush();
 
-    expect(savePhotoFile).toHaveBeenCalledTimes(1);
-    expect(savePhotoFile).toHaveBeenCalledWith(file);
-    expect(onSave).toHaveBeenCalledWith({ avatarPath: '/app-data/photos/avatar-1.jpg', name: 'Marc Nuevo' });
+    expect(onSave).toHaveBeenCalledWith({ avatarFile: file });
     await expect(openPromise).resolves.toBe('saved');
   });
 
-  it('clicking "Guardar" without changing the photo resolves onSave with avatarPath: null (AC-009)', async () => {
-    const onSave = vi.fn().mockResolvedValue(undefined);
-    void openProfileEditDialog({ avatarUrl: 'blob:existing', name: 'Marc', onSave });
-    const dialog = getDialog();
-
-    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]')?.click();
-    await flush();
-
-    expect(savePhotoFile).not.toHaveBeenCalled();
-    expect(onSave).toHaveBeenCalledWith({ avatarPath: null, name: 'Marc' });
-  });
-
-  it('clicking "Guardar" with an empty/whitespace name passes the value as-is to onSave, without any fallback (AC-010)', async () => {
-    const onSave = vi.fn().mockResolvedValue(undefined);
-    void openProfileEditDialog({ avatarUrl: null, name: 'Marc', onSave });
-    const dialog = getDialog();
-
-    const input = nameInput(dialog);
-    input.value = '   ';
-    input.dispatchEvent(new Event('input'));
-    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]')?.click();
-    await flush();
-
-    expect(onSave).toHaveBeenCalledWith({ avatarPath: null, name: '   ' });
-  });
-
-  it('shows a spinner on "Guardar" and disables Cancelar/name input/Cambiar foto while saving is in flight (AC-042)', async () => {
+  it('shows a spinner on "Guardar" and disables Cancelar/Cambiar foto while saving is in flight (AC-042)', async () => {
+    const file = new File(['x'], 'foto.jpg', { type: 'image/jpeg' });
+    vi.mocked(pickFromGallery).mockResolvedValue([file]);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:new-photo');
     let resolveOnSave!: () => void;
     const onSave = vi.fn(() => new Promise<void>((resolve) => { resolveOnSave = resolve; }));
 
-    void openProfileEditDialog({ avatarUrl: null, name: 'Marc', onSave });
+    void open({ avatarUrl: null, username: null, onSave });
     const dialog = getDialog();
-    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]')?.click();
+    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-cambiar-foto"]')?.click();
+    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-menu-galeria"]')?.click();
+    await flush();
+    saveBtn(dialog).click();
     await flush();
 
-    const saveBtn = dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]');
-    expect(saveBtn?.disabled).toBe(true);
-    expect(saveBtn?.classList.contains('is-saving')).toBe(true);
-    expect(saveBtn?.getAttribute('aria-busy')).toBe('true');
-    expect(saveBtn?.querySelector('.spinner')).not.toBeNull();
+    const btn = saveBtn(dialog);
+    expect(btn.disabled).toBe(true);
+    expect(btn.classList.contains('is-saving')).toBe(true);
+    expect(btn.getAttribute('aria-busy')).toBe('true');
+    expect(btn.querySelector('.spinner')).not.toBeNull();
     expect(dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-cancelar-perfil"]')?.disabled).toBe(true);
     expect(dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-cambiar-foto"]')?.disabled).toBe(true);
-    expect(nameInput(dialog).disabled).toBe(true);
 
     resolveOnSave();
     await flush();
@@ -169,11 +142,17 @@ describe('openProfileEditDialog (AC-004 a AC-013, AC-037, AC-038)', () => {
   });
 
   it('ignores Escape and overlay clicks while saving is in flight', async () => {
+    const file = new File(['x'], 'foto.jpg', { type: 'image/jpeg' });
+    vi.mocked(pickFromGallery).mockResolvedValue([file]);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:new-photo');
     const onSave = vi.fn(() => new Promise<void>(() => { /* never resolves */ }));
 
-    const openPromise = openProfileEditDialog({ avatarUrl: null, name: 'Marc', onSave });
+    const openPromise = open({ avatarUrl: null, username: null, onSave });
     const dialog = getDialog();
-    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]')?.click();
+    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-cambiar-foto"]')?.click();
+    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-menu-galeria"]')?.click();
+    await flush();
+    saveBtn(dialog).click();
     await flush();
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
@@ -187,34 +166,38 @@ describe('openProfileEditDialog (AC-004 a AC-013, AC-037, AC-038)', () => {
   });
 
   it('re-enables the controls and hides the spinner if saving fails (AC-012, AC-042)', async () => {
-    const onSave = vi.fn().mockRejectedValue(new Error('fallo de BBDD'));
+    const file = new File(['x'], 'foto.jpg', { type: 'image/jpeg' });
+    vi.mocked(pickFromGallery).mockResolvedValue([file]);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:new-photo');
+    const onSave = vi.fn().mockRejectedValue(new Error('fallo de subida'));
 
-    void openProfileEditDialog({ avatarUrl: null, name: 'Marc', onSave });
+    void open({ avatarUrl: null, username: null, onSave });
     const dialog = getDialog();
-    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]')?.click();
+    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-cambiar-foto"]')?.click();
+    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-menu-galeria"]')?.click();
+    await flush();
+    saveBtn(dialog).click();
     await flush();
 
-    const saveBtn = dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]');
-    expect(saveBtn?.disabled).toBe(false);
-    expect(saveBtn?.classList.contains('is-saving')).toBe(false);
-    expect(saveBtn?.textContent).toBe('Guardar');
-    expect(nameInput(dialog).disabled).toBe(false);
+    const btn = saveBtn(dialog);
+    expect(btn.disabled).toBe(false);
+    expect(btn.classList.contains('is-saving')).toBe(false);
+    expect(btn.textContent).toBe('Guardar');
   });
 
-  it('clicking "Cancelar" resolves "cancelled" without calling savePhotoFile or onSave (AC-011)', async () => {
+  it('clicking "Cancelar" resolves "cancelled" without calling onSave (AC-011)', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
-    const openPromise = openProfileEditDialog({ avatarUrl: null, name: null, onSave });
+    const openPromise = open({ avatarUrl: null, username: null, onSave });
     const dialog = getDialog();
 
     dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-cancelar-perfil"]')?.click();
 
     await expect(openPromise).resolves.toBe('cancelled');
-    expect(savePhotoFile).not.toHaveBeenCalled();
     expect(onSave).not.toHaveBeenCalled();
   });
 
   it('closing with Escape resolves "cancelled", same as Cancelar (AC-011)', async () => {
-    const openPromise = openProfileEditDialog({ avatarUrl: null, name: null, onSave: vi.fn() });
+    const openPromise = open({ avatarUrl: null, username: null, onSave: vi.fn() });
     getDialog();
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
@@ -223,7 +206,7 @@ describe('openProfileEditDialog (AC-004 a AC-013, AC-037, AC-038)', () => {
   });
 
   it('closing with an overlay click resolves "cancelled", same as Cancelar (AC-011)', async () => {
-    const openPromise = openProfileEditDialog({ avatarUrl: null, name: null, onSave: vi.fn() });
+    const openPromise = open({ avatarUrl: null, username: null, onSave: vi.fn() });
     const dialog = getDialog();
 
     (dialog.shadowRoot!.querySelector('.overlay') as HTMLElement).click();
@@ -231,33 +214,27 @@ describe('openProfileEditDialog (AC-004 a AC-013, AC-037, AC-038)', () => {
     await expect(openPromise).resolves.toBe('cancelled');
   });
 
-  it('keeps the dialog open, shows an error toast and preserves the entered values when onSave rejects (AC-012)', async () => {
+  it('keeps the dialog open, shows an error toast and preserves the chosen preview when onSave rejects — the previous avatar stays untouched (AC-012, 5.2)', async () => {
     const file = new File(['x'], 'foto.jpg', { type: 'image/jpeg' });
     vi.mocked(pickFromGallery).mockResolvedValue([file]);
-    vi.mocked(savePhotoFile).mockResolvedValue('/app-data/photos/avatar-2.jpg');
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:new-photo');
-    const onSave = vi.fn().mockRejectedValue(new Error('fallo de BBDD'));
+    const onSave = vi.fn().mockRejectedValue(new Error('fallo de red'));
 
-    void openProfileEditDialog({ avatarUrl: null, name: null, onSave });
+    void open({ avatarUrl: 'blob:previous-avatar', username: null, onSave });
     const dialog = getDialog();
     dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-cambiar-foto"]')?.click();
     dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-menu-galeria"]')?.click();
     await flush();
-
-    const input = nameInput(dialog);
-    input.value = 'Marc';
-    input.dispatchEvent(new Event('input'));
-    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]')?.click();
+    saveBtn(dialog).click();
     await flush();
 
     expect(document.body.querySelector('profile-edit-dialog')).not.toBeNull();
     expect(document.body.querySelector('[data-cy="photo-toast-error"]')).not.toBeNull();
-    expect(nameInput(dialog).value).toBe('Marc');
     expect(previewImg(dialog)?.getAttribute('src')).toBe('blob:new-photo');
   });
 
   it('gives every new interactive control a unique data-cy (AC-037)', () => {
-    void openProfileEditDialog({ avatarUrl: null, name: null, onSave: vi.fn() });
+    void open({ avatarUrl: null, username: null, onSave: vi.fn() });
     const dialog = getDialog();
     dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-cambiar-foto"]')?.click();
 
@@ -265,10 +242,10 @@ describe('openProfileEditDialog (AC-004 a AC-013, AC-037, AC-038)', () => {
       el.getAttribute('data-cy'),
     );
     const expected = [
-      'profile-input-nombre',
       'profile-btn-cambiar-foto',
       'profile-menu-camara',
       'profile-menu-galeria',
+      'profile-btn-editar-username',
       'profile-btn-guardar-perfil',
       'profile-btn-cancelar-perfil',
     ];
@@ -279,7 +256,7 @@ describe('openProfileEditDialog (AC-004 a AC-013, AC-037, AC-038)', () => {
   });
 
   it('applies the min-width/min-height hitbox token to "Guardar"/"Cancelar" (.action) and "Cambiar foto" (.change-photo-btn) (AC-038)', () => {
-    void openProfileEditDialog({ avatarUrl: null, name: null, onSave: vi.fn() });
+    void open({ avatarUrl: null, username: null, onSave: vi.fn() });
     const dialog = getDialog();
 
     expect(dialog.shadowRoot!.querySelector('[data-cy="profile-btn-guardar-perfil"]')?.classList.contains('action')).toBe(true);
@@ -292,5 +269,74 @@ describe('openProfileEditDialog (AC-004 a AC-013, AC-037, AC-038)', () => {
     expect(dialogStyles).toMatch(/\.action\s*\{[^}]*min-height:\s*var\(--hitbox-min\)[^}]*\}/);
     expect(dialogStyles).toMatch(/\.change-photo-btn\s*\{[^}]*min-width:\s*var\(--hitbox-min\)[^}]*\}/);
     expect(dialogStyles).toMatch(/\.change-photo-btn\s*\{[^}]*min-height:\s*var\(--hitbox-min\)[^}]*\}/);
+  });
+});
+
+describe('openProfileEditDialog — editar username desde el mismo diálogo (unificar-perfil-cuenta, un único botón "Editar")', () => {
+  function usernameBtn(dialog: HTMLElement): HTMLButtonElement {
+    return dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-editar-username"]')!;
+  }
+
+  it('con username ya fijado, el botón dice "Editar nombre de usuario" y lo pasa a onEditUsername', () => {
+    const onEditUsername = vi.fn().mockResolvedValue(null);
+    void open({ avatarUrl: null, username: 'rider42', onSave: vi.fn(), onEditUsername });
+    const dialog = getDialog();
+
+    expect(usernameBtn(dialog).textContent).toBe('Editar nombre de usuario');
+    usernameBtn(dialog).click();
+
+    expect(onEditUsername).toHaveBeenCalledTimes(1);
+  });
+
+  it('sin username fijado, el botón dice "Fijar nombre de usuario"', () => {
+    void open({ avatarUrl: null, username: null, onSave: vi.fn() });
+    const dialog = getDialog();
+
+    expect(usernameBtn(dialog).textContent).toBe('Fijar nombre de usuario');
+  });
+
+  it('tras editar el username con éxito, la previsualización se actualiza sin cerrar el diálogo (AC-004, un único punto de edición)', async () => {
+    const onEditUsername = vi.fn().mockResolvedValue('newname');
+    const openPromise = open({ avatarUrl: null, username: 'oldname', onSave: vi.fn(), onEditUsername });
+    const dialog = getDialog();
+
+    usernameBtn(dialog).click();
+    await flush();
+
+    expect(previewName(dialog)).toBe('newname');
+    expect(document.body.querySelector('profile-edit-dialog')).not.toBeNull();
+
+    let settled = false;
+    void openPromise.then(() => { settled = true; });
+    await flush();
+    expect(settled).toBe(false);
+  });
+
+  it('cancelar la edición de username (onEditUsername resuelve null) deja la previsualización sin cambios', async () => {
+    const onEditUsername = vi.fn().mockResolvedValue(null);
+    void open({ avatarUrl: null, username: 'oldname', onSave: vi.fn(), onEditUsername });
+    const dialog = getDialog();
+
+    usernameBtn(dialog).click();
+    await flush();
+
+    expect(previewName(dialog)).toBe('oldname');
+  });
+
+  it('deshabilita el botón de username mientras se está subiendo un avatar nuevo', async () => {
+    const file = new File(['x'], 'foto.jpg', { type: 'image/jpeg' });
+    vi.mocked(pickFromGallery).mockResolvedValue([file]);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:new-photo');
+    const onSave = vi.fn(() => new Promise<void>(() => { /* never resolves */ }));
+
+    void open({ avatarUrl: null, username: 'rider42', onSave });
+    const dialog = getDialog();
+    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-cambiar-foto"]')?.click();
+    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-menu-galeria"]')?.click();
+    await flush();
+    saveBtn(dialog).click();
+    await flush();
+
+    expect(usernameBtn(dialog).disabled).toBe(true);
   });
 });

@@ -3,8 +3,6 @@ import type { Profile, CreateProfile } from '../models/profile.types.js';
 
 /** Perfil vacío por defecto, usado como base del coalescido cuando no se ha guardado nada todavía. */
 const EMPTY_PROFILE: Profile = {
-  avatarPath: null,
-  name: null,
   vehicleType: null,
   vehicleMake: null,
   vehicleModel: null,
@@ -39,8 +37,6 @@ export class MemoryProfileRepository implements IProfileRepository {
     // (conserva el valor existente) de "incluido explícitamente" (sobrescribe,
     // incluso a null si así se pasa) — ver JSDoc de IProfileRepository.save().
     const merged: Profile = {
-      avatarPath: 'avatarPath' in patch ? (patch.avatarPath ?? null) : existing.avatarPath,
-      name: 'name' in patch ? (patch.name ?? null) : existing.name,
       vehicleType: 'vehicleType' in patch ? (patch.vehicleType ?? null) : existing.vehicleType,
       vehicleMake: 'vehicleMake' in patch ? (patch.vehicleMake ?? null) : existing.vehicleMake,
       vehicleModel: 'vehicleModel' in patch ? (patch.vehicleModel ?? null) : existing.vehicleModel,

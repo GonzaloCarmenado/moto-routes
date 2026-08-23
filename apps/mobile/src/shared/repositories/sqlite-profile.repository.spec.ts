@@ -71,8 +71,8 @@ describe('SqliteProfileRepository', () => {
   });
 
   it('should use INSERT OR REPLACE on every save(), never a plain INSERT, so the second call never fails on a duplicate PRIMARY KEY', async () => {
-    await repo.save({ name: 'Marc' });
-    await repo.save({ name: 'Marc Updated' });
+    await repo.save({ vehicleMake: 'Honda' });
+    await repo.save({ vehicleMake: 'Yamaha' });
 
     const executeCalls = (db.execute as ReturnType<typeof vi.fn>).mock.calls as [string, unknown[]?][];
     const insertCalls = executeCalls.filter(([sql]) => sql.toUpperCase().includes('INSERT'));
@@ -82,6 +82,22 @@ describe('SqliteProfileRepository', () => {
     }
 
     const fetched = await repo.get();
-    expect(fetched!.name).toBe('Marc Updated');
+    expect(fetched!.vehicleMake).toBe('Yamaha');
+  });
+
+  it('should preserve the legacy avatar_path/name columns untouched across save() (dead columns, never rewritten — ADR-055)', async () => {
+    // Fila preexistente con avatar_path/name ya poblados por una versión anterior de la app.
+    await db.execute(
+      `INSERT OR REPLACE INTO profile (id, avatar_path, name, vehicle_type, vehicle_make, vehicle_model)
+       VALUES (1, ?, ?, ?, ?, ?)`,
+      ['/legacy/avatar.jpg', 'Legacy Name', null, null, null],
+    );
+
+    await repo.save({ vehicleMake: 'Honda' });
+
+    const rows = await db.select('SELECT * FROM profile WHERE id = 1');
+    const row = rows[0] as { avatar_path: string | null; name: string | null };
+    expect(row.avatar_path).toBe('/legacy/avatar.jpg');
+    expect(row.name).toBe('Legacy Name');
   });
 });

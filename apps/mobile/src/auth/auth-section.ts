@@ -5,7 +5,6 @@ export interface AuthSectionCallbacks {
   onOpenRegister: () => void;
   onOpenForgotPassword: () => void;
   onLogout: () => void;
-  onEditUsername: () => void;
 }
 
 /**
@@ -14,7 +13,12 @@ export interface AuthSectionCallbacks {
  * `buildProfileHeader`: la resolución del estado (`loadAuthSectionState`,
  * con su llamada a `/api/auth/me`) vive aparte, en `auth-section.service.ts`.
  * Sin título propio ("Cuenta"): se integra visualmente bajo el avatar/nombre
- * en `profile.element.ts::buildIdentityCard`, no como sección aparte.
+ * en `profile.element.ts::buildIdentityCard`, no como sección aparte. El
+ * `username` ya se muestra en la cabecera de identidad (`buildProfileHeader`)
+ * y se edita desde ahí (dentro de "Editar perfil", un único punto de
+ * edición) — esta sección no repite ni el texto ni un botón propio para
+ * editarlo (unificar-perfil-cuenta, a petición explícita del usuario: un
+ * solo botón "Editar" en la pantalla principal, no dos).
  */
 export function buildAuthSection(state: AuthSectionState, callbacks: AuthSectionCallbacks): HTMLElement {
   const section = document.createElement('div');
@@ -22,16 +26,13 @@ export function buildAuthSection(state: AuthSectionState, callbacks: AuthSection
   section.setAttribute('data-cy', 'auth-section-cuenta');
 
   section.appendChild(
-    state.status === 'logged-in' ? buildLoggedIn(state.email, state.username, callbacks) : buildLoggedOut(callbacks),
+    state.status === 'logged-in' ? buildLoggedIn(state.email, callbacks) : buildLoggedOut(callbacks),
   );
 
   return section;
 }
 
-function buildLoggedIn(email: string, username: string | null, callbacks: AuthSectionCallbacks): HTMLElement {
-  const container = document.createElement('div');
-  container.className = 'auth-loggedin';
-
+function buildLoggedIn(email: string, callbacks: AuthSectionCallbacks): HTMLElement {
   const row = document.createElement('div');
   row.className = 'auth-loggedin-row';
 
@@ -51,28 +52,6 @@ function buildLoggedIn(email: string, username: string | null, callbacks: AuthSe
   logoutBtn.textContent = 'Salir';
   logoutBtn.addEventListener('click', callbacks.onLogout);
   row.appendChild(logoutBtn);
-
-  container.appendChild(row);
-  container.appendChild(buildUsernameRow(username, callbacks));
-  return container;
-}
-
-function buildUsernameRow(username: string | null, callbacks: AuthSectionCallbacks): HTMLElement {
-  const row = document.createElement('div');
-  row.className = 'auth-username-row';
-
-  const label = document.createElement('p');
-  label.className = 'auth-username';
-  label.textContent = username ?? 'Sin nombre de usuario';
-  row.appendChild(label);
-
-  const editBtn = document.createElement('button');
-  editBtn.type = 'button';
-  editBtn.className = 'auth-link-btn';
-  editBtn.setAttribute('data-cy', 'auth-btn-editar-username');
-  editBtn.textContent = username ? 'Editar' : 'Fijar';
-  editBtn.addEventListener('click', callbacks.onEditUsername);
-  row.appendChild(editBtn);
 
   return row;
 }

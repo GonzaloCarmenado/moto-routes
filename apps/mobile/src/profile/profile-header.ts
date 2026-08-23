@@ -12,15 +12,17 @@
  * la URL del avatar por sí mismo — recibe `avatarUrl` ya resuelto por quien
  * lo llame.
  */
-import { resolveDisplayName } from './profile.transform.js';
-
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /** Opciones para construir el bloque avatar+nombre. */
 export interface ProfileHeaderOptions {
   /** URL ya resuelta de la foto de perfil (`blob:`, ruta de archivo, etc.), o `null` si todavía no se ha configurado ninguna (AC-002). */
   avatarUrl: string | null;
-  /** Nombre guardado del perfil, o `null` si todavía no se ha configurado ninguno (AC-003). */
+  /**
+   * El `username` de la cuenta autenticada, o `null` sin sesión activa —
+   * sin marcador de posición propio: sin sesión, no se muestra ningún
+   * nombre (`unificar-perfil-cuenta`, ADR-055).
+   */
   name: string | null;
   /** Invocado al pulsar el avatar (p. ej. para abrir el modal de edición). Opcional: sin callback, el click no hace nada ni lanza error. */
   onAvatarClick?: () => void;
@@ -112,11 +114,11 @@ function buildAvatarPlaceholder(): SVGSVGElement {
   return svg;
 }
 
-/** Nombre a mostrar (AC-003), delegado en `resolveDisplayName` para el marcador de posición. */
+/** Nombre a mostrar (el `username` de la cuenta) — vacío sin sesión activa, sin marcador de posición propio. */
 function buildNameElement(name: string | null): HTMLParagraphElement {
   const nameEl = document.createElement('p');
   nameEl.className = 'profile-name';
   nameEl.setAttribute('data-cy', 'profile-name');
-  nameEl.textContent = resolveDisplayName(name);
+  nameEl.textContent = name ?? '';
   return nameEl;
 }

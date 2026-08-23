@@ -68,8 +68,6 @@ describe('parseCypressSeed', () => {
   it('parses an optional profile when the JSON includes one', () => {
     const routeA = buildRoute('route-a');
     const profile: Profile = {
-      avatarPath: null,
-      name: 'Marc',
       vehicleType: 'motorcycle',
       vehicleMake: 'Honda',
       vehicleModel: 'CB500X',
@@ -93,8 +91,6 @@ describe('parseCypressSeed', () => {
 
   it('accepts a profile with all fields null (empty profile)', () => {
     const profile: Profile = {
-      avatarPath: null,
-      name: null,
       vehicleType: null,
       vehicleMake: null,
       vehicleModel: null,

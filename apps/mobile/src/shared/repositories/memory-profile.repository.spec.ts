@@ -20,7 +20,7 @@ describe('MemoryProfileRepository', () => {
     const repoA = new MemoryProfileRepository();
     const repoB = new MemoryProfileRepository();
 
-    await repoA.save({ name: 'Marc' });
+    await repoA.save({ vehicleMake: 'Honda' });
 
     expect(await repoA.get()).not.toBeNull();
     expect(await repoB.get()).toBeNull();
@@ -29,8 +29,6 @@ describe('MemoryProfileRepository', () => {
   it('seed() loads a profile directly without going through save() (siembra E2E)', async () => {
     const seeded = new MemoryProfileRepository();
     const profile = {
-      avatarPath: null,
-      name: 'Marc',
       vehicleType: 'motorcycle' as const,
       vehicleMake: 'Honda',
       vehicleModel: 'CB500X',

@@ -60,31 +60,10 @@
   flex-direction: column;
 }
 
-.auth-loggedin {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
 .auth-loggedin-row {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-}
-
-.auth-username-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding-left: calc(7px + var(--space-2));
-}
-
-.auth-username {
-  font-family: var(--font-ui);
-  font-size: 13px;
-  color: var(--ink-soft);
-  flex: 1;
-  margin: 0;
 }
 
 .auth-status-dot {

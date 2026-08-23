@@ -11,6 +11,9 @@ import type { Route } from '../shared/models/route.types.js';
 import { fetchVehicleMakes, fetchVehicleModels } from './vpic.service.js';
 import { fetchCurrentUser, setUsername } from '../auth/auth-api.service.js';
 import type * as AuthApiService from '../auth/auth-api.service.js';
+import { fetchAccountAvatar, uploadAccountAvatar } from '../shared/http/avatar-api.service.js';
+import { pickFromGallery } from '../shared/services/photo-capture-adapter.service.js';
+import type * as PhotoCaptureAdapter from '../shared/services/photo-capture-adapter.service.js';
 import './profile.element.js';
 
 // AC-024: la carga normal de la vista de Perfil nunca debe consultar la API
@@ -23,6 +26,16 @@ vi.mock('./vpic.service.js', () => ({
 vi.mock('../auth/auth-api.service.js', async (importOriginal) => {
   const actual = await importOriginal<typeof AuthApiService>();
   return { ...actual, fetchCurrentUser: vi.fn(), setUsername: vi.fn() };
+});
+
+vi.mock('../shared/http/avatar-api.service.js', () => ({
+  fetchAccountAvatar: vi.fn().mockRejectedValue(new Error('no avatar configured')),
+  uploadAccountAvatar: vi.fn(),
+}));
+
+vi.mock('../shared/services/photo-capture-adapter.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof PhotoCaptureAdapter>();
+  return { ...actual, pickFromGallery: vi.fn() };
 });
 
 // `?inline` no sirve para inspeccionar el CSS fuente bajo Vitest — se lee el
@@ -101,27 +114,27 @@ describe('profile-view — vista principal', () => {
     expect(el.shadowRoot!.querySelector('[data-cy="profile-view-loading"]')).not.toBeNull();
   });
 
-  it('con un perfil vacío, renderiza los placeholders de avatar/nombre/vehículo/estadísticas sin llamar a vPIC (AC-001, AC-002, AC-003, AC-015, AC-024, AC-031)', async () => {
+  it('con un perfil vacío y sin sesión, renderiza los placeholders de avatar/vehículo/estadísticas sin nombre ni llamar a vPIC (AC-001, AC-002, AC-015, AC-024, AC-031)', async () => {
     const view = await createView(new MemoryProfileRepository(), new MemoryRouteRepository());
     const root = view.shadowRoot!;
 
     expect(root.querySelector('[data-cy="profile-avatar-placeholder"]')).not.toBeNull();
-    expect(root.querySelector('.profile-name')?.textContent).toBe('Motorista sin nombre');
+    expect(root.querySelector('.profile-name')?.textContent).toBe('');
     expect(root.querySelector('[data-cy="profile-vehicle-empty"]')).not.toBeNull();
     expect(root.querySelector('[data-cy="profile-stats-empty"]')).not.toBeNull();
     expect(fetchVehicleMakes).not.toHaveBeenCalled();
     expect(fetchVehicleModels).not.toHaveBeenCalled();
   });
 
-  it('con un perfil guardado y rutas completadas, renderiza avatar/nombre reales, vehículo y un .stat-grid con 5 valores (AC-001, AC-014, AC-028, AC-029)', async () => {
+  it('con sesión activa y avatar configurado en la cuenta, renderiza avatar/username reales, vehículo y un .stat-grid con 5 valores (AC-001, AC-014, AC-028, AC-029, unificar-perfil-cuenta)', async () => {
+    vi.mocked(fetchCurrentUser).mockResolvedValue({ id: 1, email: 'rider@example.com', emailVerified: true, username: 'rider42' });
+    vi.mocked(fetchAccountAvatar).mockResolvedValue(new Blob(['avatar bytes'], { type: 'image/png' }));
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:account-avatar');
+    const sessionRepo = new MemorySessionRepository();
+    await sessionRepo.save({ token: 'jwt-token', email: 'rider@example.com' });
+
     const profileRepo = new MemoryProfileRepository();
-    await profileRepo.save({
-      avatarPath: '/app-data/photos/avatar.jpg',
-      name: 'Marc',
-      vehicleType: 'motorcycle',
-      vehicleMake: 'Honda',
-      vehicleModel: 'CB500X',
-    });
+    await profileRepo.save({ vehicleType: 'motorcycle', vehicleMake: 'Honda', vehicleModel: 'CB500X' });
     const routeRepo = new MemoryRouteRepository();
     routeRepo.seed([
       buildRoute({ status: 'completed', totalDistance: 20, duration: 1800, avgSpeed: 40 }),
@@ -130,18 +143,28 @@ describe('profile-view — vista principal', () => {
       buildRoute({ status: 'active', totalDistance: 999, avgSpeed: 999 }),
     ]);
 
-    const view = await createView(profileRepo, routeRepo);
+    const view = await createViewWithSession(profileRepo, routeRepo, sessionRepo);
     const root = view.shadowRoot!;
 
-    expect(root.querySelector('img.avatar-image')).not.toBeNull();
-    expect(root.querySelector('.profile-name')?.textContent).toBe('Marc');
+    expect(root.querySelector('img.avatar-image')?.getAttribute('src')).toBe('blob:account-avatar');
+    expect(root.querySelector('.profile-name')?.textContent).toBe('rider42');
     expect(root.querySelector('.vehicle-details')?.textContent).toContain('Honda');
     expect(root.querySelector('.vehicle-details')?.textContent).toContain('CB500X');
     expect(root.querySelectorAll('.stat-tile').length).toBe(5);
   });
 
-  it('clicking [data-cy="profile-btn-editar-perfil"] opens profile-edit-dialog (AC-004)', async () => {
+  it('sin sesión activa, no muestra el botón "Editar" de avatar (solo tiene sentido con una cuenta autenticada)', async () => {
     const view = await createView(new MemoryProfileRepository(), new MemoryRouteRepository());
+
+    expect(view.shadowRoot!.querySelector('[data-cy="profile-btn-editar-perfil"]')).toBeNull();
+  });
+
+  it('con sesión activa, clicking [data-cy="profile-btn-editar-perfil"] opens profile-edit-dialog (AC-004)', async () => {
+    vi.mocked(fetchCurrentUser).mockResolvedValue({ id: 1, email: 'rider@example.com', emailVerified: true, username: 'rider42' });
+    const sessionRepo = new MemorySessionRepository();
+    await sessionRepo.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const view = await createViewWithSession(new MemoryProfileRepository(), new MemoryRouteRepository(), sessionRepo);
 
     view.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-editar-perfil"]')?.click();
     await waitRender();
@@ -149,22 +172,33 @@ describe('profile-view — vista principal', () => {
     expect(document.body.querySelector('profile-edit-dialog')).not.toBeNull();
   });
 
-  it('after saving profile-edit-dialog, the view re-renders with the new data without reloading the page (AC-004, AC-009)', async () => {
-    const profileRepo = new MemoryProfileRepository();
-    const view = await createView(profileRepo, new MemoryRouteRepository());
+  it('after saving a new avatar in profile-edit-dialog, the view re-renders with the uploaded avatar without reloading the page (AC-004, AC-009, unificar-perfil-cuenta)', async () => {
+    vi.mocked(fetchCurrentUser).mockResolvedValue({ id: 1, email: 'rider@example.com', emailVerified: true, username: 'rider42' });
+    vi.mocked(fetchAccountAvatar).mockRejectedValue(new Error('no avatar configured'));
+    vi.mocked(uploadAccountAvatar).mockImplementation(() => {
+      vi.mocked(fetchAccountAvatar).mockResolvedValue(new Blob(['new avatar bytes'], { type: 'image/png' }));
+      return Promise.resolve();
+    });
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:new-account-avatar');
+    const file = new File(['x'], 'foto.jpg', { type: 'image/jpeg' });
+    vi.mocked(pickFromGallery).mockResolvedValue([file]);
+    const sessionRepo = new MemorySessionRepository();
+    await sessionRepo.save({ token: 'jwt-token', email: 'rider@example.com' });
+
+    const view = await createViewWithSession(new MemoryProfileRepository(), new MemoryRouteRepository(), sessionRepo);
 
     view.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-editar-perfil"]')?.click();
     await waitRender();
     const dialog = document.body.querySelector('profile-edit-dialog')!;
-    const input = dialog.shadowRoot!.querySelector<HTMLInputElement>('[data-cy="profile-input-nombre"]')!;
-    input.value = 'Marc Nuevo';
-    input.dispatchEvent(new Event('input'));
+    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-cambiar-foto"]')?.click();
+    dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-menu-galeria"]')?.click();
+    await waitRender();
     dialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-guardar-perfil"]')?.click();
     await waitRender();
 
-    expect(view.shadowRoot!.querySelector('.profile-name')?.textContent).toBe('Marc Nuevo');
-    const saved = await profileRepo.get();
-    expect(saved?.name).toBe('Marc Nuevo');
+    expect(uploadAccountAvatar).toHaveBeenCalledWith(expect.any(String), 'jwt-token', file, 'foto.jpg');
+    expect(document.body.querySelector('profile-edit-dialog')).toBeNull();
+    expect(view.shadowRoot!.querySelector('img.avatar-image')?.getAttribute('src')).toBe('blob:new-account-avatar');
   });
 
   it('clicking [data-cy="profile-btn-editar-vehiculo"] opens profile-vehicle-dialog (AC-016)', async () => {
@@ -208,9 +242,12 @@ describe('profile-view — vista principal', () => {
   });
 
   it('gives every new interactive control a unique data-cy and applies the min-width/min-height hitbox token to .edit-btn (AC-037, AC-038)', async () => {
+    vi.mocked(fetchCurrentUser).mockResolvedValue({ id: 1, email: 'rider@example.com', emailVerified: true, username: 'rider42' });
+    const sessionRepo = new MemorySessionRepository();
+    await sessionRepo.save({ token: 'jwt-token', email: 'rider@example.com' });
     const profileRepo = new MemoryProfileRepository();
     await profileRepo.save({ vehicleType: 'motorcycle', vehicleMake: 'Honda', vehicleModel: 'CB500X' });
-    const view = await createView(profileRepo, new MemoryRouteRepository());
+    const view = await createViewWithSession(profileRepo, new MemoryRouteRepository(), sessionRepo);
     const root = view.shadowRoot!;
 
     const cyValues = Array.from(root.querySelectorAll('[data-cy]')).map((el) => el.getAttribute('data-cy'));
@@ -226,17 +263,25 @@ describe('profile-view — vista principal', () => {
   });
 });
 
-describe('profile-view — editar username (nombre-usuario, Grupo 6)', () => {
-  it('con sesión activa, muestra el username actual y una acción para editarlo que abre el diálogo compartido (6.1)', async () => {
+describe('profile-view — editar username desde "Editar perfil" (unificar-perfil-cuenta: un único botón "Editar", no dos)', () => {
+  async function openProfileEditDialogFromMainPage(root: ShadowRoot): Promise<HTMLElement> {
+    root.querySelector<HTMLButtonElement>('[data-cy="profile-btn-editar-perfil"]')?.click();
+    await waitRender();
+    return document.body.querySelector('profile-edit-dialog') as HTMLElement;
+  }
+
+  it('con sesión activa, muestra el username actual en la cabecera y una acción dentro de "Editar perfil" que abre el diálogo compartido (6.1)', async () => {
     vi.mocked(fetchCurrentUser).mockResolvedValue({ id: 1, email: 'rider@example.com', emailVerified: true, username: 'rider42' });
     const sessionRepo = new MemorySessionRepository();
     await sessionRepo.save({ token: 'jwt-token', email: 'rider@example.com' });
 
     const view = await createViewWithSession(new MemoryProfileRepository(), new MemoryRouteRepository(), sessionRepo);
     const root = view.shadowRoot!;
-
     expect(root.textContent).toContain('rider42');
-    root.querySelector<HTMLButtonElement>('[data-cy="auth-btn-editar-username"]')?.click();
+    expect(root.querySelector('[data-cy="auth-btn-editar-username"]')).toBeNull();
+
+    const editDialog = await openProfileEditDialogFromMainPage(root);
+    editDialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-editar-username"]')?.click();
     await waitRender();
 
     expect(document.body.querySelector('username-edit-dialog')).not.toBeNull();
@@ -260,7 +305,8 @@ describe('profile-view — editar username (nombre-usuario, Grupo 6)', () => {
     const view = await createViewWithSession(new MemoryProfileRepository(), new MemoryRouteRepository(), sessionRepo);
     const root = view.shadowRoot!;
 
-    root.querySelector<HTMLButtonElement>('[data-cy="auth-btn-editar-username"]')?.click();
+    const editDialog = await openProfileEditDialogFromMainPage(root);
+    editDialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-editar-username"]')?.click();
     await waitRender();
     const dialog = document.body.querySelector('username-edit-dialog')!;
     const form = dialog.shadowRoot!.querySelector('username-form')!;
@@ -271,6 +317,8 @@ describe('profile-view — editar username (nombre-usuario, Grupo 6)', () => {
     await waitRender();
 
     expect(document.body.querySelector('username-edit-dialog')).toBeNull();
+    // "Editar perfil" sigue abierto (solo el diálogo de username anidado se cierra) y ya refleja el nuevo username.
+    expect(editDialog.shadowRoot!.querySelector('.preview .profile-name')?.textContent).toBe('newname');
     expect(root.textContent).toContain('newname');
   });
 
@@ -284,7 +332,8 @@ describe('profile-view — editar username (nombre-usuario, Grupo 6)', () => {
     const view = await createViewWithSession(new MemoryProfileRepository(), new MemoryRouteRepository(), sessionRepo);
     const root = view.shadowRoot!;
 
-    root.querySelector<HTMLButtonElement>('[data-cy="auth-btn-editar-username"]')?.click();
+    const editDialog = await openProfileEditDialogFromMainPage(root);
+    editDialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-editar-username"]')?.click();
     await waitRender();
     const dialog = document.body.querySelector('username-edit-dialog')!;
     const form = dialog.shadowRoot!.querySelector('username-form')!;
@@ -307,7 +356,8 @@ describe('profile-view — editar username (nombre-usuario, Grupo 6)', () => {
     const view = await createViewWithSession(new MemoryProfileRepository(), new MemoryRouteRepository(), sessionRepo);
     const root = view.shadowRoot!;
 
-    root.querySelector<HTMLButtonElement>('[data-cy="auth-btn-editar-username"]')?.click();
+    const editDialog = await openProfileEditDialogFromMainPage(root);
+    editDialog.shadowRoot!.querySelector<HTMLButtonElement>('[data-cy="profile-btn-editar-username"]')?.click();
     await waitRender();
     const dialog = document.body.querySelector('username-edit-dialog')!;
     const form = dialog.shadowRoot!.querySelector('username-form')!;
