@@ -124,6 +124,15 @@ func (f *fakeUserStore) FindUserByEmail(_ context.Context, email string) (auth.S
 	return user, nil
 }
 
+func (f *fakeUserStore) FindUserByUsername(_ context.Context, username string) (auth.StoredUser, error) {
+	for _, u := range f.byEmail {
+		if u.Username != nil && *u.Username == username {
+			return u, nil
+		}
+	}
+	return auth.StoredUser{}, auth.ErrUserNotFound
+}
+
 func (f *fakeUserStore) FindUserByID(_ context.Context, id int64) (auth.StoredUser, error) {
 	for _, u := range f.byEmail {
 		if u.ID == id {

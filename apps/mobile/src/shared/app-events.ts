@@ -15,6 +15,7 @@ export const APP_EVENTS = {
   VIEW_ROUTE: 'view-route',
   VIEW_SHARING: 'view-sharing',
   VIEW_ACHIEVEMENTS: 'view-achievements',
+  VIEW_FRIENDS: 'view-friends',
   BACK_TO_LIST: 'back-to-list',
   AUTH_LOGGED_IN: 'auth-logged-in',
 } as const;
@@ -27,6 +28,7 @@ export interface AppEventDetailMap {
   'view-route': { routeId: string };
   'view-sharing': undefined;
   'view-achievements': undefined;
+  'view-friends': undefined;
   'back-to-list': undefined;
   /** Despachado tras un login interactivo correcto (`profile-account.ts`) — permite
    * a `app-root` re-comprobar el bloqueo por username sin fijar (nombre-usuario,

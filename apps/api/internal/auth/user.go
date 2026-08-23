@@ -63,6 +63,10 @@ type UserStore interface {
 	CreateUser(ctx context.Context, email, passwordHash, username string) (StoredUser, error)
 	FindUserByEmail(ctx context.Context, email string) (StoredUser, error)
 	FindUserByID(ctx context.Context, id int64) (StoredUser, error)
+	// FindUserByUsername busca la cuenta por username, comparando sin
+	// distinguir mayúsculas/minúsculas (mismo criterio que el índice único
+	// de unicidad, ver 0012_add_users_username.sql).
+	FindUserByUsername(ctx context.Context, username string) (StoredUser, error)
 	// MarkEmailVerified marca la cuenta indicada como verificada. No hace
 	// nada si ya lo estaba.
 	MarkEmailVerified(ctx context.Context, id int64) error

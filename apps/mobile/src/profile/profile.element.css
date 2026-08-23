@@ -245,6 +245,22 @@
   font-weight: 600;
 }
 
+.friends-link__badge {
+  flex-shrink: 0;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--amber);
+  color: var(--bg-top);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .achievements-link__chevron {
   flex-shrink: 0;
   display: inline-flex;
