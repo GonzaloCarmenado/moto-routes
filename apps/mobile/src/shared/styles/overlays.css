@@ -58,7 +58,11 @@
  * de texto/estado sin desaparecer y reaparecer (ver subida-automatica-rutas). */
 .route-upload-snackbar {
   position: fixed;
-  top: 12px;
+  /* Sin esto queda por debajo de la barra de estado en edge-to-edge
+     (MainActivity.kt llama a enableEdgeToEdge()) — confirmado en dispositivo
+     real vía CDP que safe-area-inset-top vale 32px, frente a los 12px fijos
+     que usaba antes, dejando el snackbar prácticamente tapado. */
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
   left: 50%;
   transform: translateX(-50%);
   max-width: 90vw;
