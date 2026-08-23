@@ -57,7 +57,7 @@ class UsernameFormElement extends BaseElement {
   private async handleSubmit(): Promise<void> {
     if (this.submitting) return;
     this.currentInputValue = this.shadowRoot?.querySelector<HTMLInputElement>('[data-cy="username-form-input"]')?.value ?? '';
-    const username = this.currentInputValue.trim();
+    const username = this.currentInputValue.trim().toLowerCase();
 
     if (username === '') {
       this.errorMessage = EMPTY_MESSAGE;
@@ -99,6 +99,12 @@ class UsernameFormElement extends BaseElement {
     input.className = 'input';
     input.value = this.currentInputValue;
     input.setAttribute('data-cy', 'username-form-input');
+    // Transforma en vivo: el usuario nunca tiene que darse cuenta de que las
+    // mayúsculas no están permitidas (ver bug real reportado por el usuario).
+    input.addEventListener('input', () => {
+      const lower = input.value.toLowerCase();
+      if (input.value !== lower) input.value = lower;
+    });
     field.appendChild(input);
 
     return field;
