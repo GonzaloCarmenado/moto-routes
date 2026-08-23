@@ -73,6 +73,12 @@ function loginViaUi(email: string): void {
 function sendFriendRequestViaUi(targetUsername: string): void {
   cy.get('[data-cy="nav-perfil"]').click();
   cy.get('[data-cy="profile-btn-amigos"]').click();
+  // fetchAndRender() reconstruye el DOM del formulario en dos pasadas (carga
+  // y, tras resolver las 4 llamadas en paralelo, datos reales) — esperar a
+  // que las pestañas existan (solo se pintan cuando `_loading` es false)
+  // evita escribir en un <input> que un segundo render reemplaza a mitad de
+  // la escritura (bug real de carrera encontrado en CI, no en local).
+  cy.get('[data-cy="tab-bar-btn-friends-amigos"]').should('exist');
   cy.get('[data-cy="friends-input-username"]').type(targetUsername);
   cy.get('[data-cy="friends-btn-enviar"]').click();
   cy.get('[data-cy="photo-toast"]').should('contain', 'enviado');
