@@ -8,6 +8,7 @@ import type { IRouteRepository } from '../../shared/models/route.repository.js';
 import type { CreateRoute, CreateRoutePoint, CreateRouteStop } from '../../shared/models/route.types.js';
 import { simplifyPolyline } from '../../shared/services/route-polyline.service.js';
 import { showToast } from '../../shared/feedback/toast.js';
+import { APP_EVENTS, dispatchAppEvent } from '../../shared/app-events.js';
 
 const BACKUP_KEY = 'moto-routes-pending-backup';
 
@@ -89,7 +90,13 @@ export function persistRouteOnStop(repository: IRouteRepository | undefined, sta
   const route = buildCreateRoute(state, name);
   const points = buildCreatePoints(state);
   const stops = buildStops(state);
-  repository.save(route, points, stops).catch(() => {
+  repository.save(route, points, stops).then(() => {
+    // Solo tras un guardado local confirmado — nunca desde persistRouteOnStart
+    // (fila 'active' sin puntos todavía). app.element.ts escucha esto para
+    // intentar la subida automática (ver subida-automatica-rutas, design.md D1);
+    // cockpit sigue sin saber nada de auth/nube, solo anuncia el hecho.
+    dispatchAppEvent(APP_EVENTS.ROUTE_SAVED, { routeId: state.routeId });
+  }).catch(() => {
     // Si falla, guardar backup en localStorage (best-effort, ver persistFallback) y avisar
     // de forma visible — un guardado roto en silencio es justo el incidente real que
     // motivó este aviso (ruta larga sin ningún aviso hasta días después).

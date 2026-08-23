@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { persistRouteOnStop, persistRouteOnStart } from './cockpit-persist.service.js';
 import type { IRouteRepository } from '../../shared/models/route.repository.js';
 import type { CockpitState } from '../cockpit.types.js';
+import { APP_EVENTS } from '../../shared/app-events.js';
 
 vi.mock('../../shared/feedback/toast.js', () => ({
   showToast: vi.fn(),
@@ -114,6 +115,35 @@ describe('persistRouteOnStop', () => {
 
     expect(localStorage.getItem(BACKUP_KEY)).toBeNull();
   });
+
+  it('dispatches route-saved with the routeId once the local save succeeds', async () => {
+    const repository = createRepository();
+    const state = createState();
+    const handler = vi.fn();
+    window.addEventListener(APP_EVENTS.ROUTE_SAVED, handler);
+
+    persistRouteOnStop(repository, state, 'Ruta de prueba');
+    await flushPromises();
+
+    expect(handler).toHaveBeenCalledOnce();
+    const event = handler.mock.calls[0]?.[0] as CustomEvent<{ routeId: string }>;
+    expect(event.detail).toEqual({ routeId: 'route-1' });
+    window.removeEventListener(APP_EVENTS.ROUTE_SAVED, handler);
+  });
+
+  it('does not dispatch route-saved when the local save fails', async () => {
+    const repository = createRepository();
+    (repository.save as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db offline'));
+    const state = createState();
+    const handler = vi.fn();
+    window.addEventListener(APP_EVENTS.ROUTE_SAVED, handler);
+
+    persistRouteOnStop(repository, state, 'Ruta de prueba');
+    await flushPromises();
+
+    expect(handler).not.toHaveBeenCalled();
+    window.removeEventListener(APP_EVENTS.ROUTE_SAVED, handler);
+  });
 });
 
 describe('persistRouteOnStart', () => {
@@ -140,5 +170,17 @@ describe('persistRouteOnStart', () => {
 
     expect(() => { persistRouteOnStart(repository, createState()); }).not.toThrow();
     await flushPromises();
+  });
+
+  it('never dispatches route-saved, even when save() succeeds (this is the initial active-row insert, not a completed route)', async () => {
+    const repository = createRepository();
+    const handler = vi.fn();
+    window.addEventListener(APP_EVENTS.ROUTE_SAVED, handler);
+
+    persistRouteOnStart(repository, createState());
+    await flushPromises();
+
+    expect(handler).not.toHaveBeenCalled();
+    window.removeEventListener(APP_EVENTS.ROUTE_SAVED, handler);
   });
 });

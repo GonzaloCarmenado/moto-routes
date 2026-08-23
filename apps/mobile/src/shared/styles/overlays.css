@@ -52,3 +52,53 @@
   color: var(--ink-soft);
   background: var(--panel);
 }
+
+/* Snackbar de progreso de subida automática de ruta (route-upload-snackbar.ts)
+ * — arriba, a diferencia de .photo-toast (abajo), y el mismo elemento cambia
+ * de texto/estado sin desaparecer y reaparecer (ver subida-automatica-rutas). */
+.route-upload-snackbar {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 90vw;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  text-align: center;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.route-upload-snackbar__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.route-upload-snackbar__icon svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.route-upload-snackbar--progress {
+  color: var(--ink-soft);
+  background: var(--panel);
+}
+
+.route-upload-snackbar--success {
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.route-upload-snackbar--error {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
