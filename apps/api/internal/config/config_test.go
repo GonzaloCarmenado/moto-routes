@@ -24,6 +24,8 @@ func setValidEnv(t *testing.T) {
 	t.Setenv("MINIO_SECRET_KEY", "test-secret-key")
 	t.Setenv("MINIO_BUCKET", "test-bucket")
 	t.Setenv("PHOTO_ENCRYPTION_KEY", validPhotoEncryptionKey)
+	t.Setenv("ADMIN_STATUS_TOKEN", "test-admin-token")
+	t.Setenv("RESEND_WEBHOOK_SECRET", "test-webhook-secret")
 }
 
 func TestLoad_RequiresDatabaseURL(t *testing.T) {
@@ -225,6 +227,121 @@ func TestLoad_PassesThroughFCMServiceAccountJSONWhenSet(t *testing.T) {
 	}
 	if cfg.FCMServiceAccountJSON != `{"project_id":"test-project"}` {
 		t.Fatalf("expected FCMServiceAccountJSON to be passed through, got %q", cfg.FCMServiceAccountJSON)
+	}
+}
+
+func TestLoad_RequiresAdminStatusToken(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("ADMIN_STATUS_TOKEN", "")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("expected an error when ADMIN_STATUS_TOKEN is not set")
+	}
+}
+
+func TestLoad_RequiresResendWebhookSecret(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("RESEND_WEBHOOK_SECRET", "")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("expected an error when RESEND_WEBHOOK_SECRET is not set")
+	}
+}
+
+func TestLoad_EventsLogPathDefaultsWhenNotSet(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("EVENTS_LOG_PATH", "")
+
+	cfg, err := Load()
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.EventsLogPath != "events.jsonl" {
+		t.Fatalf("expected default EventsLogPath, got %q", cfg.EventsLogPath)
+	}
+}
+
+func TestLoad_EventsLogPathUsesConfiguredValue(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("EVENTS_LOG_PATH", "/var/lib/moto-api/events.jsonl")
+
+	cfg, err := Load()
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.EventsLogPath != "/var/lib/moto-api/events.jsonl" {
+		t.Fatalf("expected configured EventsLogPath, got %q", cfg.EventsLogPath)
+	}
+}
+
+func TestLoad_EventsLogMaxSizeBytesDefaultsWhenNotSet(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("EVENTS_LOG_MAX_SIZE_BYTES", "")
+
+	cfg, err := Load()
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.EventsLogMaxSizeBytes != 10*1024*1024 {
+		t.Fatalf("expected default 10MiB, got %d", cfg.EventsLogMaxSizeBytes)
+	}
+}
+
+func TestLoad_EventsLogMaxSizeBytesRejectsInvalidValue(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("EVENTS_LOG_MAX_SIZE_BYTES", "not-a-number")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("expected an error for a non-numeric EVENTS_LOG_MAX_SIZE_BYTES")
+	}
+}
+
+func TestLoad_EventsLogMaxSizeBytesRejectsNonPositiveValue(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("EVENTS_LOG_MAX_SIZE_BYTES", "0")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("expected an error for a non-positive EVENTS_LOG_MAX_SIZE_BYTES")
+	}
+}
+
+func TestLoad_SysMetricsPathDefaultsWhenNotSet(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("SYSMETRICS_PATH", "")
+
+	cfg, err := Load()
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.SysMetricsPath != "sysmetrics.json" {
+		t.Fatalf("expected default SysMetricsPath, got %q", cfg.SysMetricsPath)
+	}
+}
+
+func TestLoad_SysMetricsAlertThresholdDefaultsWhenNotSet(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("SYSMETRICS_ALERT_THRESHOLD_PERCENT", "")
+
+	cfg, err := Load()
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.SysMetricsAlertThresholdPercent != 90.0 {
+		t.Fatalf("expected default threshold 90.0, got %v", cfg.SysMetricsAlertThresholdPercent)
+	}
+}
+
+func TestLoad_SysMetricsAlertThresholdRejectsOutOfRangeValue(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("SYSMETRICS_ALERT_THRESHOLD_PERCENT", "150")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("expected an error for a threshold above 100")
 	}
 }
 
