@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 
@@ -76,6 +77,20 @@ func (s *fakeUserStore) FindUserByUsername(_ context.Context, username string) (
 		}
 	}
 	return StoredUser{}, ErrUserNotFound
+}
+
+func (s *fakeUserStore) SearchUsernames(_ context.Context, query string, limit int) ([]string, error) {
+	matches := []string{}
+	for username := range s.byUsername {
+		if strings.Contains(strings.ToLower(username), strings.ToLower(query)) {
+			matches = append(matches, username)
+		}
+	}
+	sort.Strings(matches)
+	if len(matches) > limit {
+		matches = matches[:limit]
+	}
+	return matches, nil
 }
 
 func (s *fakeUserStore) FindUserByID(_ context.Context, id int64) (StoredUser, error) {

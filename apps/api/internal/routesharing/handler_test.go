@@ -154,6 +154,10 @@ func (f *fakeUserStore) MarkEmailVerified(_ context.Context, id int64) error {
 
 func (f *fakeUserStore) UpdatePasswordHash(_ context.Context, _ int64, _ string) error { return nil }
 
+func (f *fakeUserStore) SearchUsernames(_ context.Context, _ string, _ int) ([]string, error) {
+	return nil, nil
+}
+
 func testIssuer() auth.TokenIssuer {
 	return auth.TokenIssuer{Secret: []byte("routesharing-handler-test-secret"), TTL: time.Hour}
 }
@@ -189,10 +193,10 @@ func TestCreateInvitationHandler_EligibleRouteAndVerifiedAccountCreatesInvitatio
 	userStore := newFakeUserStore()
 	notifier := &notifications.FakeNotifier{}
 	routeStore.byUser[1] = map[string]*routes.Detail{"route-1": {Route: routes.Route{ID: "route-1"}}}
-	userStore.byEmail["friend@example.com"] = auth.StoredUser{ID: 2, Email: "friend@example.com", EmailVerified: true}
+	userStore.byEmail["friend@example.com"] = auth.StoredUser{ID: 2, Email: "friend@example.com", Username: strPtr("friend1"), EmailVerified: true}
 
 	handler := auth.RequireAuth(testIssuer())(RateLimitedCreateInvitationHandler(shareStore, routeStore, userStore, notifier, auth.NewLoginRateLimiter(10, time.Minute)))
-	body, _ := json.Marshal(map[string]string{"route_id": "route-1", "email": "friend@example.com"})
+	body, _ := json.Marshal(map[string]string{"route_id": "route-1", "username": "friend1"})
 	rec := doRequest(handler, http.MethodPost, "/api/route-shares", body, bearerFor(t, 1))
 
 	if rec.Code != http.StatusOK {
@@ -225,7 +229,7 @@ func TestCreateInvitationHandler_DoesNotNotifyWhenNoInvitationIsCreated(t *testi
 	// Sin destinatario registrado — Create nunca se llega a invocar.
 
 	handler := auth.RequireAuth(testIssuer())(RateLimitedCreateInvitationHandler(shareStore, routeStore, userStore, notifier, auth.NewLoginRateLimiter(10, time.Minute)))
-	body, _ := json.Marshal(map[string]string{"route_id": "route-1", "email": "nobody@example.com"})
+	body, _ := json.Marshal(map[string]string{"route_id": "route-1", "username": "nobody"})
 	doRequest(handler, http.MethodPost, "/api/route-shares", body, bearerFor(t, 1))
 
 	if len(notifier.Sent) != 0 {
@@ -239,10 +243,10 @@ func TestCreateInvitationHandler_NotifierFailureDoesNotUndoTheInvitation(t *test
 	userStore := newFakeUserStore()
 	notifier := &notifications.FakeNotifier{FailWith: notifications.ErrFakeSendFailure}
 	routeStore.byUser[1] = map[string]*routes.Detail{"route-1": {Route: routes.Route{ID: "route-1"}}}
-	userStore.byEmail["friend@example.com"] = auth.StoredUser{ID: 2, Email: "friend@example.com", EmailVerified: true}
+	userStore.byEmail["friend@example.com"] = auth.StoredUser{ID: 2, Email: "friend@example.com", Username: strPtr("friend1"), EmailVerified: true}
 
 	handler := auth.RequireAuth(testIssuer())(RateLimitedCreateInvitationHandler(shareStore, routeStore, userStore, notifier, auth.NewLoginRateLimiter(10, time.Minute)))
-	body, _ := json.Marshal(map[string]string{"route_id": "route-1", "email": "friend@example.com"})
+	body, _ := json.Marshal(map[string]string{"route_id": "route-1", "username": "friend1"})
 	rec := doRequest(handler, http.MethodPost, "/api/route-shares", body, bearerFor(t, 1))
 
 	if rec.Code != http.StatusOK {
@@ -253,7 +257,7 @@ func TestCreateInvitationHandler_NotifierFailureDoesNotUndoTheInvitation(t *test
 	}
 }
 
-func TestCreateInvitationHandler_NonexistentEmailRespondsIdenticallyWithoutCreating(t *testing.T) {
+func TestCreateInvitationHandler_NonexistentUsernameRespondsIdenticallyWithoutCreating(t *testing.T) {
 	shareStore := newFakeShareStore()
 	routeStore := newFakeRouteStore()
 	userStore := newFakeUserStore()
@@ -261,7 +265,7 @@ func TestCreateInvitationHandler_NonexistentEmailRespondsIdenticallyWithoutCreat
 	routeStore.byUser[1] = map[string]*routes.Detail{"route-1": {Route: routes.Route{ID: "route-1"}}}
 
 	handler := auth.RequireAuth(testIssuer())(RateLimitedCreateInvitationHandler(shareStore, routeStore, userStore, notifier, auth.NewLoginRateLimiter(10, time.Minute)))
-	body, _ := json.Marshal(map[string]string{"route_id": "route-1", "email": "nobody@example.com"})
+	body, _ := json.Marshal(map[string]string{"route_id": "route-1", "username": "nobody"})
 	rec := doRequest(handler, http.MethodPost, "/api/route-shares", body, bearerFor(t, 1))
 
 	if rec.Code != http.StatusOK {
@@ -273,7 +277,7 @@ func TestCreateInvitationHandler_NonexistentEmailRespondsIdenticallyWithoutCreat
 		t.Fatalf("expected the generic message, got %q", respExists.Message)
 	}
 	if len(shareStore.created) != 0 {
-		t.Fatalf("expected no invitation created for a nonexistent email, got %d", len(shareStore.created))
+		t.Fatalf("expected no invitation created for a nonexistent username, got %d", len(shareStore.created))
 	}
 }
 
@@ -283,10 +287,10 @@ func TestCreateInvitationHandler_UnverifiedAccountRespondsIdenticallyWithoutCrea
 	userStore := newFakeUserStore()
 	notifier := &notifications.FakeNotifier{}
 	routeStore.byUser[1] = map[string]*routes.Detail{"route-1": {Route: routes.Route{ID: "route-1"}}}
-	userStore.byEmail["unverified@example.com"] = auth.StoredUser{ID: 2, Email: "unverified@example.com", EmailVerified: false}
+	userStore.byEmail["unverified@example.com"] = auth.StoredUser{ID: 2, Email: "unverified@example.com", Username: strPtr("unverified1"), EmailVerified: false}
 
 	handler := auth.RequireAuth(testIssuer())(RateLimitedCreateInvitationHandler(shareStore, routeStore, userStore, notifier, auth.NewLoginRateLimiter(10, time.Minute)))
-	body, _ := json.Marshal(map[string]string{"route_id": "route-1", "email": "unverified@example.com"})
+	body, _ := json.Marshal(map[string]string{"route_id": "route-1", "username": "unverified1"})
 	rec := doRequest(handler, http.MethodPost, "/api/route-shares", body, bearerFor(t, 1))
 
 	if rec.Code != http.StatusOK {
@@ -302,10 +306,10 @@ func TestCreateInvitationHandler_NotOwnedOrUnsyncedRouteRespondsIdenticallyWitho
 	routeStore := newFakeRouteStore()
 	userStore := newFakeUserStore()
 	notifier := &notifications.FakeNotifier{}
-	userStore.byEmail["friend@example.com"] = auth.StoredUser{ID: 2, Email: "friend@example.com", EmailVerified: true}
+	userStore.byEmail["friend@example.com"] = auth.StoredUser{ID: 2, Email: "friend@example.com", Username: strPtr("friend1"), EmailVerified: true}
 
 	handler := auth.RequireAuth(testIssuer())(RateLimitedCreateInvitationHandler(shareStore, routeStore, userStore, notifier, auth.NewLoginRateLimiter(10, time.Minute)))
-	body, _ := json.Marshal(map[string]string{"route_id": "not-synced-route", "email": "friend@example.com"})
+	body, _ := json.Marshal(map[string]string{"route_id": "not-synced-route", "username": "friend1"})
 	rec := doRequest(handler, http.MethodPost, "/api/route-shares", body, bearerFor(t, 1))
 
 	if rec.Code != http.StatusOK {
@@ -323,10 +327,10 @@ func TestCreateInvitationHandler_SharingWithSelfRespondsIdenticallyWithoutCreati
 	userStore := newFakeUserStore()
 	notifier := &notifications.FakeNotifier{}
 	routeStore.byUser[1] = map[string]*routes.Detail{"route-1": {Route: routes.Route{ID: "route-1"}}}
-	userStore.byEmail["me@example.com"] = auth.StoredUser{ID: 1, Email: "me@example.com", EmailVerified: true}
+	userStore.byEmail["me@example.com"] = auth.StoredUser{ID: 1, Email: "me@example.com", Username: strPtr("me"), EmailVerified: true}
 
 	handler := auth.RequireAuth(testIssuer())(RateLimitedCreateInvitationHandler(shareStore, routeStore, userStore, notifier, auth.NewLoginRateLimiter(10, time.Minute)))
-	body, _ := json.Marshal(map[string]string{"route_id": "route-1", "email": "me@example.com"})
+	body, _ := json.Marshal(map[string]string{"route_id": "route-1", "username": "me"})
 	rec := doRequest(handler, http.MethodPost, "/api/route-shares", body, bearerFor(t, 1))
 
 	if rec.Code != http.StatusOK {
@@ -340,11 +344,11 @@ func TestCreateInvitationHandler_RateLimited(t *testing.T) {
 	userStore := newFakeUserStore()
 	notifier := &notifications.FakeNotifier{}
 	routeStore.byUser[1] = map[string]*routes.Detail{"route-1": {Route: routes.Route{ID: "route-1"}}}
-	userStore.byEmail["friend@example.com"] = auth.StoredUser{ID: 2, Email: "friend@example.com", EmailVerified: true}
+	userStore.byEmail["friend@example.com"] = auth.StoredUser{ID: 2, Email: "friend@example.com", Username: strPtr("friend1"), EmailVerified: true}
 
 	limiter := auth.NewLoginRateLimiter(1, time.Minute)
 	handler := auth.RequireAuth(testIssuer())(RateLimitedCreateInvitationHandler(shareStore, routeStore, userStore, notifier, limiter))
-	body, _ := json.Marshal(map[string]string{"route_id": "route-1", "email": "friend@example.com"})
+	body, _ := json.Marshal(map[string]string{"route_id": "route-1", "username": "friend1"})
 
 	first := doRequest(handler, http.MethodPost, "/api/route-shares", body, bearerFor(t, 1))
 	if first.Code != http.StatusOK {
@@ -489,3 +493,5 @@ func TestRevokeHandler_NotFoundReturns404(t *testing.T) {
 		t.Fatalf("expected 404, got %d", rec.Code)
 	}
 }
+
+func strPtr(s string) *string { return &s }

@@ -21,7 +21,7 @@ describe('buildShareButton', () => {
     expect(btn.getAttribute('aria-label')).toBe('Compartir ruta');
   });
 
-  it('opens the share dialog with the route id, token and own email on click', () => {
+  it('opens the share dialog with the route id and token on click', () => {
     const btn = buildShareButton({ apiBaseUrl: 'http://localhost:8080', session: { token: 'jwt-token', email: 'me@example.com' }, routeId: 'route-1', disabled: false });
 
     btn.click();
@@ -30,7 +30,6 @@ describe('buildShareButton', () => {
       apiBaseUrl: 'http://localhost:8080',
       token: 'jwt-token',
       routeId: 'route-1',
-      ownEmail: 'me@example.com',
     });
   });
 

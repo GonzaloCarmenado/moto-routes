@@ -90,6 +90,29 @@ func (s PostgresUserStore) FindUserByID(ctx context.Context, id int64) (StoredUs
 	return user, nil
 }
 
+// SearchUsernames busca usernames que contienen query (coincidencia parcial,
+// sin distinguir mayúsculas/minúsculas), en orden alfabético, acotado a limit.
+func (s PostgresUserStore) SearchUsernames(ctx context.Context, query string, limit int) ([]string, error) {
+	rows, err := s.Pool.Query(ctx,
+		"SELECT username FROM users WHERE username ILIKE '%' || $1 || '%' ORDER BY username ASC LIMIT $2",
+		query, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	usernames := []string{}
+	for rows.Next() {
+		var username string
+		if err := rows.Scan(&username); err != nil {
+			return nil, err
+		}
+		usernames = append(usernames, username)
+	}
+	return usernames, rows.Err()
+}
+
 // UpdateUsername fija o cambia el username de la cuenta, traduciendo la
 // violación de la constraint única a ErrUsernameTaken.
 func (s PostgresUserStore) UpdateUsername(ctx context.Context, id int64, username string) error {

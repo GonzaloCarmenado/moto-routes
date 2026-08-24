@@ -27,10 +27,19 @@ function uniqueTestEmail(suffix: string): string {
 
 let usernameCounter = 0;
 
-/** Username único y válido (`[a-z0-9_]{3,20}`, ver `validateUsername` en `apps/api`) — obligatorio desde `nombre-usuario`. */
-function uniqueTestUsername(): string {
+/**
+ * Username único y válido (`[a-z0-9_]{3,20}`, ver `validateUsername` en
+ * `apps/api`) — obligatorio desde `nombre-usuario`. Sin `prefix`, incrusta su
+ * propio timestamp (comportamiento original). Con un `prefix` ya único (por
+ * ejemplo uno que un test construye con su propio `Date.now()` para buscar
+ * por coincidencia parcial), no vuelve a incrustar otro timestamp encima —
+ * hacerlo agotaba los 20 caracteres antes de llegar al contador, produciendo
+ * el mismo string dos veces (bug real encontrado en este mismo spec).
+ */
+function uniqueTestUsername(prefix?: string): string {
   usernameCounter += 1;
-  return `cy${Date.now().toString(36)}${String(usernameCounter)}`.slice(0, 20);
+  const base = prefix ?? `cy${Date.now().toString(36)}`;
+  return `${base}${String(usernameCounter)}`.slice(0, 20);
 }
 
 function markEmailVerified(email: string): Cypress.Chainable {
@@ -39,9 +48,10 @@ function markEmailVerified(email: string): Cypress.Chainable {
   );
 }
 
-function registerVerifiedAccountViaApi(email: string): Cypress.Chainable<string> {
+/** Registra una cuenta verificada con un username conocido de antemano (para poder buscarlo en el selector después) y devuelve su token. */
+function registerVerifiedAccountViaApi(email: string, username: string): Cypress.Chainable<string> {
   return cy
-    .request('POST', `${API_BASE_URL}/api/auth/register`, { email, password: TEST_PASSWORD, username: uniqueTestUsername() })
+    .request('POST', `${API_BASE_URL}/api/auth/register`, { email, password: TEST_PASSWORD, username })
     .then(() => markEmailVerified(email))
     .then(() => cy.request('POST', `${API_BASE_URL}/api/auth/login`, { email, password: TEST_PASSWORD }))
     .then((res) => (res.body as { token: string }).token);
@@ -108,11 +118,12 @@ function loginViaUi(email: string): void {
   cy.get('[data-cy="auth-dialog-login"]').should('not.exist');
 }
 
-function shareRouteViaUi(routeName: string, targetEmail: string): void {
+function shareRouteViaUi(routeName: string, targetUsername: string): void {
   cy.get('[data-cy="nav-rutas"]').click();
   cy.contains('[data-cy="route-card"]', routeName).click();
   cy.get('[data-cy="route-detail-btn-compartir"]').click();
-  cy.get('[data-cy="route-share-input-email"]').type(targetEmail);
+  cy.get('[data-cy="friend-selector-input"]').type(targetUsername);
+  cy.contains('[data-cy="friend-selector-result"]', targetUsername).click();
   cy.get('[data-cy="route-share-btn-confirmar"]').click();
   cy.get('[data-cy="route-share-dialog"]').should('contain', 'Invitación enviada');
   cy.get('[data-cy="route-share-btn-confirmar"]').click();
@@ -126,19 +137,20 @@ describe('Compartir rutas - invitación, aceptar, rechazar y revocar', () => {
     );
   });
 
-  it('compartir una ruta sincronizada crea una invitación real solo si el email existe, con la misma respuesta en ambos casos', () => {
+  it('compartir una ruta sincronizada, eligiendo el destino con el selector por username, crea una invitación real', () => {
     const emailA = uniqueTestEmail('emisor-1');
     const emailB = uniqueTestEmail('destino-1');
+    const usernameA = uniqueTestUsername();
+    const usernameB = uniqueTestUsername();
     const route = buildSeedRoute({ name: `Ruta a compartir ${String(Date.now())}` });
 
-    registerVerifiedAccountViaApi(emailA).then((tokenA) => {
+    registerVerifiedAccountViaApi(emailA, usernameA).then((tokenA) => {
       uploadRouteViaApi(tokenA, route).then(() => {
-        registerVerifiedAccountViaApi(emailB).then(() => {
+        registerVerifiedAccountViaApi(emailB, usernameB).then(() => {
           cy.visitWithSeed({});
           loginViaUi(emailA);
 
-          shareRouteViaUi(route.name as string, 'no-existe-' + emailB);
-          shareRouteViaUi(route.name as string, emailB);
+          shareRouteViaUi(route.name as string, usernameB);
 
           fetchSentInvitations(tokenA).then((sent) => {
             expect(sent).to.have.length(1);
@@ -150,24 +162,32 @@ describe('Compartir rutas - invitación, aceptar, rechazar y revocar', () => {
     });
   });
 
-  it('compartir la propia ruta consigo mismo se rechaza en cliente, sin llamar al servidor', () => {
+  it('la propia cuenta nunca aparece como destino al buscar en el diálogo de compartir ruta (defensa en profundidad)', () => {
+    const prefix = `rssf${Date.now().toString(36)}`;
     const email = uniqueTestEmail('self');
+    const emailOther = uniqueTestEmail('otra-self');
+    const username = uniqueTestUsername(prefix);
+    const usernameOther = uniqueTestUsername(prefix);
     const route = buildSeedRoute({ name: `Ruta propia ${String(Date.now())}` });
 
-    registerVerifiedAccountViaApi(email).then((token) => {
+    registerVerifiedAccountViaApi(email, username).then((token) => {
       uploadRouteViaApi(token, route).then(() => {
-        cy.visitWithSeed({});
-        loginViaUi(email);
+        registerVerifiedAccountViaApi(emailOther, usernameOther).then(() => {
+          cy.visitWithSeed({});
+          loginViaUi(email);
 
-        cy.get('[data-cy="nav-rutas"]').click();
-        cy.contains('[data-cy="route-card"]', route.name as string).click();
-        cy.get('[data-cy="route-detail-btn-compartir"]').click();
-        cy.get('[data-cy="route-share-input-email"]').type(email);
-        cy.get('[data-cy="route-share-btn-confirmar"]').click();
-        cy.get('[data-cy="route-share-error"]').should('contain', 'contigo mismo');
+          cy.get('[data-cy="nav-rutas"]').click();
+          cy.contains('[data-cy="route-card"]', route.name as string).click();
+          cy.get('[data-cy="route-detail-btn-compartir"]').click();
+          // Busca por el prefijo compartido de este test para confirmar que
+          // la propia cuenta queda excluida aunque coincidiría con la búsqueda.
+          cy.get('[data-cy="friend-selector-input"]').type(prefix);
+          cy.contains('[data-cy="friend-selector-result"]', usernameOther).should('exist');
+          cy.contains('[data-cy="friend-selector-result"]', username).should('not.exist');
 
-        fetchSentInvitations(token).then((sent) => {
-          expect(sent).to.have.length(0);
+          fetchSentInvitations(token).then((sent) => {
+            expect(sent).to.have.length(0);
+          });
         });
       });
     });
@@ -177,7 +197,7 @@ describe('Compartir rutas - invitación, aceptar, rechazar y revocar', () => {
     const email = uniqueTestEmail('local');
     const route = buildSeedRoute({ name: `Ruta local ${String(Date.now())}` });
 
-    registerVerifiedAccountViaApi(email).then(() => {
+    registerVerifiedAccountViaApi(email, uniqueTestUsername()).then(() => {
       cy.visitWithSeed({ routes: [route] });
       loginViaUi(email);
 
@@ -190,17 +210,19 @@ describe('Compartir rutas - invitación, aceptar, rechazar y revocar', () => {
   it('aceptar una invitación clona la ruta, que aparece en el listado del destinatario; rechazar no clona nada', () => {
     const emailA = uniqueTestEmail('emisor-2');
     const emailB = uniqueTestEmail('destino-2');
+    const usernameA = uniqueTestUsername();
+    const usernameB = uniqueTestUsername();
     const routeToAccept = buildSeedRoute({ name: `Ruta a aceptar ${String(Date.now())}` });
     const routeToDecline = buildSeedRoute({ name: `Ruta a rechazar ${String(Date.now())}` });
 
-    registerVerifiedAccountViaApi(emailA).then((tokenA) => {
+    registerVerifiedAccountViaApi(emailA, usernameA).then((tokenA) => {
       uploadRouteViaApi(tokenA, routeToAccept).then(() => {
         uploadRouteViaApi(tokenA, routeToDecline).then(() => {
-          registerVerifiedAccountViaApi(emailB).then(() => {
+          registerVerifiedAccountViaApi(emailB, usernameB).then(() => {
             cy.visitWithSeed({});
             loginViaUi(emailA);
-            shareRouteViaUi(routeToAccept.name as string, emailB);
-            shareRouteViaUi(routeToDecline.name as string, emailB);
+            shareRouteViaUi(routeToAccept.name as string, usernameB);
+            shareRouteViaUi(routeToDecline.name as string, usernameB);
 
             fetchSentInvitations(tokenA).then((sent) => {
               expect(sent).to.have.length(2);
@@ -244,15 +266,17 @@ describe('Compartir rutas - invitación, aceptar, rechazar y revocar', () => {
   it('el emisor ve el estado en "Enviadas" y puede revocar una invitación pendiente', () => {
     const emailA = uniqueTestEmail('emisor-3');
     const emailB = uniqueTestEmail('destino-3');
+    const usernameA = uniqueTestUsername();
+    const usernameB = uniqueTestUsername();
     const route = buildSeedRoute({ name: `Ruta a revocar ${String(Date.now())}` });
 
-    registerVerifiedAccountViaApi(emailA).then((tokenA) => {
+    registerVerifiedAccountViaApi(emailA, usernameA).then((tokenA) => {
       uploadRouteViaApi(tokenA, route).then(() => {
-        registerVerifiedAccountViaApi(emailB).then(() => {
+        registerVerifiedAccountViaApi(emailB, usernameB).then(() => {
           cy.intercept('GET', '**/api/route-shares/sent').as('sent');
           cy.visitWithSeed({});
           loginViaUi(emailA);
-          shareRouteViaUi(route.name as string, emailB);
+          shareRouteViaUi(route.name as string, usernameB);
 
           cy.get('[data-cy="nav-rutas"]').click();
           cy.get('[data-cy="route-list-btn-invitaciones"]').click();
@@ -283,19 +307,21 @@ describe('Compartir rutas - invitación, aceptar, rechazar y revocar', () => {
     const emailA = uniqueTestEmail('emisor-4');
     const emailB = uniqueTestEmail('destino-4');
     const emailC = uniqueTestEmail('ajena-4');
+    const usernameA = uniqueTestUsername();
+    const usernameB = uniqueTestUsername();
     const route = buildSeedRoute({ name: `Ruta aislada ${String(Date.now())}` });
 
-    registerVerifiedAccountViaApi(emailA).then((tokenA) => {
+    registerVerifiedAccountViaApi(emailA, usernameA).then((tokenA) => {
       uploadRouteViaApi(tokenA, route).then(() => {
-        registerVerifiedAccountViaApi(emailB).then(() => {
+        registerVerifiedAccountViaApi(emailB, usernameB).then(() => {
           cy.visitWithSeed({});
           loginViaUi(emailA);
-          shareRouteViaUi(route.name as string, emailB);
+          shareRouteViaUi(route.name as string, usernameB);
 
           fetchSentInvitations(tokenA).then((sent) => {
             const invitationId = sent.find((s) => s.to_email === emailB)?.id;
 
-            registerVerifiedAccountViaApi(emailC).then((tokenC) => {
+            registerVerifiedAccountViaApi(emailC, uniqueTestUsername()).then((tokenC) => {
               cy.request({
                 method: 'POST',
                 url: `${API_BASE_URL}/api/route-shares/${invitationId}/accept`,

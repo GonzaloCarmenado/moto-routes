@@ -33,11 +33,18 @@ func (l *LoginRateLimiter) Allowed(key string) bool {
 	return len(l.pruneLocked(key)) < l.max
 }
 
-// RecordFailure registra un intento fallido para la clave.
-func (l *LoginRateLimiter) RecordFailure(key string) {
+// Record cuenta una petición contra el límite de la clave — no implica que
+// la petición fallara (una búsqueda nunca falla, solo cuenta contra el
+// límite), a diferencia de RecordFailure.
+func (l *LoginRateLimiter) Record(key string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.attempts[key] = append(l.pruneLocked(key), time.Now())
+}
+
+// RecordFailure registra un intento fallido para la clave.
+func (l *LoginRateLimiter) RecordFailure(key string) {
+	l.Record(key)
 }
 
 func (l *LoginRateLimiter) pruneLocked(key string) []time.Time {

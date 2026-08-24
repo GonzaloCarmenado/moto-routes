@@ -20,6 +20,7 @@ import type { Session } from '../../shared/models/session.types.js';
 import { SHARE_ICON } from '../../shared/icons/share-icon.js';
 import { openRouteShareDialog } from './route-share-dialog.element.js';
 
+
 export interface ShareButtonOptions {
   apiBaseUrl: string;
   session: Session;
@@ -41,7 +42,6 @@ export function buildShareButton(options: ShareButtonOptions): HTMLButtonElement
       apiBaseUrl: options.apiBaseUrl,
       token: options.session.token,
       routeId: options.routeId,
-      ownEmail: options.session.email,
     });
   });
   return btn;

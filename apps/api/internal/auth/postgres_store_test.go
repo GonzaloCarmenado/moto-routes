@@ -235,3 +235,65 @@ func TestPostgresUserStore_FindUnknownUsernameReturnsErrUserNotFound(t *testing.
 		t.Fatalf("expected ErrUserNotFound, got %v", err)
 	}
 }
+
+func TestPostgresUserStore_SearchUsernamesMatchesPartialCaseInsensitive(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	if _, err := store.CreateUser(ctx, "rider1@example.com", "hash-1", "rider_alpha"); err != nil {
+		t.Fatalf("unexpected error creating first user: %v", err)
+	}
+	if _, err := store.CreateUser(ctx, "rider2@example.com", "hash-2", "RIDER_beta"); err != nil {
+		t.Fatalf("unexpected error creating second user: %v", err)
+	}
+	if _, err := store.CreateUser(ctx, "other@example.com", "hash-3", "someoneelse"); err != nil {
+		t.Fatalf("unexpected error creating third user: %v", err)
+	}
+
+	found, err := store.SearchUsernames(ctx, "RIDER", 10)
+	if err != nil {
+		t.Fatalf("unexpected error searching usernames: %v", err)
+	}
+	if len(found) != 2 || found[0] != "rider_alpha" || found[1] != "RIDER_beta" {
+		t.Fatalf("expected [rider_alpha RIDER_beta] in alphabetical order, got %+v", found)
+	}
+}
+
+func TestPostgresUserStore_SearchUsernamesRespectsLimit(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	for _, username := range []string{"rider_a", "rider_b", "rider_c"} {
+		if _, err := store.CreateUser(ctx, username+"@example.com", "hash", username); err != nil {
+			t.Fatalf("unexpected error creating user %s: %v", username, err)
+		}
+	}
+
+	found, err := store.SearchUsernames(ctx, "rider", 2)
+	if err != nil {
+		t.Fatalf("unexpected error searching usernames: %v", err)
+	}
+	if len(found) != 2 {
+		t.Fatalf("expected 2 results respecting the limit, got %d: %+v", len(found), found)
+	}
+	if found[0] != "rider_a" || found[1] != "rider_b" {
+		t.Fatalf("expected [rider_a rider_b] in alphabetical order, got %+v", found)
+	}
+}
+
+func TestPostgresUserStore_SearchUsernamesNoMatchReturnsEmpty(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	if _, err := store.CreateUser(ctx, "rider@example.com", "hash", "rider1"); err != nil {
+		t.Fatalf("unexpected error creating user: %v", err)
+	}
+
+	found, err := store.SearchUsernames(ctx, "ghost", 10)
+	if err != nil {
+		t.Fatalf("unexpected error searching usernames: %v", err)
+	}
+	if len(found) != 0 {
+		t.Fatalf("expected no matches, got %+v", found)
+	}
+}

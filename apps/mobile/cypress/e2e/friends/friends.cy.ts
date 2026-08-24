@@ -79,7 +79,8 @@ function sendFriendRequestViaUi(targetUsername: string): void {
   // evita escribir en un <input> que un segundo render reemplaza a mitad de
   // la escritura (bug real de carrera encontrado en CI, no en local).
   cy.get('[data-cy="tab-bar-btn-friends-amigos"]').should('exist');
-  cy.get('[data-cy="friends-input-username"]').type(targetUsername);
+  cy.get('[data-cy="friend-selector-input"]').type(targetUsername);
+  cy.contains('[data-cy="friend-selector-result"]', targetUsername).click();
   cy.get('[data-cy="friends-btn-enviar"]').click();
   cy.get('[data-cy="photo-toast"]').should('contain', 'enviado');
 }

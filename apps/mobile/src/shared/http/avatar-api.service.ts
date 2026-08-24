@@ -95,3 +95,39 @@ export async function fetchAccountAvatar(apiBaseUrl: string, token: string): Pro
 
   return response.blob();
 }
+
+/**
+ * `GET /api/users/{username}/avatar` — descarga el avatar de otra cuenta
+ * (ver selector-amigos, design.md). Mismo patrón que `fetchAccountAvatar`,
+ * salvo que aquí un 404 no es un error del llamante: significa "esa cuenta
+ * no tiene avatar", así que se resuelve como `null` en vez de propagarse —
+ * el selector lo trata como estado esperado (icono placeholder), no vacío.
+ * Sin caché local (a diferencia de `account-avatar-cache.ts`): cada apertura
+ * del selector vuelve a pedir los avatares (design.md, Non-Goals).
+ */
+export async function resolveUserAvatarUrl(apiBaseUrl: string, token: string, username: string): Promise<string | null> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}/api/users/${encodeURIComponent(username)}/avatar`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (err) {
+    throw new AvatarApiError('network', `Network error fetching avatar for ${username}: ${String(err)}`);
+  }
+
+  if (response.status === 404) return null;
+
+  if (!response.ok) {
+    let message = `Avatar download failed with status ${String(response.status)}`;
+    try {
+      const body = (await response.json()) as ApiErrorBody;
+      if (body.error) message = body.error;
+    } catch {
+      // cuerpo de error no-JSON o vacío — se mantiene el mensaje genérico
+    }
+    throw new AvatarApiError(mapStatus(response.status), message);
+  }
+
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+}
