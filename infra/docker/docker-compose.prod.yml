@@ -33,3 +33,21 @@ services:
     restart: unless-stopped
     env_file:
       - .env.prod
+    volumes:
+      # Eventos de error/warning (ver openspec/changes/observabilidad-produccion,
+      # design.md Decisión 1) — volumen nombrado para que sobrevivan a
+      # `docker compose up --build` recreando el contenedor, no solo a un
+      # restart. EVENTS_LOG_PATH en .env.prod debe apuntar dentro de este
+      # punto de montaje.
+      - events-log:/var/lib/moto-api/events
+      # Instantánea de memoria/disco del host (ver design.md Decisión 2),
+      # escrita por scripts/collect-sysmetrics.sh vía cron/timer en el propio
+      # host — bind mount de solo lectura, no un volumen nombrado: el
+      # contenedor nunca necesita escribir aquí, solo el script del host.
+      # Mismo path dentro y fuera a propósito, evita traducir rutas entre
+      # SYSMETRICS_PATH y el destino real del script. Crear el directorio en
+      # el host antes del primer despliegue (mkdir -p).
+      - /var/lib/moto-api/metrics:/var/lib/moto-api/metrics:ro
+
+volumes:
+  events-log:

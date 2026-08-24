@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/crzverde/moto-routes/apps/api/internal/achievements"
+	"github.com/crzverde/moto-routes/apps/api/internal/adminstatus"
 	"github.com/crzverde/moto-routes/apps/api/internal/auth"
 	"github.com/crzverde/moto-routes/apps/api/internal/avatar"
 	"github.com/crzverde/moto-routes/apps/api/internal/config"
@@ -20,11 +22,13 @@ import (
 	"github.com/crzverde/moto-routes/apps/api/internal/mapmatch"
 	"github.com/crzverde/moto-routes/apps/api/internal/migrate"
 	"github.com/crzverde/moto-routes/apps/api/internal/notifications"
+	"github.com/crzverde/moto-routes/apps/api/internal/opslog"
 	"github.com/crzverde/moto-routes/apps/api/internal/photos"
 	"github.com/crzverde/moto-routes/apps/api/internal/ping"
 	"github.com/crzverde/moto-routes/apps/api/internal/routes"
 	"github.com/crzverde/moto-routes/apps/api/internal/routesharing"
 	"github.com/crzverde/moto-routes/apps/api/internal/stoptypes"
+	"github.com/crzverde/moto-routes/apps/api/internal/sysmetrics"
 	"github.com/crzverde/moto-routes/apps/api/internal/userdirectory"
 )
 
@@ -117,6 +121,11 @@ func main() {
 
 	ctx := context.Background()
 
+	eventsLogger, err := opslog.Open(cfg.EventsLogPath, cfg.EventsLogMaxSizeBytes)
+	if err != nil {
+		log.Fatalf("failed to open events log: %v", err)
+	}
+
 	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("invalid DATABASE_URL: %v", err)
@@ -141,7 +150,7 @@ func main() {
 	refreshIssuer := auth.RefreshTokenIssuer{Store: refreshTokenStore, TTL: refreshTokenTTL}
 	resendSender := email.ResendSender{APIKey: cfg.ResendAPIKey, From: cfg.ResendFromAddress}
 	deviceTokenStore := notifications.PostgresDeviceTokenStore{Pool: pool}
-	notifier := buildNotifier(ctx, cfg.FCMServiceAccountJSON, deviceTokenStore)
+	notifier := buildNotifier(ctx, cfg.FCMServiceAccountJSON, deviceTokenStore, eventsLogger)
 
 	blobStore, err := photos.NewMinioBlobStore(cfg.MinioEndpoint, cfg.MinioAccessKey, cfg.MinioSecretKey, cfg.MinioBucket, false)
 	if err != nil {
@@ -149,7 +158,8 @@ func main() {
 	}
 
 	router := chi.NewRouter()
-	router.Use(httpmw.Recover)
+	router.Use(httpmw.Recover(eventsLogger))
+	router.Use(httpmw.CaptureErrors(eventsLogger))
 	router.Get("/api/ping", ping.Handler(ping.PostgresService{Pool: pool}).ServeHTTP)
 	router.With(httpmw.PublicCORS).Get("/api/stop-types", stoptypes.Handler(stoptypes.PostgresRepository{Pool: pool}).ServeHTTP)
 	loginRateLimiter := auth.NewLoginRateLimiter(loginRateLimitMaxAttempts, loginRateLimitWindow)
@@ -284,6 +294,11 @@ func main() {
 		avatar.DownloadUserAvatarHandler(userStore, blobStore, cfg.PhotoEncryptionKey).ServeHTTP)
 	router.With(httpmw.PublicCORS).Options("/api/users/{username}/avatar", func(http.ResponseWriter, *http.Request) {})
 
+	sysMetricsMonitor := sysmetrics.NewMonitor(cfg.SysMetricsPath, cfg.SysMetricsAlertThresholdPercent, eventsLogger)
+	router.Get("/admin/status", adminstatus.Handler(eventsLogger, cfg.AdminStatusToken, sysMetricsMonitor).ServeHTTP)
+
+	router.Post("/api/webhooks/resend", email.WebhookHandler(eventsLogger, cfg.ResendWebhookSecret))
+
 	log.Printf("listening on %s", cfg.ServerAddress)
 	if err := http.ListenAndServe(cfg.ServerAddress, router); err != nil {
 		log.Fatal(err)
@@ -294,16 +309,33 @@ func main() {
 // configurada, o un NoopNotifier si no — las notificaciones push son
 // opcionales (ver design.md de notificaciones-push-fcm, Decisión 4), un
 // fallo al parsear la credencial no debe impedir arrancar el servidor.
-func buildNotifier(ctx context.Context, serviceAccountJSON string, tokenStore notifications.DeviceTokenStore) notifications.Notifier {
+// Ambos casos de degradación se registran como warning en eventsLogger (ver
+// openspec/changes/observabilidad-produccion) en vez de solo log.Printf, para
+// que sean consultables desde el endpoint admin.
+func buildNotifier(ctx context.Context, serviceAccountJSON string, tokenStore notifications.DeviceTokenStore, eventsLogger *opslog.Logger) notifications.Notifier {
 	if serviceAccountJSON == "" {
-		log.Printf("FCM_SERVICE_ACCOUNT_JSON not set — push notifications disabled")
+		recordDegradedFeatureWarning(eventsLogger, "FCM_SERVICE_ACCOUNT_JSON not set — push notifications disabled")
 		return notifications.NoopNotifier{}
 	}
 
 	notifier, err := notifications.NewFCMNotifier(ctx, serviceAccountJSON, tokenStore)
 	if err != nil {
-		log.Printf("failed to initialize FCM notifier, push notifications disabled: %v", err)
+		recordDegradedFeatureWarning(eventsLogger, fmt.Sprintf("failed to initialize FCM notifier, push notifications disabled: %v", err))
 		return notifications.NoopNotifier{}
 	}
 	return notifier
+}
+
+// recordDegradedFeatureWarning registra un warning en eventsLogger y lo
+// refleja también en el log del proceso (docker compose logs sigue siendo
+// útil para depurar el propio arranque, antes de que el registro de eventos
+// esté disponible vía el endpoint admin).
+func recordDegradedFeatureWarning(eventsLogger *opslog.Logger, message string) {
+	log.Print(message)
+	_ = eventsLogger.Record(opslog.Event{
+		Timestamp: time.Now().UTC(),
+		Level:     opslog.LevelWarning,
+		Kind:      "degraded_feature",
+		Message:   message,
+	})
 }
