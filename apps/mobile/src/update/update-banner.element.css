@@ -17,7 +17,17 @@
   font-size: 0.95rem;
 }
 
-.update-banner__download {
+.update-banner__progress {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.update-banner__error {
+  font-size: 0.9rem;
+  color: var(--danger);
+}
+
+.update-banner__action {
   min-width: var(--hitbox-min);
   min-height: var(--hitbox-min);
   padding: 0 16px;
@@ -30,13 +40,13 @@
   cursor: pointer;
 }
 
-.update-banner__download:hover,
-.update-banner__download:focus-visible {
+.update-banner__action:hover,
+.update-banner__action:focus-visible {
   background: var(--amber-strong);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .update-banner__download {
+  .update-banner__action {
     transition: none;
   }
 }

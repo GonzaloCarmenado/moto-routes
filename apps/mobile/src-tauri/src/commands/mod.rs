@@ -251,6 +251,85 @@ pub fn clear_pending_token_refresh(_app_handle: tauri::AppHandle) -> Result<(), 
     Ok(())
 }
 
+/// Solo permite instalar un APK descargado por este mismo flujo
+/// (`update-download.service.ts`): dentro de un directorio `updates`, nombrado
+/// exactamente `update.apk`, sin traversal. No resuelve el directorio de
+/// caché real de la app (eso exigiría un `AppHandle`, no testeable con
+/// `#[test]` puro, mismo criterio que `save_file` de arriba) — la validación
+/// es sintáctica, suficiente para rechazar cualquier ruta que no pueda venir
+/// de una descarga legítima de este propio flujo.
+fn validate_update_apk_path(path: &str) -> Result<(), String> {
+    if path.contains("..") {
+        return Err("Path traversal is not allowed".to_string());
+    }
+
+    let path_buf = PathBuf::from(path);
+    if path_buf.file_name().and_then(|n| n.to_str()) != Some("update.apk") {
+        return Err("Unexpected file name for an update APK".to_string());
+    }
+
+    let parent_dir_name = path_buf
+        .parent()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str());
+    if parent_dir_name != Some("updates") {
+        return Err("Path is not inside the updates directory".to_string());
+    }
+
+    Ok(())
+}
+
+/// Lanza el instalador nativo de Android sobre el APK ya descargado en `path`
+/// (ver `update-download.service.ts`). No-op fuera de Android.
+#[tauri::command]
+pub fn install_update(_app_handle: tauri::AppHandle, path: String) -> Result<(), String> {
+    validate_update_apk_path(&path)?;
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        if let Some(handle) =
+            _app_handle.try_state::<crate::install_update::InstallUpdateHandle<tauri::Wry>>()
+        {
+            return handle.install_apk(path);
+        }
+    }
+    Ok(())
+}
+
+/// `true` si la app puede instalar APKs fuera de Play Store (permiso ya
+/// concedido). Fuera de Android esta restricción no aplica — `true` para no
+/// bloquear nada donde el concepto ni siquiera existe.
+#[tauri::command]
+pub fn can_install_update_packages(_app_handle: tauri::AppHandle) -> Result<bool, String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        if let Some(handle) =
+            _app_handle.try_state::<crate::install_update::InstallUpdateHandle<tauri::Wry>>()
+        {
+            return handle.can_install_packages();
+        }
+    }
+    Ok(true)
+}
+
+/// Dirige al usuario a los Ajustes del sistema para conceder el permiso de
+/// instalar APKs externos para esta app concreta (mismo patrón que la
+/// comprobación de permiso de ubicación ya existente). No-op fuera de Android.
+#[tauri::command]
+pub fn request_install_update_permission(_app_handle: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        if let Some(handle) =
+            _app_handle.try_state::<crate::install_update::InstallUpdateHandle<tauri::Wry>>()
+        {
+            return handle.request_install_permission();
+        }
+    }
+    Ok(())
+}
+
 // ─── Tests ──────────────────────────────────────────────
 // AC-008 de `specs/features/deuda-tecnica-auditoria.md`: cubre la lógica de
 // validación real de `save_file` (rechaza rutas absolutas, exige relativas
@@ -317,6 +396,42 @@ mod tests {
     #[test]
     fn greet_rejects_empty_name() {
         let result = greet(String::new());
+
+        assert!(result.is_err());
+    }
+
+    // actualizacion-in-app: `validate_update_apk_path` es la única parte de
+    // `install_update` testeable sin un runtime de Tauri real (mismo criterio
+    // que `save_file` de arriba) — solo acepta un fichero llamado `update.apk`
+    // dentro de un directorio `updates`, sin traversal.
+    #[test]
+    fn validate_update_apk_path_accepts_a_well_formed_path() {
+        let path = if cfg!(windows) {
+            "C:\\data\\cache\\updates\\update.apk"
+        } else {
+            "/data/cache/updates/update.apk"
+        };
+
+        assert!(validate_update_apk_path(path).is_ok());
+    }
+
+    #[test]
+    fn validate_update_apk_path_rejects_path_traversal() {
+        let result = validate_update_apk_path("/data/cache/updates/../secrets/update.apk");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_update_apk_path_rejects_a_file_outside_the_updates_directory() {
+        let result = validate_update_apk_path("/data/cache/other/update.apk");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_update_apk_path_rejects_an_unexpected_file_name() {
+        let result = validate_update_apk_path("/data/cache/updates/not-an-apk.txt");
 
         assert!(result.is_err());
     }

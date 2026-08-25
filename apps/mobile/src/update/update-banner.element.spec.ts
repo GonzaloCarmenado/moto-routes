@@ -46,4 +46,66 @@ describe('update-banner', () => {
 
     expect(banner.shadowRoot?.querySelector('[data-cy="update-banner-download"]')).toBeNull();
   });
+
+  it('setDownloading shows progress and hides the download button', () => {
+    const banner = mount();
+    banner.result = { hasUpdate: true, latestVersion: '0.1.18', downloadUrl: 'https://example.com/apk' };
+
+    banner.setDownloading({ loaded: 5_000_000, total: 10_000_000 });
+
+    expect(banner.shadowRoot?.querySelector('[data-cy="update-banner-download"]')).toBeNull();
+    const progressEl = banner.shadowRoot?.querySelector('[data-cy="update-banner-progress"]');
+    expect(progressEl).not.toBeNull();
+    expect(progressEl?.textContent).toContain('50%');
+  });
+
+  it('setDownloading with an unknown total shows an indeterminate message, not a percentage', () => {
+    const banner = mount();
+    banner.result = { hasUpdate: true, latestVersion: '0.1.18', downloadUrl: 'https://example.com/apk' };
+
+    banner.setDownloading({ loaded: 1000, total: null });
+
+    const progressEl = banner.shadowRoot?.querySelector('[data-cy="update-banner-progress"]');
+    expect(progressEl).not.toBeNull();
+    expect(progressEl?.textContent).not.toContain('%');
+  });
+
+  it('setReadyToInstall shows an install button that emits update-install-requested', () => {
+    const banner = mount();
+    banner.result = { hasUpdate: true, latestVersion: '0.1.18', downloadUrl: 'https://example.com/apk' };
+    banner.setReadyToInstall();
+
+    const handler = vi.fn();
+    window.addEventListener('update-install-requested', handler);
+    banner.shadowRoot?.querySelector<HTMLButtonElement>('[data-cy="update-banner-install"]')?.click();
+    window.removeEventListener('update-install-requested', handler);
+
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it('setDownloadError shows the message and a retry button that emits update-download-requested again', () => {
+    const banner = mount();
+    banner.result = { hasUpdate: true, latestVersion: '0.1.18', downloadUrl: 'https://example.com/apk' };
+    banner.setDownloadError('Sin conexión');
+
+    expect(banner.shadowRoot?.querySelector('.update-banner__error')?.textContent).toContain('Sin conexión');
+
+    const handler = vi.fn();
+    window.addEventListener('update-download-requested', handler);
+    banner.shadowRoot?.querySelector<HTMLButtonElement>('[data-cy="update-banner-retry"]')?.click();
+    window.removeEventListener('update-download-requested', handler);
+
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it('a new result resets any downloading/ready/error phase back to idle', () => {
+    const banner = mount();
+    banner.result = { hasUpdate: true, latestVersion: '0.1.18', downloadUrl: 'https://example.com/apk' };
+    banner.setDownloadError('Sin conexión');
+
+    banner.result = { hasUpdate: true, latestVersion: '0.1.19', downloadUrl: 'https://example.com/apk2' };
+
+    expect(banner.shadowRoot?.querySelector('[data-cy="update-banner-download"]')).not.toBeNull();
+    expect(banner.shadowRoot?.querySelector('[data-cy="update-banner-retry"]')).toBeNull();
+  });
 });

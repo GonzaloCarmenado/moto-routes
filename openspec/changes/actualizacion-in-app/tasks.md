@@ -46,12 +46,13 @@
 
 ## 7. Plugin nativo de instalación (Rust + Kotlin)
 
-- [ ] 7.1 Nuevo módulo Rust `src-tauri/src/install_update.rs` (mismo patrón que `recording_service.rs`/`notifications.rs`), comando `install_update(path: String)`.
-- [ ] 7.2 Contraparte Kotlin: `Intent.ACTION_VIEW` sobre el APK vía el `FileProvider` ya declarado (`${applicationId}.fileprovider`), comprobando `canRequestPackageInstalls()` antes de lanzarlo.
-- [ ] 7.3 Registrar el plugin en `lib.rs` (`.plugin(install_update::init())`) y el comando en `invoke_handler!`.
-- [ ] 7.4 Añadir `android.permission.REQUEST_INSTALL_PACKAGES` a `AndroidManifest.xml`.
-- [ ] 7.5 Test Rust (`cargo test`) para la parte pura verificable: el comando rechaza cualquier ruta fuera de `$APPCACHE/updates/` (mismo criterio de validación de path que `commands::save_file`).
-- [ ] 7.6 Flujo de solicitud del permiso si no está concedido: dirige a los Ajustes del sistema para esta app concreta (mismo patrón ya usado para el permiso de ubicación).
+- [x] 7.1 Nuevo módulo Rust `src-tauri/src/install_update.rs` (mismo patrón que `recording_service.rs`/`notifications.rs`), comando `install_update(path: String)`.
+- [x] 7.2 Contraparte Kotlin `InstallUpdatePlugin.kt`: `Intent.ACTION_VIEW` sobre el APK vía el `FileProvider` ya declarado (`${applicationId}.fileprovider`), `canInstallPackages()`/`requestInstallPermission()` propios.
+- [x] 7.3 Plugin registrado en `lib.rs` (`.plugin(install_update::init())`) y los 3 comandos (`install_update`, `can_install_update_packages`, `request_install_update_permission`) en `invoke_handler!` + wrappers JS tipados en `commands.ts` (14/14 tests, tsc/ESLint limpios).
+- [x] 7.4 `android.permission.REQUEST_INSTALL_PACKAGES` añadido a `AndroidManifest.xml`.
+- [x] 7.5 Test Rust (`cargo test`): `validate_update_apk_path` rechaza traversal, directorio distinto de `updates` y nombre de fichero distinto de `update.apk` — validación sintáctica (sin `AppHandle`, mismo criterio que `save_file`). 9/9 tests Rust, clippy/fmt limpios.
+- [x] 7.6 `requestInstallUpdatePermission()`: `Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES` para esta app concreta (mismo patrón ya usado para el permiso de ubicación).
+- [x] 7.7 (no prevista, necesaria para que el flujo funcione de verdad) Cableado end-to-end: `<update-banner>` gana estados `downloading`/`ready`/`error` (progreso real, botón "Instalar", reintentar); `app-update-banner.ts::handleUpdateDownloadRequested`/`handleUpdateInstallRequested` escuchan `update-download-requested`/`update-install-requested` en `window` y orquestan descarga→instalación. **Límite real encontrada**: `Intent.ACTION_VIEW` no informa a la app si el usuario canceló la instalación o si falló por firma — el banner se queda en `ready` tras pulsar "Instalar" (ya es el estado reintentable que pide la spec, sin fase "instalando" que nunca se resolvería). 1456/1456 Vitest, tsc/ESLint limpios.
 
 ## 8. Integración end-to-end
 
