@@ -56,8 +56,8 @@
 
 ## 8. Integración end-to-end
 
-- [ ] 8.1 Cypress nuevo `update.cy.ts`: aviso visible cuando hay versión nueva (mock de la respuesta de GitHub Releases), oculto cuando no la hay, botón de descarga dispara el servicio correspondiente — la instalación real queda fuera de Cypress, se cubre en verificación manual (sección 9).
-- [ ] 8.2 Test de regresión: en modo web (sin Tauri) no se muestra el aviso ni se dispara ninguna llamada de red relacionada.
+- [x] 8.1 **Replanteada durante `apply`** (ver Risk nuevo en `design.md`): Cypress corre el build web plano, donde `isAndroidTauri()` es `false` de verdad — el mismo guard que protege producción impide simular en Cypress el estado "hay actualización" sin un puente IPC de Tauri real. El aviso visible, el botón de descarga y la orquestación completa ya están cubiertos por Vitest (`update-check.service.spec.ts`, `update-banner.element.spec.ts`, `app-update-banner.spec.ts`, 35 tests); Cypress se limita a lo que sí puede probar de verdad (tarea 8.2). El positivo real se confirma en dispositivo (sección 9).
+- [x] 8.2 Cypress nuevo `update.cy.ts`: en modo web (sin Tauri) no se muestra `<update-banner>` ni se dispara ninguna llamada de red a `api.github.com`/`github.com`/`release-assets.githubusercontent.com` — único comportamiento de este cambio verificable de verdad en Cypress. 1/1 en verde.
 
 ## 9. Verificación en dispositivo Android real
 
