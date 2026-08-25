@@ -14,6 +14,16 @@ val tauriProperties = Properties().apply {
     }
 }
 
+// Firma de release persistente (openspec/changes/actualizacion-in-app): CI decodifica
+// el keystore desde un GitHub Secret y expone estas 3 variables antes de compilar (ver
+// .github/workflows/ci.yml, step "Configure release signing keystore"). Sin ellas
+// (build local sin el secreto configurado) el buildType release sigue usando el
+// keystore de depuracion efimero de siempre, sin romper el flujo de desarrollo local.
+val releaseKeystorePath = System.getenv("ANDROID_RELEASE_KEYSTORE_PATH")
+val releaseKeystorePassword = System.getenv("ANDROID_RELEASE_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("ANDROID_RELEASE_KEY_ALIAS")
+val hasPersistentReleaseKeystore = releaseKeystorePath != null && releaseKeystorePassword != null && releaseKeyAlias != null
+
 android {
     compileSdk = 36
     namespace = "com.motoroutes.app"
@@ -24,6 +34,16 @@ android {
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+    }
+    signingConfigs {
+        if (hasPersistentReleaseKeystore) {
+            create("release") {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeystorePassword
+            }
+        }
     }
     buildTypes {
         getByName("debug") {
@@ -40,10 +60,11 @@ android {
         getByName("release") {
             isMinifyEnabled = true
             isShrinkResources = true
-            // Reutiliza el keystore de depuración efímero ya generado por AGP en cada
-            // runner de CI (sin keystore ni secreto de firma nuevo) -- ver design.md
-            // D1 de openspec/changes/optimizar-bundle-produccion.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasPersistentReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
