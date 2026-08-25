@@ -61,10 +61,12 @@
 
 ## 9. Verificación en dispositivo Android real
 
-- [ ] 9.1 Compilar e instalar en el dispositivo de pruebas la primera versión de esta feature (ya con el keystore nuevo tras la tarea 1.9).
-- [ ] 9.2 Publicar una release de prueba posterior y confirmar en el dispositivo real: aviso in-app aparece, notificación local se muestra, descarga con progreso visible, el instalador nativo se lanza y la actualización se instala **sin pedir desinstalar** — confirma que el problema de firma queda resuelto de verdad, no solo en teoría.
-- [ ] 9.3 Confirmar que cancelar el diálogo de instalación del sistema deja la app en un estado reintentable, sin volver a descargar el APK.
-- [ ] 9.4 Borrar cualquier tag/release de prueba usado en 9.1/9.2 tras confirmar.
+- [x] 9.1 Compilado e instalado en el dispositivo de pruebas (`75fe536b`) — con un bug real encontrado y corregido antes de llegar aquí: `AndroidManifest.xml` tenía un comentario XML con `--` en su interior (inválido en XML, solo permitido justo antes de `-->`), rompiendo `processUniversalReleaseMainManifest` con `SAXParseException` — habría roto cualquier build release, no solo local. Corregido y commiteado (`30b19c4`) antes de seguir.
+- [x] 9.2 Tag de prueba real (`v0.1.18-actualizacion-test`) publicado y verificado en el dispositivo real con capturas de pantalla en cada paso: aviso in-app aparece con la versión real de la release ("Nueva versión disponible: 0.1.18-actualizacion-test"), descarga con progreso real visible (3%→50%→89%→completa), botón "Instalar" dispara el flujo de permiso (Android dirige a Ajustes "Instalar aplicaciones desconocidas" automáticamente al no estar concedido, luego Google Play Protect pide analizar la app — ambos son gates del propio sistema, no de esta app), y la actualización se instala **sin pedir desinstalar** — confirmado con `adb shell dumpsys package` tras el flujo: `versionName=0.1.18-actualizacion-test`. Confirma que ADR-060 resuelve el problema de firma de verdad, no solo en teoría.
+  **Bug de CSS real encontrado por el usuario en las capturas**: el botón "Descargar"/"Instalar" del banner se ve cortado por su contenedor — pendiente de arreglar en la próxima sesión (ver tarea 9.5 nueva).
+- [ ] 9.3 Confirmar que cancelar el diálogo de instalación del sistema deja la app en un estado reintentable, sin volver a descargar el APK. **Pendiente** — la sesión se cortó justo tras confirmar la instalación con éxito, antes de probar el camino de cancelación.
+- [x] 9.4 Tag y release de prueba (`v0.1.18-actualizacion-test`) borrados tras confirmar.
+- [ ] 9.5 (nueva, encontrada en 9.2) Arreglar el recorte visual del botón de acción del banner (`update-banner.element.css`) — visible en las capturas de dispositivo real, el texto/botón queda parcialmente fuera de su contenedor. Diagnosticar con el propio `.update-banner` (probablemente `max-width`/`overflow` del contenedor fijo en `index.css` combinado con `justify-content: space-between` sin `flex-wrap`) antes de tocar nada.
 
 ## 10. Cierre
 
