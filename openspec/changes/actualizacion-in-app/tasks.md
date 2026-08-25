@@ -7,28 +7,28 @@
 - [x] 1.5 Editar `.github/workflows/ci.yml`: step nuevo que decodifica el secreto base64 a fichero en el runner efímero.
 - [x] 1.6 Editar `apps/mobile/src-tauri/gen/android/app/build.gradle.kts`: `signingConfig` del buildType `release` apunta al keystore nuevo (vía variables inyectadas por el step de CI), deja de apuntar incondicionalmente a `signingConfigs.getByName("debug")` (fallback conservado solo para builds locales sin el secreto).
 - [x] 1.7 Actualizar el cuerpo del GitHub Release publicado por `ci.yml` — quitar la advertencia actual de incompatibilidad de firma entre versiones.
-- [ ] 1.8 Tag de prueba real (p. ej. `v0.0.1-keystore-test`) para verificar que el job compila, firma con el keystore nuevo y publica correctamente; confirmar con `apksigner`/`keytool -printcert` que el certificado es el nuevo (no el de debug); borrar tag y release de prueba después.
-- [ ] 1.9 En el dispositivo de pruebas real: instalar esa release de prueba sobre la versión ya instalada (firmada con el keystore de debug antiguo) y confirmar que Android la rechaza como incompatible — es el comportamiento esperado y la última vez que debe ocurrir. Desinstalar y reinstalar limpio para dejar el dispositivo en el nuevo esquema de firma antes de seguir.
+- [x] 1.8 Tag de prueba real (`v0.0.1-keystore-test`) para verificar que el job compila, firma con el keystore nuevo y publica correctamente; confirmado con `apksigner verify --print-certs` que el certificado (`881c28dd...4d8de9`) es el nuevo, no el de debug; tag y release de prueba borrados después.
+- [x] 1.9 En el dispositivo de pruebas real (`75fe536b`): build local firmado con el keystore nuevo rechazado como `INSTALL_FAILED_UPDATE_INCOMPATIBLE` sobre la versión ya instalada (firmada con un keystore de debug antiguo) — comportamiento esperado, última vez que debe ocurrir. Desinstalado y reinstalado limpio; dispositivo ya en el nuevo esquema de firma.
 
 ## 2. Verificación de red: dominio real del asset y scope de `plugin-http`
 
-- [ ] 2.1 Investigación: petición real contra la última release del propio repo, capturar el/los host(s) reales a los que redirige la descarga del asset `.apk` (ver Open Question de `design.md`).
-- [ ] 2.2 Añadir `@tauri-apps/plugin-http` a `package.json` y su crate correspondiente a `Cargo.toml`/`lib.rs`, registrar el plugin.
-- [ ] 2.3 Configurar `capabilities/default.json` con `http:default`/`http:allow-fetch` acotado a `api.github.com` y al/los host(s) de descarga confirmados en 2.1 — sin wildcardear dominios de más.
+- [x] 2.1 Investigación: petición real contra la última release del propio repo, capturar el/los host(s) reales a los que redirige la descarga del asset `.apk` (ver Open Question de `design.md`) — confirmado: un único salto a `release-assets.githubusercontent.com`.
+- [x] 2.2 Añadir `@tauri-apps/plugin-http` a `package.json` y su crate correspondiente a `Cargo.toml`/`lib.rs`, registrar el plugin.
+- [x] 2.3 Configurar `capabilities/default.json` con `http:default` acotado a `api.github.com` (endpoint exacto de releases/latest), `github.com` (ruta de descarga exacta del repo) y `release-assets.githubusercontent.com` — sin wildcardear dominios de más. Validado compilando (`cargo build`, valida capabilities contra el schema).
 - [ ] 2.4 Confirmar durante la implementación si el plugin además exige esos hosts en `connect-src` del CSP (`tauri.conf.json`/`index.html`) y añadirlos solo si hace falta de verdad.
 
 ## 3. Comprobación de versión (`src/update/`)
 
-- [ ] 3.1 Test rojo: `update-check.service.spec.ts` — compara `app.getVersion()` contra el tag de la última release y devuelve si hay actualización disponible.
-- [ ] 3.2 Implementación mínima: `update-check.types.ts` + `update-check.service.ts`.
-- [ ] 3.3 Test + implementación: la comprobación no corre fuera de Android/Tauri (mismo criterio que el guard ya usado para seleccionar el proveedor de GPS nativo).
-- [ ] 3.4 Test + implementación: sin conexión, error de la API o rate limit → resuelve a "sin actualización disponible", sin lanzar ni bloquear el arranque.
+- [x] 3.1 Test rojo: `update-check.service.spec.ts` — compara `app.getVersion()` contra el tag de la última release y devuelve si hay actualización disponible.
+- [x] 3.2 Implementación mínima: `update-check.types.ts` + `update-check.service.ts`.
+- [x] 3.3 Test + implementación: la comprobación no corre fuera de Android/Tauri (mismo criterio que el guard ya usado para seleccionar el proveedor de GPS nativo, replicado en `update/` para no importar cruzado de `cockpit/`).
+- [x] 3.4 Test + implementación: sin conexión, error de la API/rate limit, o release sin asset `.apk` → resuelve a "sin actualización disponible", sin lanzar ni bloquear el arranque. 7/7 tests en verde, tsc/ESLint limpios.
 
 ## 4. Aviso dentro de la app
 
-- [ ] 4.1 Test rojo: `update-banner.element.spec.ts` — visible con la versión nueva cuando hay actualización disponible, oculto en caso contrario.
-- [ ] 4.2 Implementación: `update-banner.element.ts` + `.element.css` (tokens de `tokens.css`, hitbox mínima 56×56px), `data-cy="update-banner-*"` en cada elemento interactivo.
-- [ ] 4.3 Montar el banner en `app.element.ts` (mismo patrón que el resto de vistas/avisos globales ya existentes).
+- [x] 4.1 Test rojo: `update-banner.element.spec.ts` — visible con la versión nueva cuando hay actualización disponible, oculto en caso contrario.
+- [x] 4.2 Implementación: `update-banner.element.ts` + `.element.css` (tokens de `tokens.css`, hitbox mínima 56×56px), `data-cy="update-banner-*"` en cada elemento interactivo. Botón "Descargar" despacha `update-download-requested` (nuevo en `app-events.ts`) en vez de acoplar el banner a la descarga real (grupo 6). 4/4 tests nuevos en verde, tsc/ESLint limpios. Actualizado de paso `capabilities-allowlist.spec.ts` (ADR-014) con `http:default` y un test nuevo de scope exacto sin wildcard.
+- [x] 4.3 Montar el banner en `app.element.ts` — extraído a `app-update-banner.ts` (mismo patrón sin sufijo `.element` que `app-route-upload.ts`/`app-username-gate.ts`, necesario para no superar `max-statements`/`max-lines`). Comprobación best-effort en `init()`, posicionado `fixed` en `index.css` con el mismo fix de `safe-area-inset-top` ya usado para `.route-upload-snackbar`. 1425/1425 Vitest, tsc/ESLint limpios.
 
 ## 5. Notificación local
 

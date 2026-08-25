@@ -1,0 +1,42 @@
+@import '../shared/styles/tokens.css';
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--amber-soft);
+  border: 1px solid var(--amber-border);
+  border-radius: 12px;
+  color: var(--ink);
+  font-family: var(--font-ui);
+}
+
+.update-banner__message {
+  font-size: 0.95rem;
+}
+
+.update-banner__download {
+  min-width: var(--hitbox-min);
+  min-height: var(--hitbox-min);
+  padding: 0 16px;
+  background: var(--amber);
+  color: var(--bg-top);
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.update-banner__download:hover,
+.update-banner__download:focus-visible {
+  background: var(--amber-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-banner__download {
+    transition: none;
+  }
+}

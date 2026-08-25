@@ -35,6 +35,14 @@
     {
       "identifier": "fs:allow-remove",
       "allow": [{ "path": "$APPDATA/photos/**" }]
+    },
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://api.github.com/repos/crzverde/moto-routes/releases/latest" },
+        { "url": "https://github.com/crzverde/moto-routes/releases/download/*" },
+        { "url": "https://release-assets.githubusercontent.com/*" }
+      ]
     }
   ]
 }

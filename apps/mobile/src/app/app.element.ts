@@ -37,6 +37,7 @@ import type { NavBarActiveView } from '../shared/nav-bar/nav-bar.element.js';
 import { resolveUsernameGateSession } from './app-username-gate.js';
 import '../auth/username-form.element.js';
 import { USERNAME_FORM_SUCCESS_EVENT } from '../auth/username-form.types.js';
+import { mountUpdateBanner, checkForUpdateAndReflect } from './app-update-banner.js';
 
 /** Vista interna de `app-root` (7 vistas — `nav-bar` solo entiende 3, ver `navViewFor`).
  * `username-gate` es una séptima vista sin acceso desde `nav-bar` (ver nombre-usuario,
@@ -70,6 +71,7 @@ class AppRoot extends BaseElement {
   private achievementsEl: HTMLElement | null = null;
   private friendsEl: HTMLElement | null = null;
   private navBarEl: HTMLElement | null = null;
+  private updateBannerEl: HTMLElement | null = null;
   private usernameGateEl: HTMLElement | null = null;
   /** `true` mientras la cuenta con sesión activa no tiene username fijado —
    * bloquea la navegación por `<nav-bar>` (ver nombre-usuario, design.md
@@ -345,6 +347,10 @@ class AppRoot extends BaseElement {
       fetchFromApi: fetchStopTypesFromApi,
       apiBaseUrl: getApiBaseUrl(),
     });
+
+    // Comprobación de actualización (actualizacion-in-app): best-effort, igual
+    // que el resto de comprobaciones de este método — ver app-update-banner.ts.
+    if (this.updateBannerEl) checkForUpdateAndReflect(this.updateBannerEl);
   }
 
   // app-root monta las vistas en su DOM ligero (no usa Shadow DOM). El layout
@@ -381,6 +387,8 @@ class AppRoot extends BaseElement {
 
     this.navBarEl = document.createElement('nav-bar');
     this.appendChild(this.navBarEl);
+
+    this.updateBannerEl = mountUpdateBanner(this);
 
     // Estado inicial de visibilidad (cockpit visible, resto oculto).
     this.showView('cockpit');

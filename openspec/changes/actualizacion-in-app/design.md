@@ -44,4 +44,5 @@ Ver `proposal.md` para la motivación completa. Puntos de partida técnicos rele
 ## Open Questions
 
 - ¿`@tauri-apps/plugin-http` permite leer el cuerpo de la respuesta en streaming para reportar progreso real de descarga, o solo "en curso"/"completo"? No cambia el enfoque (ver Risk correspondiente) — a confirmar en la primera tarea de implementación del componente de descarga.
-- Dominio(s) exactos a los que redirige la descarga de un asset de GitHub Release en este repo concreto — no cambia el enfoque, solo el valor exacto del `scope` del plugin-http; se confirma con una petición real en la primera tarea de implementación.
+
+**Resuelta durante `apply` (tarea 2.1)**: dominio(s) de redirección del asset de GitHub Release — verificado con una petición real (`curl -sIL`) contra el asset de la release `v0.1.17` real del repo: un único salto 302 desde `github.com/crzverde/moto-routes/releases/download/...` hacia `release-assets.githubusercontent.com` (con una URL firmada de corta duración), que responde 200 directamente. `scope` del plugin-http: `api.github.com` (consulta JSON), `github.com` (origen de la descarga) y `release-assets.githubusercontent.com` (CDN real del asset) — sin wildcard.

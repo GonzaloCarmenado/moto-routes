@@ -59,6 +59,17 @@ app-root > nav-bar {
   z-index: 100;
 }
 
+/* Sin esto queda por debajo de la barra de estado en edge-to-edge, mismo
+   gotcha ya corregido para .route-upload-snackbar (subida-automatica-rutas). */
+app-root > update-banner {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 90vw;
+  z-index: 100;
+}
+
 /* ─── Pantalla de bloqueo por username sin fijar (nombre-usuario) ── */
 app-root > .app-view.username-gate {
   bottom: 0;

@@ -37,6 +37,7 @@ const KNOWN_PERMISSIONS = [
   'fs:allow-write-file',
   'fs:allow-read-file',
   'fs:allow-remove',
+  'http:default',
 ].sort();
 
 describe('src-tauri/capabilities/default.json — allowlist de permisos mínimos (ADR-014)', () => {
@@ -57,6 +58,23 @@ describe('src-tauri/capabilities/default.json — allowlist de permisos mínimos
       for (const scope of permission.allow) {
         expect(scope.path.startsWith('$APPDATA/photos')).toBe(true);
       }
+    }
+  });
+
+  it('scopes http:default to exact GitHub Releases hosts, never a wildcard (actualizacion-in-app)', () => {
+    const httpPermission = capabilities.permissions.find(
+      (p): p is { identifier: string; allow: { url: string }[] } => typeof p === 'object' && p.identifier === 'http:default',
+    );
+
+    expect(httpPermission).toBeDefined();
+    const urls = httpPermission?.allow.map((scope) => scope.url) ?? [];
+    expect(urls).toEqual([
+      'https://api.github.com/repos/crzverde/moto-routes/releases/latest',
+      'https://github.com/crzverde/moto-routes/releases/download/*',
+      'https://release-assets.githubusercontent.com/*',
+    ]);
+    for (const url of urls) {
+      expect(url).not.toContain('*.');
     }
   });
 });
