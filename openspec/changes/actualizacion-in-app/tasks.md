@@ -32,17 +32,17 @@
 
 ## 5. Notificación local
 
-- [ ] 5.1 Test rojo: no se repite la notificación para una versión ya notificada (dedupe vía `localStorage`, clave `lastNotifiedUpdateVersion`).
-- [ ] 5.2 Implementación: `update-notification.service.ts`, reutilizando `@tauri-apps/plugin-notification` ya instalado.
-- [ ] 5.3 Test + implementación: sin permiso de notificaciones concedido, el aviso dentro de la app se sigue mostrando con normalidad.
+- [x] 5.1 Test rojo: no se repite la notificación para una versión ya notificada (dedupe vía `localStorage`, clave `lastNotifiedUpdateVersion`).
+- [x] 5.2 Implementación: `update-notification.service.ts`, reutilizando `@tauri-apps/plugin-notification` ya instalado. Nunca pide el permiso (solo lo comprueba) — reutiliza el que ya pudiera existir de push (`device-token.service.ts`). Cableado en `app-update-banner.ts::checkForUpdateAndReflect` (con su propio test nuevo).
+- [x] 5.3 Test + implementación: sin permiso de notificaciones concedido, el aviso dentro de la app se sigue mostrando con normalidad. 5/5 tests nuevos + 2 de `app-update-banner.spec.ts` (nuevo, cubre también `mountUpdateBanner`), tsc/ESLint limpios.
 
 ## 6. Descarga del APK dentro de la app
 
-- [ ] 6.1 Test rojo: la descarga solo se inicia por una acción explícita del usuario, nunca automáticamente al detectar la versión.
-- [ ] 6.2 Implementación: `update-download.service.ts` — descarga vía `plugin-http`, escritura a fichero temporal en `$APPCACHE/updates/` vía `@tauri-apps/plugin-fs` (ya instalado), rename atómico solo al completar con éxito.
-- [ ] 6.3 Añadir el scope `fs:allow-write-file`/`allow-mkdir`/`allow-exists` para `$APPCACHE/updates/**` a `capabilities/default.json` (mismo patrón que `$APPDATA/photos/**` ya existente).
-- [ ] 6.4 Test + implementación: progreso de descarga expuesto al componente de UI — real si `plugin-http` permite lectura en streaming del cuerpo (confirmar según Open Question de `design.md`), indicador indeterminado si no.
-- [ ] 6.5 Test + implementación: fallo de red a mitad de descarga → error visible, reintento posible, nunca se ofrece instalar un fichero parcial.
+- [x] 6.1 Test rojo: la descarga solo se inicia por una acción explícita del usuario, nunca automáticamente al detectar la versión.
+- [x] 6.2 Implementación: `update-download.service.ts` — descarga vía `plugin-http`, escritura a fichero temporal en `$APPCACHE/updates/` vía `@tauri-apps/plugin-fs` (ya instalado), rename atómico solo al completar con éxito.
+- [x] 6.3 Scope `fs:allow-mkdir`/`allow-exists`/`allow-write-file`/`allow-remove`/`allow-rename` para `$APPCACHE/updates/**` en `capabilities/default.json` (mismo patrón que `$APPDATA/photos/**`), validado con `cargo build` contra el schema real. `capabilities-allowlist.spec.ts` actualizado (permiso nuevo + segundo prefijo de scope válido).
+- [x] 6.4 Test + implementación: progreso real de descarga vía streaming — **confirmado leyendo el código fuente instalado de `@tauri-apps/plugin-http` (`ReadableStream` real respaldado por `fetch_read_body` en Rust, no un blob único)**, resuelve la Open Question de `design.md` a favor del streaming real, sin degradar a indeterminado.
+- [x] 6.5 Test + implementación: fallo HTTP no-ok o de red → lanza sin escribir nada en disco; intento anterior incompleto (`update.apk.part`) se borra antes de empezar uno nuevo. 6/6 tests nuevos, tsc/ESLint limpios.
 
 ## 7. Plugin nativo de instalación (Rust + Kotlin)
 

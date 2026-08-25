@@ -43,6 +43,6 @@ Ver `proposal.md` para la motivación completa. Puntos de partida técnicos rele
 
 ## Open Questions
 
-- ¿`@tauri-apps/plugin-http` permite leer el cuerpo de la respuesta en streaming para reportar progreso real de descarga, o solo "en curso"/"completo"? No cambia el enfoque (ver Risk correspondiente) — a confirmar en la primera tarea de implementación del componente de descarga.
+**Resuelta durante `apply` (tarea 6.4)**: ¿`@tauri-apps/plugin-http` permite leer el cuerpo de la respuesta en streaming para reportar progreso real de descarga? **Sí** — confirmado leyendo el código fuente instalado (`node_modules/.pnpm/@tauri-apps+plugin-http@2.5.9/.../dist-js/index.js`): construye un `ReadableStream` real respaldado por llamadas IPC `fetch_read_body` en un `pull()` en bucle, no un único blob. `update-download.service.ts` usa `response.body.getReader()` directamente, con progreso exacto (`loaded`/`total` reales), sin necesidad del fallback a indicador indeterminado previsto como plan B.
 
 **Resuelta durante `apply` (tarea 2.1)**: dominio(s) de redirección del asset de GitHub Release — verificado con una petición real (`curl -sIL`) contra el asset de la release `v0.1.17` real del repo: un único salto 302 desde `github.com/crzverde/moto-routes/releases/download/...` hacia `release-assets.githubusercontent.com` (con una URL firmada de corta duración), que responde 200 directamente. `scope` del plugin-http: `api.github.com` (consulta JSON), `github.com` (origen de la descarga) y `release-assets.githubusercontent.com` (CDN real del asset) — sin wildcard.

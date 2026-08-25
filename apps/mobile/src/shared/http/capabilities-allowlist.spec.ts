@@ -37,6 +37,7 @@ const KNOWN_PERMISSIONS = [
   'fs:allow-write-file',
   'fs:allow-read-file',
   'fs:allow-remove',
+  'fs:allow-rename',
   'http:default',
 ].sort();
 
@@ -47,7 +48,7 @@ describe('src-tauri/capabilities/default.json — allowlist de permisos mínimos
     expect(actual).toEqual(KNOWN_PERMISSIONS);
   });
 
-  it('scopes every fs permission to $APPDATA/photos, never a broader path', () => {
+  it('scopes every fs permission to $APPDATA/photos or $APPCACHE/updates, never a broader path', () => {
     const fsPermissions = capabilities.permissions.filter(
       (p): p is { identifier: string; allow: { path: string }[] } =>
         typeof p === 'object' && p.identifier.startsWith('fs:'),
@@ -56,7 +57,8 @@ describe('src-tauri/capabilities/default.json — allowlist de permisos mínimos
     expect(fsPermissions.length).toBeGreaterThan(0);
     for (const permission of fsPermissions) {
       for (const scope of permission.allow) {
-        expect(scope.path.startsWith('$APPDATA/photos')).toBe(true);
+        const isKnownScope = scope.path.startsWith('$APPDATA/photos') || scope.path.startsWith('$APPCACHE/updates');
+        expect(isKnownScope).toBe(true);
       }
     }
   });
