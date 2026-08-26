@@ -33,6 +33,9 @@ apps/mobile/src-tauri/gen/android/app/google-services.json
 apps/mobile/cypress/screenshots/
 apps/mobile/cypress/videos/
 apps/mobile/cypress/downloads/
+apps/web/cypress/screenshots/
+apps/web/cypress/videos/
+apps/web/cypress/downloads/
 
 # Documentación generada
 docs/api/
