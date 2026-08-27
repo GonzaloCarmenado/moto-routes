@@ -1,6 +1,12 @@
 node_modules/
 dist/
 coverage/
+# Excepción a `dist/` de arriba: placeholder committeado obligatorio para
+# //go:embed (dashboard-reporting) — sin él, `go build`/`go vet` fallan en
+# cualquier checkout limpio (CI incluida) porque el directorio no existe.
+# Git no negaría el fichero sin negar antes el propio directorio.
+!apps/api/internal/webui/dist/
+!apps/api/internal/webui/dist/index.html
 # target/ (build output de Maven, apps/api) — sin `/` intermedio, cubre cualquier profundidad
 target/
 *.local

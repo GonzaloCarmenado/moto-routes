@@ -23,10 +23,20 @@ describe('Panel de reporting — login y sesión', () => {
   });
 
   it('credencial correcta contra el backend real: accede al panel y muestra los estados vacíos reales (backend recién levantado, sin eventos ni instantánea de host todavía)', () => {
+    // Se espera explícitamente la petición real de red (login + la propia
+    // carga de reporting-view), en vez de confiar solo en el timeout por
+    // defecto de cy.get().should() — el contenedor recién levantado por el
+    // job de CI puede tardar más que en local en responder a la primera
+    // petición real, y ese margen no debe hacer flaky el test.
+    cy.intercept('GET', '/admin/status').as('adminStatus');
+
     cy.get('[data-cy="login-input-token"]').type(VALID_TOKEN);
     cy.get('[data-cy="login-button-submit"]').click();
+    cy.wait('@adminStatus'); // petición de login (validación de la credencial)
 
     cy.get('[data-cy="app-shell-private"]').should('be.visible');
+    cy.wait('@adminStatus'); // petición real de reporting-view al montarse
+
     cy.get('[data-cy="events-list-empty-state"]').should('be.visible');
     cy.get('[data-cy="host-snapshot-empty-state"]').should('be.visible');
   });
