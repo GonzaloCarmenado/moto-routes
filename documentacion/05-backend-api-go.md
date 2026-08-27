@@ -27,39 +27,44 @@ apps/api/
     ├── routes/               # Rutas (upsert, list, detail, GPX export)
     ├── routesharing/         # Compartir ruta (invitaciones)
     ├── secretscan/           # Test que detecta secretos hardcodeados
-    └── stoptypes/            # Catálogo de tipos de parada
+    ├── stoptypes/            # Catálogo de tipos de parada
+    └── webui/                # Sirve el build de apps/web (dashboard-reporting) vía embed.FS
 ```
 
 ## Endpoints
 
-| Método | Ruta | Descripción | Auth |
-|--------|------|-------------|------|
-| GET | `/api/ping` | Health check (incluye estado de Postgres) | — |
-| GET | `/api/stop-types` | Catálogo de tipos de parada | — |
-| POST | `/api/auth/register` | Registro (+ envía verificación, rate-limited) | — |
-| POST | `/api/auth/login` | Login (exige email verificado), emite JWT (TTL 24h) | — |
-| GET | `/api/auth/me` | Perfil del usuario autenticado | JWT |
-| POST | `/api/auth/verify-email/request` | Reenvío de verificación (rate-limited) | — |
-| GET | `/api/auth/verify-email/confirm` | Confirma email (HTML mínimo) | — |
-| POST | `/api/auth/reset-password/request` | Solicita reset (rate-limited) | — |
-| GET/POST | `/api/auth/reset-password/confirm` | Formulario + confirmación de reset | — |
-| POST | `/api/routes` | Upsert de ruta (con normalización OSRM best-effort) | JWT |
-| GET | `/api/routes` | Listado de rutas | JWT |
-| GET | `/api/routes/{id}` | Detalle de ruta | JWT |
-| GET | `/api/routes/{id}/export.gpx` | Exportación GPX 1.1 | JWT |
-| POST | `/api/routes/{id}/photos` | Subida de foto (cifrada) | JWT |
-| GET | `/api/routes/{id}/photos` | Listado de fotos | JWT |
-| GET | `/api/routes/{id}/photos/{photoId}` | Descarga de foto (descifra) | JWT |
-| DELETE | `/api/routes/{id}/photos/{photoId}` | Borrado de foto | JWT |
-| POST | `/api/route-shares` | Crear invitación para compartir ruta (+push FCM) | JWT |
-| GET | `/api/route-shares/received` · `/sent` | Invitaciones recibidas/enviadas | JWT |
-| POST | `/api/route-shares/{id}/accept` · `/decline` · `/revoke` | Aceptar/declinar/revocar | JWT |
-| POST | `/api/achievements/check` | Evalúa y desbloquea logros | JWT |
-| GET | `/api/achievements` | Listado de logros + desbloqueados | JWT |
-| POST | `/api/device-tokens` | Registra token de dispositivo (FCM) | JWT |
+| Método  | Ruta                                                             | Descripción                                         | Auth |
+| -------- | ---------------------------------------------------------------- | ---------------------------------------------------- | ---- |
+| GET      | `/api/ping`                                                    | Health check (incluye estado de Postgres)            | —   |
+| GET      | `/api/stop-types`                                              | Catálogo de tipos de parada                         | —   |
+| POST     | `/api/auth/register`                                           | Registro (+ envía verificación, rate-limited)      | —   |
+| POST     | `/api/auth/login`                                              | Login (exige email verificado), emite JWT (TTL 24h)  | —   |
+| GET      | `/api/auth/me`                                                 | Perfil del usuario autenticado                       | JWT  |
+| POST     | `/api/auth/verify-email/request`                               | Reenvío de verificación (rate-limited)             | —   |
+| GET      | `/api/auth/verify-email/confirm`                               | Confirma email (HTML mínimo)                        | —   |
+| POST     | `/api/auth/reset-password/request`                             | Solicita reset (rate-limited)                        | —   |
+| GET/POST | `/api/auth/reset-password/confirm`                             | Formulario + confirmación de reset                  | —   |
+| POST     | `/api/routes`                                                  | Upsert de ruta (con normalización OSRM best-effort) | JWT  |
+| GET      | `/api/routes`                                                  | Listado de rutas                                     | JWT  |
+| GET      | `/api/routes/{id}`                                             | Detalle de ruta                                      | JWT  |
+| GET      | `/api/routes/{id}/export.gpx`                                  | Exportación GPX 1.1                                 | JWT  |
+| POST     | `/api/routes/{id}/photos`                                      | Subida de foto (cifrada)                             | JWT  |
+| GET      | `/api/routes/{id}/photos`                                      | Listado de fotos                                     | JWT  |
+| GET      | `/api/routes/{id}/photos/{photoId}`                            | Descarga de foto (descifra)                          | JWT  |
+| DELETE   | `/api/routes/{id}/photos/{photoId}`                            | Borrado de foto                                      | JWT  |
+| POST     | `/api/route-shares`                                            | Crear invitación para compartir ruta (+push FCM)    | JWT  |
+| GET      | `/api/route-shares/received` · `/sent`                      | Invitaciones recibidas/enviadas                      | JWT  |
+| POST     | `/api/route-shares/{id}/accept` · `/decline` · `/revoke` | Aceptar/declinar/revocar                             | JWT  |
+| POST     | `/api/achievements/check`                                      | Evalúa y desbloquea logros                          | JWT  |
+| GET      | `/api/achievements`                                            | Listado de logros + desbloqueados                    | JWT  |
+| POST     | `/api/device-tokens`                                           | Registra token de dispositivo (FCM)                  | JWT  |
+| GET      | `/admin/status`                                                | Eventos operacionales recientes + memoria/disco del host | Secreto propio (`ADMIN_STATUS_TOKEN`) |
+| GET      | `/dashboard/*`                                                 | Panel web (`apps/web`), servido vía `embed.FS`, mismo origen | — (login propio del panel) |
 
 Cada ruta pública que la app llama por `fetch()` cross-origin lleva `PublicCORS` y su ruta `OPTIONS`
-para el preflight.
+para el preflight. `/admin/status` y `/dashboard/*` son la excepción: nunca llevan `PublicCORS` — el
+panel se sirve desde el mismo origen que la API (ver `dashboard-reporting`, design.md), así que no lo
+necesita.
 
 ## Middleware y seguridad
 

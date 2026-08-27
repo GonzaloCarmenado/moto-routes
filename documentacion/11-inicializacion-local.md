@@ -30,8 +30,8 @@ pnpm install --frozen-lockfile
 # (opcional, para documentación) instala también está en el workspace de la raíz
 ```
 
-El workspace pnpm (`pnpm-workspace.yaml`) solo incluye `apps/mobile`; el `package.json` de la raíz
-solo gestiona `docs:*` y `husky`.
+El workspace pnpm (`pnpm-workspace.yaml`) incluye `apps/mobile` y `apps/web`; el `package.json` de la
+raíz solo gestiona `docs:*` y `husky`.
 
 ## 3. Levantar la infraestructura (Postgres + MinIO + API)
 
@@ -79,6 +79,18 @@ Para que la app hable con la API local, el valor por defecto ya es
 `VITE_API_BASE_URL=http://localhost:8080` (plantilla en `apps/mobile/.env.example`). Si necesitas otro
 host, crea `apps/mobile/.env.local` (no versionado).
 
+## 4b. Arrancar el panel web (desarrollo)
+
+```powershell
+cd apps/web
+pnpm dev   # Vite en http://localhost:4200
+```
+
+`vite.config.ts` reenvía `/api` y `/admin` a `http://localhost:8080` (la API local del paso 3) vía
+`server.proxy` — sin CORS en ningún entorno, mismo origen que en producción (donde `apps/web` se sirve
+directamente desde el binario de `apps/api` bajo `/dashboard/`, ver 05-backend-api-go.md). Para apuntar
+a otra API, sobrescribe `WEB_DEV_API_PROXY_TARGET` como variable de entorno antes de `pnpm dev`.
+
 ## 5. Tests, lint y build
 
 Desde `apps/mobile/`:
@@ -93,6 +105,16 @@ pnpm build           # tsc + vite build
 pnpm rust:test       # cargo test
 pnpm rust:lint       # cargo clippy -- -D warnings
 pnpm rust:format     # cargo fmt --check
+```
+
+Desde `apps/web/` (mismos comandos que `apps/mobile`, sin los de Rust/Tauri):
+
+```powershell
+pnpm test            # Vitest (unitarios)
+pnpm test:coverage   # Vitest con cobertura (umbral 80%)
+pnpm test:e2e        # Cypress (levanta Vite; en modo web sin sesión no llama a la API)
+pnpm lint            # ESLint
+pnpm build           # tsc + vite build
 ```
 
 Desde `apps/api/`:

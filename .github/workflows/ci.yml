@@ -146,6 +146,77 @@ jobs:
         working-directory: infra/docker
         run: docker compose down -v
 
+  quality-web:
+    name: Quality gates — Web (apps/web)
+    needs: [detect-doc-only-change]
+    if: needs.detect-doc-only-change.outputs.only-docs != 'true' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Cache Cypress binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          key: cypress-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            cypress-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (tsc)
+        working-directory: apps/web
+        run: pnpm exec tsc --noEmit
+
+      - name: ESLint
+        working-directory: apps/web
+        run: pnpm exec eslint src/ --max-warnings 0
+
+      - name: Unit tests (Vitest, with coverage)
+        working-directory: apps/web
+        run: pnpm exec vitest run --coverage
+
+      # dashboard-reporting: apps/web se sirve desde el propio binario de
+      # apps/api en producción (embed.FS bajo /dashboard/*), pero en CI se
+      # ejercita contra el dev server de Vite + la API real de docker compose
+      # (mismo patrón que quality-ts) — el proxy de vite.config.ts cubre la
+      # diferencia de origen sin CORS en ningún caso.
+      - name: Start apps/api (real backend for Cypress E2E)
+        working-directory: infra/docker
+        run: |
+          cp .env.example .env
+          sed -i "s|^PHOTO_ENCRYPTION_KEY=.*|PHOTO_ENCRYPTION_KEY=$(openssl rand -base64 32)|" .env
+          docker compose up -d --build
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/api/ping > /dev/null; then
+              echo "apps/api listo"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "apps/api no respondió a tiempo" >&2
+          docker compose logs
+          exit 1
+
+      - name: E2E tests (Cypress)
+        working-directory: apps/web
+        run: pnpm run test:e2e
+
+      - name: Stop apps/api
+        if: always()
+        working-directory: infra/docker
+        run: docker compose down -v
+
   quality-tauri:
     name: Quality gates — Tauri (Rust)
     needs: [detect-doc-only-change]

@@ -1,0 +1,74 @@
+@import '../shared/styles/tokens.css';
+
+:host {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: var(--space-5);
+}
+
+.title {
+  font-size: 22px;
+  text-align: center;
+  margin-bottom: var(--space-5);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+.field-label {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.input {
+  min-height: var(--hitbox-min);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--panel-sunken);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  padding: 0 var(--space-3);
+}
+
+.input:focus {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+.error {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--danger);
+  max-width: 320px;
+  margin: var(--space-3) auto 0;
+}
+
+.action {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  min-height: var(--hitbox-min);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--amber);
+  background: var(--amber);
+  color: var(--bg-bottom);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  margin: var(--space-4) auto 0;
+}
+
+.action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

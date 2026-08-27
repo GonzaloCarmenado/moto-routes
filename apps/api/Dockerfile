@@ -11,12 +11,29 @@
 # hardening-despliegue-servidor): el servicio no necesita privilegios de
 # superusuario para escuchar en :8080 ni para hablar con Postgres por loopback.
 
+# Build de apps/web (panel de reporting, dashboard-reporting) — contexto
+# adicional de BuildKit apuntando solo a apps/web (docker-compose.yml/.prod.yml,
+# additional_contexts), no al monorepo entero: apps/web no tiene dependencias
+# de workspace (su package.json no referencia ningún paquete `workspace:*`),
+# así que se resuelve como proyecto standalone con npm, sin necesitar el
+# pnpm-lock.yaml compartido ni el resto de apps/mobile en este contexto.
+FROM node:22-trixie AS web-build
+WORKDIR /web
+COPY --from=web package.json ./
+RUN npm install
+COPY --from=web . .
+RUN npm run build
+
 FROM golang:1.25-trixie AS build
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
+# Sobrescribe el placeholder committeado (ver internal/webui/dist/) con el
+# build real antes de compilar — //go:embed exige que el directorio exista en
+# tiempo de compilación (ver dashboard-reporting, tasks.md 4.3).
+COPY --from=web-build /web/dist ./internal/webui/dist
 RUN CGO_ENABLED=0 go build -o /app/bin/api ./cmd/api
 
 FROM debian:trixie-slim AS runtime

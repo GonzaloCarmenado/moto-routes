@@ -30,6 +30,7 @@ import (
 	"github.com/crzverde/moto-routes/apps/api/internal/stoptypes"
 	"github.com/crzverde/moto-routes/apps/api/internal/sysmetrics"
 	"github.com/crzverde/moto-routes/apps/api/internal/userdirectory"
+	"github.com/crzverde/moto-routes/apps/api/internal/webui"
 )
 
 // accessTokenTTL es la duración de validez del access token de sesión emitido
@@ -296,6 +297,11 @@ func main() {
 
 	sysMetricsMonitor := sysmetrics.NewMonitor(cfg.SysMetricsPath, cfg.SysMetricsAlertThresholdPercent, eventsLogger)
 	router.Get("/admin/status", adminstatus.Handler(eventsLogger, cfg.AdminStatusToken, sysMetricsMonitor).ServeHTTP)
+
+	// Panel web (apps/web) — mismo origen que /api/* y /admin/status, sin CORS
+	// (ver dashboard-reporting, design.md Decisión 1).
+	router.Handle("/dashboard", http.RedirectHandler("/dashboard/", http.StatusMovedPermanently))
+	router.Handle("/dashboard/*", webui.Handler("/dashboard"))
 
 	router.Post("/api/webhooks/resend", email.WebhookHandler(eventsLogger, cfg.ResendWebhookSecret))
 

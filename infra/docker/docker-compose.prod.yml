@@ -26,6 +26,10 @@ services:
   api:
     build:
       context: ../../apps/api
+      # dashboard-reporting: apps/web se construye como contexto adicional de
+      # BuildKit (ver Dockerfile) — no forma parte del contexto principal.
+      additional_contexts:
+        web: ../../apps/web
     # El PostgreSQL de producción es nativo del propio servidor (no un contenedor),
     # escuchando solo en 127.0.0.1/::1. network_mode: host hace que ese loopback
     # sea el mismo dentro y fuera del contenedor, sin tocar pg_hba.conf/postgresql.conf.

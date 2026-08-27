@@ -1,0 +1,95 @@
+/**
+ * MOTO ROUTES — Design Tokens (panel web)
+ * Subconjunto de `apps/mobile/src/shared/styles/tokens.css` — mismos colores
+ * OKLCH y mismo sistema "Asfalto Nocturno" (modo oscuro obligatorio), pero sin
+ * las fuentes autoalojadas: este panel no tiene el requisito CSP font-src
+ * 'self' offline de una app Tauri, así que usa pilas de fuentes de sistema en
+ * vez de duplicar los ficheros .woff2. Duplicado en vez de importado desde
+ * apps/mobile — ver justificación en shared/base-element.ts.
+ *
+ * ⚠️ NUNCA hardcodear estos valores. Usar var(--token) siempre.
+ */
+
+:root {
+  --bg-top:       oklch(22% 0.018 50);
+  --bg-bottom:    oklch(14% 0.014 50);
+  --panel:        oklch(24% 0.018 50);
+  --panel-sunken: oklch(20% 0.016 50);
+  --bezel:        oklch(9% 0.01 50);
+
+  --ink:          oklch(92% 0.01 60);
+  --ink-soft:     oklch(70% 0.015 55);
+  --ink-faint:    oklch(55% 0.02 55);
+
+  --amber:        oklch(74% 0.17 48);
+  --amber-strong: oklch(58% 0.17 45);
+  --amber-soft:   oklch(28% 0.03 45);
+  --amber-border: oklch(45% 0.14 45 / 0.5);
+
+  --line:         oklch(30% 0.02 50);
+  --line-strong:  oklch(45% 0.02 55);
+
+  --danger:       oklch(55% 0.18 30);
+  --danger-soft:  oklch(28% 0.05 30);
+  --success:      oklch(65% 0.13 140);
+  --warning:      oklch(75% 0.14 80);
+  --warning-soft: oklch(28% 0.04 80);
+
+  --font-display: "Georgia", serif;
+  --font-ui:      "Segoe UI", system-ui, sans-serif;
+  --font-data:    "Segoe UI", system-ui, sans-serif;
+
+  /* Hitbox mínima — misma regla que apps/mobile (CLAUDE.md, "Reglas de edición"),
+     no ligada solo al uso con guantes: aplica siempre. */
+  --hitbox-min: 56px;
+
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-pill: 999px;
+
+  --shadow-card: 0 1px 2px oklch(20% 0.02 50 / 0.06), 0 6px 16px oklch(20% 0.02 50 / 0.08);
+  --shadow-btn:  0 2px 6px oklch(20% 0.02 50 / 0.18);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --transition-fast:   0.15s ease;
+  --transition-smooth: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Estas reglas son las únicas que llegan de forma fiable a dentro de un shadow
+   root — ver mismo comentario en apps/mobile/tokens.css. */
+h1, h2, h3, h4 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+p { margin: 0; }
+
+a {
+  color: var(--amber);
+  text-decoration: none;
+}
+a:hover {
+  color: oklch(80% 0.15 48);
+  text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
