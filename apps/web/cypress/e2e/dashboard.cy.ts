@@ -22,7 +22,14 @@ describe('Panel de reporting — login y sesión', () => {
     cy.get('[data-cy="app-shell-private"]').should('not.exist');
   });
 
-  it('credencial correcta contra el backend real: accede al panel y muestra los estados vacíos reales (backend recién levantado, sin eventos ni instantánea de host todavía)', () => {
+  it('credencial correcta contra el backend real: accede al panel y muestra los datos reales del backend recién levantado (un evento real de FCM deshabilitado, sin instantánea de host todavía)', () => {
+    // Un backend recién levantado con `.env.example` (sin FCM_SERVICE_ACCOUNT_JSON
+    // real, tal cual lo levanta este job de CI) SIEMPRE registra un evento real
+    // de aviso al arrancar (`main.go::buildNotifier` → degraded_feature, "FCM
+    // disabled") — no hay forma de tener un backend "vacío de eventos de verdad"
+    // en este entorno sin una credencial de Firebase real. La instantánea de
+    // host SÍ es un vacío real: SYSMETRICS_PATH nunca se configura aquí.
+    //
     // Se espera explícitamente la petición real de red (login + la propia
     // carga de reporting-view), en vez de confiar solo en el timeout por
     // defecto de cy.get().should() — el contenedor recién levantado por el
@@ -37,7 +44,8 @@ describe('Panel de reporting — login y sesión', () => {
     cy.get('[data-cy="app-shell-private"]').should('be.visible');
     cy.wait('@adminStatus'); // petición real de reporting-view al montarse
 
-    cy.get('[data-cy="events-list-empty-state"]').should('be.visible');
+    cy.get('[data-cy="events-list-item"]').should('have.length', 1);
+    cy.get('[data-cy="events-list-item"]').should('contain.text', 'FCM_SERVICE_ACCOUNT_JSON not set');
     cy.get('[data-cy="host-snapshot-empty-state"]').should('be.visible');
   });
 
