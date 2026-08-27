@@ -250,5 +250,34 @@ describe('job build-and-release', () => {
     expect(job()).toMatch(/action-gh-release@v\d/);
     expect(job()).toMatch(/app-universal-release\.apk/);
     expect(job()).not.toMatch(/APK de depuración \(sin firma de release\)/);
+    expect(job()).not.toMatch(/keystore de depuración efímero generado en el runner/);
+  });
+
+  it('configures the persistent release signing keystore from GitHub Secrets, before building the APK', () => {
+    const match = /name: Configure release signing keystore[\s\S]*?name: Build APK/.exec(job());
+    expect(match).not.toBeNull();
+    const step = match?.[0] ?? '';
+    expect(step).toMatch(/secrets\.ANDROID_RELEASE_KEYSTORE_BASE64/);
+    expect(step).toMatch(/secrets\.ANDROID_RELEASE_KEYSTORE_PASSWORD/);
+    expect(step).toMatch(/secrets\.ANDROID_RELEASE_KEY_ALIAS/);
+    expect(step).toMatch(/base64 -d/);
+  });
+
+  it('fails the job explicitly if the release keystore secrets are missing, instead of falling back to debug silently', () => {
+    const match = /name: Configure release signing keystore[\s\S]*?run: \|([\s\S]*?)\r?\n {6}- name:/.exec(job());
+    expect(match).not.toBeNull();
+    const step = match?.[1] ?? '';
+    expect(step).toMatch(/-z "\$ANDROID_RELEASE_KEYSTORE_BASE64"/);
+    expect(step).toMatch(/-z "\$ANDROID_RELEASE_KEYSTORE_PASSWORD"/);
+    expect(step).toMatch(/-z "\$ANDROID_RELEASE_KEY_ALIAS"/);
+    expect(step).toMatch(/exit 1/);
+  });
+
+  it('exposes the decoded keystore path/password/alias to later steps via GITHUB_ENV', () => {
+    const match = /name: Configure release signing keystore[\s\S]*?name: Build APK/.exec(job());
+    const step = match?.[0] ?? '';
+    expect(step).toMatch(/ANDROID_RELEASE_KEYSTORE_PATH=.*>> "\$GITHUB_ENV"/);
+    expect(step).toMatch(/ANDROID_RELEASE_KEYSTORE_PASSWORD=.*>> "\$GITHUB_ENV"/);
+    expect(step).toMatch(/ANDROID_RELEASE_KEY_ALIAS=.*>> "\$GITHUB_ENV"/);
   });
 });

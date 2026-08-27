@@ -494,6 +494,28 @@ jobs:
           fi
           echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 -d > apps/mobile/src-tauri/gen/android/app/google-services.json
 
+      # Firma de release persistente (openspec/changes/actualizacion-in-app): sin esto,
+      # cada runner firmaba con un keystore de depuracion efimero distinto (ADR-031/047),
+      # rompiendo cualquier actualizacion in-app por incompatibilidad de firma. Falla
+      # explicitamente si falta cualquiera de los 3 secretos, en vez de caer en silencio
+      # al keystore de debug -- ese fallback SI existe en build.gradle.kts, pero solo
+      # para builds locales sin el secreto configurado, nunca en este job.
+      - name: Configure release signing keystore
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+        run: |
+          if [ -z "$ANDROID_RELEASE_KEYSTORE_BASE64" ] || [ -z "$ANDROID_RELEASE_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_RELEASE_KEY_ALIAS" ]; then
+            echo "Falta ANDROID_RELEASE_KEYSTORE_BASE64/_PASSWORD/_ALIAS -- sin los 3 secretos configurados, el APK release no puede firmarse con el keystore persistente. Configuralos en Settings > Secrets and variables > Actions." >&2
+            exit 1
+          fi
+          KEYSTORE_PATH="$RUNNER_TEMP/release.keystore"
+          echo "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
+          echo "ANDROID_RELEASE_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+          echo "ANDROID_RELEASE_KEYSTORE_PASSWORD=$ANDROID_RELEASE_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ANDROID_RELEASE_KEY_ALIAS=$ANDROID_RELEASE_KEY_ALIAS" >> "$GITHUB_ENV"
+
       - name: Build APK (Tauri CLI — never a manual cargo build, see memory/context.md)
         working-directory: apps/mobile
         run: pnpm tauri android build --target aarch64
@@ -592,10 +614,10 @@ jobs:
           files: release/*.apk
           body: |
             APK release (minificado, sin sourcemaps) — instalar con `adb install -r`.
-            Sigue firmado con un keystore de depuración efímero generado en el runner
-            (sin firma de release real, ver ADR-031): si la instalación falla por
-            incompatibilidad de firma sobre una versión anterior, desinstala primero
-            (`adb uninstall com.motoroutes.app`).
+            Firmado con el keystore de release persistente del proyecto (mismo
+            certificado en todas las releases desde `actualizacion-in-app`): se
+            puede instalar como actualización directa sobre cualquier versión
+            anterior ya firmada con este mismo keystore, sin desinstalar antes.
 
   # ADR-044 (despliegue-automatico-backend): despliega apps/api en el servidor
   # de producción al publicar una release, revirtiendo deliberadamente la

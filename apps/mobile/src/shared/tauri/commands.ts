@@ -90,6 +90,29 @@ export async function clearPendingTokenRefresh(): Promise<void> {
   }
 }
 
+/** Lanza el instalador nativo de Android sobre el APK ya descargado en `path` (actualizacion-in-app). Propaga el error (ruta inválida, sin plugin) — a diferencia del resto de wrappers de esta sección, el llamador necesita saber si falló para poder mostrarlo. */
+export async function installUpdate(path: string): Promise<void> {
+  return invoke('install_update', { path });
+}
+
+/** `true` si la app puede instalar APKs fuera de Play Store ahora mismo — `true` por defecto si el comando no está disponible (web/desktop, donde esta restricción ni existe). */
+export async function canInstallUpdatePackages(): Promise<boolean> {
+  try {
+    return await invoke<boolean>('can_install_update_packages');
+  } catch {
+    return true;
+  }
+}
+
+/** Dirige al usuario a los Ajustes del sistema para conceder el permiso de instalar APKs externos para esta app. No-op si el comando no está disponible. */
+export async function requestInstallUpdatePermission(): Promise<void> {
+  try {
+    await invoke('request_install_update_permission');
+  } catch {
+    // Ignorar error si no está disponible (web/desktop)
+  }
+}
+
 // Ejemplo: comando greet en Rust
 /** Argumentos del comando `greet` (ejemplo del backend Rust). */
 export interface GreetArgs {

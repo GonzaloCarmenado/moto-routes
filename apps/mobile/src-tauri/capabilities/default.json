@@ -18,15 +18,25 @@
     "dialog:allow-save",
     {
       "identifier": "fs:allow-mkdir",
-      "allow": [{ "path": "$APPDATA/photos" }, { "path": "$APPDATA/photos/**" }]
+      "allow": [
+        { "path": "$APPDATA/photos" },
+        { "path": "$APPDATA/photos/**" },
+        { "path": "$APPCACHE/updates" },
+        { "path": "$APPCACHE/updates/**" }
+      ]
     },
     {
       "identifier": "fs:allow-exists",
-      "allow": [{ "path": "$APPDATA/photos" }, { "path": "$APPDATA/photos/**" }]
+      "allow": [
+        { "path": "$APPDATA/photos" },
+        { "path": "$APPDATA/photos/**" },
+        { "path": "$APPCACHE/updates" },
+        { "path": "$APPCACHE/updates/**" }
+      ]
     },
     {
       "identifier": "fs:allow-write-file",
-      "allow": [{ "path": "$APPDATA/photos/**" }]
+      "allow": [{ "path": "$APPDATA/photos/**" }, { "path": "$APPCACHE/updates/**" }]
     },
     {
       "identifier": "fs:allow-read-file",
@@ -34,7 +44,19 @@
     },
     {
       "identifier": "fs:allow-remove",
-      "allow": [{ "path": "$APPDATA/photos/**" }]
+      "allow": [{ "path": "$APPDATA/photos/**" }, { "path": "$APPCACHE/updates/**" }]
+    },
+    {
+      "identifier": "fs:allow-rename",
+      "allow": [{ "path": "$APPCACHE/updates/**" }]
+    },
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://api.github.com/repos/crzverde/moto-routes/releases/latest" },
+        { "url": "https://github.com/crzverde/moto-routes/releases/download/*" },
+        { "url": "https://release-assets.githubusercontent.com/*" }
+      ]
     }
   ]
 }

@@ -19,6 +19,8 @@ export const APP_EVENTS = {
   BACK_TO_LIST: 'back-to-list',
   AUTH_LOGGED_IN: 'auth-logged-in',
   ROUTE_SAVED: 'route-saved',
+  UPDATE_DOWNLOAD_REQUESTED: 'update-download-requested',
+  UPDATE_INSTALL_REQUESTED: 'update-install-requested',
 } as const;
 
 /** Forma del `detail` de cada evento. `undefined` = evento sin payload. */
@@ -41,6 +43,14 @@ export interface AppEventDetailMap {
    * (separación de dominios ya existente); `app-root` escucha esto para intentar
    * la subida automática (ver subida-automatica-rutas, design.md D1). */
   'route-saved': { routeId: string };
+  /** Despachado desde `<update-banner>` al pulsar "Descargar" (actualizacion-in-app,
+   * design.md D7) — `app-root` escucha esto para delegar en el servicio de descarga,
+   * mismo patrón ya usado para `route-saved`/`app-route-upload.ts`. */
+  'update-download-requested': { downloadUrl: string; latestVersion: string };
+  /** Despachado desde `<update-banner>` al pulsar "Instalar" tras una descarga
+   * completa. Sin payload: el orquestador (`app-update-download.ts`) ya conoce
+   * la ruta del APK descargado, la propia descarga la generó. */
+  'update-install-requested': undefined;
 }
 
 /** Nombre de evento de navegación (clave de `AppEventDetailMap`). */

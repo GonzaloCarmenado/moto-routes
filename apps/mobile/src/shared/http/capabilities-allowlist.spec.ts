@@ -37,6 +37,8 @@ const KNOWN_PERMISSIONS = [
   'fs:allow-write-file',
   'fs:allow-read-file',
   'fs:allow-remove',
+  'fs:allow-rename',
+  'http:default',
 ].sort();
 
 describe('src-tauri/capabilities/default.json — allowlist de permisos mínimos (ADR-014)', () => {
@@ -46,7 +48,7 @@ describe('src-tauri/capabilities/default.json — allowlist de permisos mínimos
     expect(actual).toEqual(KNOWN_PERMISSIONS);
   });
 
-  it('scopes every fs permission to $APPDATA/photos, never a broader path', () => {
+  it('scopes every fs permission to $APPDATA/photos or $APPCACHE/updates, never a broader path', () => {
     const fsPermissions = capabilities.permissions.filter(
       (p): p is { identifier: string; allow: { path: string }[] } =>
         typeof p === 'object' && p.identifier.startsWith('fs:'),
@@ -55,8 +57,26 @@ describe('src-tauri/capabilities/default.json — allowlist de permisos mínimos
     expect(fsPermissions.length).toBeGreaterThan(0);
     for (const permission of fsPermissions) {
       for (const scope of permission.allow) {
-        expect(scope.path.startsWith('$APPDATA/photos')).toBe(true);
+        const isKnownScope = scope.path.startsWith('$APPDATA/photos') || scope.path.startsWith('$APPCACHE/updates');
+        expect(isKnownScope).toBe(true);
       }
+    }
+  });
+
+  it('scopes http:default to exact GitHub Releases hosts, never a wildcard (actualizacion-in-app)', () => {
+    const httpPermission = capabilities.permissions.find(
+      (p): p is { identifier: string; allow: { url: string }[] } => typeof p === 'object' && p.identifier === 'http:default',
+    );
+
+    expect(httpPermission).toBeDefined();
+    const urls = httpPermission?.allow.map((scope) => scope.url) ?? [];
+    expect(urls).toEqual([
+      'https://api.github.com/repos/crzverde/moto-routes/releases/latest',
+      'https://github.com/crzverde/moto-routes/releases/download/*',
+      'https://release-assets.githubusercontent.com/*',
+    ]);
+    for (const url of urls) {
+      expect(url).not.toContain('*.');
     }
   });
 });

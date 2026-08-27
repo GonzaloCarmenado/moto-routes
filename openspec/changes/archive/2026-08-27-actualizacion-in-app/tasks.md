@@ -1,0 +1,75 @@
+## 1. Keystore de release y firma en CI
+
+- [x] 1.1 Generar el keystore de release (`keytool -genkeypair`) junto con el usuario; confirmar explícitamente que ha guardado su propia copia de seguridad fuera del repo antes de continuar.
+- [x] 1.2 Documentar en `design.md`/la ADR nueva (tarea 10.2) los nombres de los secretos (`ANDROID_RELEASE_KEYSTORE_BASE64`, `ANDROID_RELEASE_KEYSTORE_PASSWORD`, `ANDROID_RELEASE_KEY_ALIAS` — 3, no 4: PKCS12 exige la misma contraseña para keystore y clave) — nunca sus valores.
+- [x] 1.3 Añadir los 3 secretos a GitHub Secrets del repositorio.
+- [x] 1.4 Test rojo en `src/shared/ci/ci-workflow.spec.ts` (+ `android-release-signing.spec.ts` nuevo para `build.gradle.kts`): el job `build-and-release` decodifica el keystore desde secret antes de firmar, y el workflow falla explícitamente si el secreto no está disponible (sin caer al keystore de debug en silencio).
+- [x] 1.5 Editar `.github/workflows/ci.yml`: step nuevo que decodifica el secreto base64 a fichero en el runner efímero.
+- [x] 1.6 Editar `apps/mobile/src-tauri/gen/android/app/build.gradle.kts`: `signingConfig` del buildType `release` apunta al keystore nuevo (vía variables inyectadas por el step de CI), deja de apuntar incondicionalmente a `signingConfigs.getByName("debug")` (fallback conservado solo para builds locales sin el secreto).
+- [x] 1.7 Actualizar el cuerpo del GitHub Release publicado por `ci.yml` — quitar la advertencia actual de incompatibilidad de firma entre versiones.
+- [x] 1.8 Tag de prueba real (`v0.0.1-keystore-test`) para verificar que el job compila, firma con el keystore nuevo y publica correctamente; confirmado con `apksigner verify --print-certs` que el certificado (`881c28dd...4d8de9`) es el nuevo, no el de debug; tag y release de prueba borrados después.
+- [x] 1.9 En el dispositivo de pruebas real (`75fe536b`): build local firmado con el keystore nuevo rechazado como `INSTALL_FAILED_UPDATE_INCOMPATIBLE` sobre la versión ya instalada (firmada con un keystore de debug antiguo) — comportamiento esperado, última vez que debe ocurrir. Desinstalado y reinstalado limpio; dispositivo ya en el nuevo esquema de firma.
+
+## 2. Verificación de red: dominio real del asset y scope de `plugin-http`
+
+- [x] 2.1 Investigación: petición real contra la última release del propio repo, capturar el/los host(s) reales a los que redirige la descarga del asset `.apk` (ver Open Question de `design.md`) — confirmado: un único salto a `release-assets.githubusercontent.com`.
+- [x] 2.2 Añadir `@tauri-apps/plugin-http` a `package.json` y su crate correspondiente a `Cargo.toml`/`lib.rs`, registrar el plugin.
+- [x] 2.3 Configurar `capabilities/default.json` con `http:default` acotado a `api.github.com` (endpoint exacto de releases/latest), `github.com` (ruta de descarga exacta del repo) y `release-assets.githubusercontent.com` — sin wildcardear dominios de más. Validado compilando (`cargo build`, valida capabilities contra el schema).
+- [x] 2.4 Confirmado que **no** hace falta: `connect-src` en `tauri.conf.json` no incluye `api.github.com`/`github.com`/`release-assets.githubusercontent.com` y nunca se añadieron — la descarga real funcionó de punta a punta en dispositivo (9.2, progreso real 3%→50%→89%→completa). Confirma empíricamente lo previsto en `design.md`: las peticiones de `plugin-http` las resuelve Rust vía IPC (`reqwest`), nunca pasan por el `fetch` del WebView, así que el CSP de la página no las restringe.
+
+## 3. Comprobación de versión (`src/update/`)
+
+- [x] 3.1 Test rojo: `update-check.service.spec.ts` — compara `app.getVersion()` contra el tag de la última release y devuelve si hay actualización disponible.
+- [x] 3.2 Implementación mínima: `update-check.types.ts` + `update-check.service.ts`.
+- [x] 3.3 Test + implementación: la comprobación no corre fuera de Android/Tauri (mismo criterio que el guard ya usado para seleccionar el proveedor de GPS nativo, replicado en `update/` para no importar cruzado de `cockpit/`).
+- [x] 3.4 Test + implementación: sin conexión, error de la API/rate limit, o release sin asset `.apk` → resuelve a "sin actualización disponible", sin lanzar ni bloquear el arranque. 7/7 tests en verde, tsc/ESLint limpios.
+
+## 4. Aviso dentro de la app
+
+- [x] 4.1 Test rojo: `update-banner.element.spec.ts` — visible con la versión nueva cuando hay actualización disponible, oculto en caso contrario.
+- [x] 4.2 Implementación: `update-banner.element.ts` + `.element.css` (tokens de `tokens.css`, hitbox mínima 56×56px), `data-cy="update-banner-*"` en cada elemento interactivo. Botón "Descargar" despacha `update-download-requested` (nuevo en `app-events.ts`) en vez de acoplar el banner a la descarga real (grupo 6). 4/4 tests nuevos en verde, tsc/ESLint limpios. Actualizado de paso `capabilities-allowlist.spec.ts` (ADR-014) con `http:default` y un test nuevo de scope exacto sin wildcard.
+- [x] 4.3 Montar el banner en `app.element.ts` — extraído a `app-update-banner.ts` (mismo patrón sin sufijo `.element` que `app-route-upload.ts`/`app-username-gate.ts`, necesario para no superar `max-statements`/`max-lines`). Comprobación best-effort en `init()`, posicionado `fixed` en `index.css` con el mismo fix de `safe-area-inset-top` ya usado para `.route-upload-snackbar`. 1425/1425 Vitest, tsc/ESLint limpios.
+
+## 5. Notificación local
+
+- [x] 5.1 Test rojo: no se repite la notificación para una versión ya notificada (dedupe vía `localStorage`, clave `lastNotifiedUpdateVersion`).
+- [x] 5.2 Implementación: `update-notification.service.ts`, reutilizando `@tauri-apps/plugin-notification` ya instalado. Nunca pide el permiso (solo lo comprueba) — reutiliza el que ya pudiera existir de push (`device-token.service.ts`). Cableado en `app-update-banner.ts::checkForUpdateAndReflect` (con su propio test nuevo).
+- [x] 5.3 Test + implementación: sin permiso de notificaciones concedido, el aviso dentro de la app se sigue mostrando con normalidad. 5/5 tests nuevos + 2 de `app-update-banner.spec.ts` (nuevo, cubre también `mountUpdateBanner`), tsc/ESLint limpios.
+
+## 6. Descarga del APK dentro de la app
+
+- [x] 6.1 Test rojo: la descarga solo se inicia por una acción explícita del usuario, nunca automáticamente al detectar la versión.
+- [x] 6.2 Implementación: `update-download.service.ts` — descarga vía `plugin-http`, escritura a fichero temporal en `$APPCACHE/updates/` vía `@tauri-apps/plugin-fs` (ya instalado), rename atómico solo al completar con éxito.
+- [x] 6.3 Scope `fs:allow-mkdir`/`allow-exists`/`allow-write-file`/`allow-remove`/`allow-rename` para `$APPCACHE/updates/**` en `capabilities/default.json` (mismo patrón que `$APPDATA/photos/**`), validado con `cargo build` contra el schema real. `capabilities-allowlist.spec.ts` actualizado (permiso nuevo + segundo prefijo de scope válido).
+- [x] 6.4 Test + implementación: progreso real de descarga vía streaming — **confirmado leyendo el código fuente instalado de `@tauri-apps/plugin-http` (`ReadableStream` real respaldado por `fetch_read_body` en Rust, no un blob único)**, resuelve la Open Question de `design.md` a favor del streaming real, sin degradar a indeterminado.
+- [x] 6.5 Test + implementación: fallo HTTP no-ok o de red → lanza sin escribir nada en disco; intento anterior incompleto (`update.apk.part`) se borra antes de empezar uno nuevo. 6/6 tests nuevos, tsc/ESLint limpios.
+
+## 7. Plugin nativo de instalación (Rust + Kotlin)
+
+- [x] 7.1 Nuevo módulo Rust `src-tauri/src/install_update.rs` (mismo patrón que `recording_service.rs`/`notifications.rs`), comando `install_update(path: String)`.
+- [x] 7.2 Contraparte Kotlin `InstallUpdatePlugin.kt`: `Intent.ACTION_VIEW` sobre el APK vía el `FileProvider` ya declarado (`${applicationId}.fileprovider`), `canInstallPackages()`/`requestInstallPermission()` propios.
+- [x] 7.3 Plugin registrado en `lib.rs` (`.plugin(install_update::init())`) y los 3 comandos (`install_update`, `can_install_update_packages`, `request_install_update_permission`) en `invoke_handler!` + wrappers JS tipados en `commands.ts` (14/14 tests, tsc/ESLint limpios).
+- [x] 7.4 `android.permission.REQUEST_INSTALL_PACKAGES` añadido a `AndroidManifest.xml`.
+- [x] 7.5 Test Rust (`cargo test`): `validate_update_apk_path` rechaza traversal, directorio distinto de `updates` y nombre de fichero distinto de `update.apk` — validación sintáctica (sin `AppHandle`, mismo criterio que `save_file`). 9/9 tests Rust, clippy/fmt limpios.
+- [x] 7.6 `requestInstallUpdatePermission()`: `Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES` para esta app concreta (mismo patrón ya usado para el permiso de ubicación).
+- [x] 7.7 (no prevista, necesaria para que el flujo funcione de verdad) Cableado end-to-end: `<update-banner>` gana estados `downloading`/`ready`/`error` (progreso real, botón "Instalar", reintentar); `app-update-banner.ts::handleUpdateDownloadRequested`/`handleUpdateInstallRequested` escuchan `update-download-requested`/`update-install-requested` en `window` y orquestan descarga→instalación. **Límite real encontrada**: `Intent.ACTION_VIEW` no informa a la app si el usuario canceló la instalación o si falló por firma — el banner se queda en `ready` tras pulsar "Instalar" (ya es el estado reintentable que pide la spec, sin fase "instalando" que nunca se resolvería). 1456/1456 Vitest, tsc/ESLint limpios.
+
+## 8. Integración end-to-end
+
+- [x] 8.1 **Replanteada durante `apply`** (ver Risk nuevo en `design.md`): Cypress corre el build web plano, donde `isAndroidTauri()` es `false` de verdad — el mismo guard que protege producción impide simular en Cypress el estado "hay actualización" sin un puente IPC de Tauri real. El aviso visible, el botón de descarga y la orquestación completa ya están cubiertos por Vitest (`update-check.service.spec.ts`, `update-banner.element.spec.ts`, `app-update-banner.spec.ts`, 35 tests); Cypress se limita a lo que sí puede probar de verdad (tarea 8.2). El positivo real se confirma en dispositivo (sección 9).
+- [x] 8.2 Cypress nuevo `update.cy.ts`: en modo web (sin Tauri) no se muestra `<update-banner>` ni se dispara ninguna llamada de red a `api.github.com`/`github.com`/`release-assets.githubusercontent.com` — único comportamiento de este cambio verificable de verdad en Cypress. 1/1 en verde.
+
+## 9. Verificación en dispositivo Android real
+
+- [x] 9.1 Compilado e instalado en el dispositivo de pruebas (`75fe536b`) — con un bug real encontrado y corregido antes de llegar aquí: `AndroidManifest.xml` tenía un comentario XML con `--` en su interior (inválido en XML, solo permitido justo antes de `-->`), rompiendo `processUniversalReleaseMainManifest` con `SAXParseException` — habría roto cualquier build release, no solo local. Corregido y commiteado (`30b19c4`) antes de seguir.
+- [x] 9.2 Tag de prueba real (`v0.1.18-actualizacion-test`) publicado y verificado en el dispositivo real con capturas de pantalla en cada paso: aviso in-app aparece con la versión real de la release ("Nueva versión disponible: 0.1.18-actualizacion-test"), descarga con progreso real visible (3%→50%→89%→completa), botón "Instalar" dispara el flujo de permiso (Android dirige a Ajustes "Instalar aplicaciones desconocidas" automáticamente al no estar concedido, luego Google Play Protect pide analizar la app — ambos son gates del propio sistema, no de esta app), y la actualización se instala **sin pedir desinstalar** — confirmado con `adb shell dumpsys package` tras el flujo: `versionName=0.1.18-actualizacion-test`. Confirma que ADR-061 resuelve el problema de firma de verdad, no solo en teoría.
+  **Bug de CSS real encontrado por el usuario en las capturas**: el botón "Descargar"/"Instalar" del banner se ve cortado por su contenedor — pendiente de arreglar en la próxima sesión (ver tarea 9.5 nueva).
+- [x] 9.3 Confirmado en dispositivo real (`75fe536b`, release `v0.1.19-actualizacion-cancel-test` — tag repusheado tras encontrar el run anterior huérfano, 0 jobs tras 24h en cola, no relacionado con la incidencia de GitHub Actions de la sesión previa): al cancelar el diálogo de instalación del sistema, el banner vuelve al estado reintentable (botón "Instalar" de nuevo disponible), sin disparar una nueva descarga del APK — reutiliza el fichero ya descargado. Sin comportamiento inesperado. Tag y release de prueba borrados tras confirmar (mismo patrón que 9.4).
+- [x] 9.4 Tag y release de prueba (`v0.1.18-actualizacion-test`) borrados tras confirmar.
+- [x] 9.5 (nueva, encontrada en 9.2) Arreglar el recorte visual del botón de acción del banner (`update-banner.element.css`) — visible en las capturas de dispositivo real, el texto/botón queda parcialmente fuera de su contenedor. Causa confirmada: `justify-content: space-between` sin `flex-wrap` en `.update-banner`, combinado con el `max-width: 90vw` del host fijo en `index.css` — cuando el mensaje (con la versión larga) más el botón no caben en 90vw, el botón se comprimía en vez de que el mensaje pasara a una segunda línea. Corregido con `flex-wrap: wrap` en `.update-banner`, `flex: 1 1 auto; min-width: 0` en `.update-banner__message` (para que el texto ceda espacio/rompa antes que el botón) y `flex-shrink: 0` en `.update-banner__action` (el botón nunca se comprime). Sin tests de CSS existentes que romper — `update-banner.element.spec.ts`/`app-update-banner.spec.ts` (18/18) en verde tras el cambio. Pendiente confirmar visualmente en dispositivo real la próxima vez que se toque este flujo.
+
+## 10. Cierre
+
+- [x] 10.1 `openspec validate --all --strict` limpio (32/32).
+- [x] 10.2 **ADR-061** en `memory/decisions.md` sobre el keystore de release persistente (referenciando ADR-031/047) — ya escrita en la sesión de implementación, renumerada de ADR-060 a ADR-061 en esta sesión al detectar colisión con la ADR-060 de `dashboard-reporting` (PR #162, todavía sin mergear). `memory/context.md` actualizado más abajo, en esta misma sesión.
+- [x] 10.3 Suite completa en verde antes de abrir el PR: `tsc --noEmit` limpio, `eslint src/ --max-warnings 0` limpio, Vitest 1456/1456 con cobertura, `cargo fmt --check` limpio, `cargo clippy -- -D warnings` sin avisos, `cargo test` 9/9, Cypress completo **102/102** (no solo lo nuevo de este cambio) contra el stack Docker local real. `node_modules` tuvo que resincronizarse (`pnpm install`) tras venir de `dashboard-reporting` — `@tauri-apps/plugin-http` no estaba instalado hasta entonces.
