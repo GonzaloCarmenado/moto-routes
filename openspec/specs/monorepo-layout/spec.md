@@ -31,12 +31,16 @@ El workflow `.github/workflows/ci.yml` SHALL ejecutar los jobs `quality-ts` y `q
 - **WHEN** un desarrollador hace commit de un cambio dentro de `apps/mobile`
 - **THEN** el hook ejecuta la misma cadena de comandos de calidad que antes de la reorganización, sin errores de "fichero o ruta no encontrada"
 
-### Requirement: El workspace de pnpm solo gestiona apps/mobile
-`pnpm-workspace.yaml` SHALL apuntar a `apps/mobile` como único paquete pnpm real del monorepo. El nuevo servicio Java (`apps/api`) SHALL quedar fuera de la gestión de pnpm, al ser un proyecto Maven independiente.
+### Requirement: El workspace de pnpm gestiona apps/mobile y apps/web
+`pnpm-workspace.yaml` SHALL apuntar a `apps/mobile` y `apps/web` como los paquetes pnpm reales del monorepo. El servicio Go (`apps/api`) SHALL seguir fuera de la gestión de pnpm, al ser un proyecto independiente sin `package.json`.
 
-#### Scenario: pnpm install no intenta tratar apps/api como paquete pnpm
-- **WHEN** se ejecuta `pnpm install` en la raíz del repositorio tras la reorganización
-- **THEN** pnpm resuelve dependencias únicamente para `apps/mobile`, sin buscar ni fallar por la ausencia de un `package.json` en `apps/api`
+#### Scenario: pnpm install resuelve ambos paquetes TypeScript
+- **WHEN** se ejecuta `pnpm install` en la raíz del repositorio
+- **THEN** pnpm resuelve dependencias para `apps/mobile` y `apps/web`, sin buscar ni fallar por la ausencia de un `package.json` en `apps/api`
+
+#### Scenario: Los comandos de cada app siguen siendo independientes
+- **WHEN** se ejecuta un script de `apps/mobile` (p. ej. `pnpm --filter mobile build`)
+- **THEN** no instala, compila ni ejecuta nada de `apps/web`, y viceversa
 
 ### Requirement: Las carpetas transversales no se mueven
 `openspec/`, `specs/` (histórico congelado), `docs/`, `memory/` y `.github/` SHALL permanecer en la raíz del repositorio, sin trasladarse a `apps/mobile` ni a ninguna otra subcarpeta de aplicación.
