@@ -43,9 +43,10 @@ describe('.github/workflows/ci.yml — existe y dispara en los eventos correctos
     expect(workflow).toMatch(/tags:.*v\*/);
   });
 
-  it('declares the four expected jobs', () => {
+  it('declares the five expected jobs', () => {
     const workflow = readWorkflow();
     expect(workflow).toMatch(/^ {2}quality-ts:\s*$/m);
+    expect(workflow).toMatch(/^ {2}quality-web:\s*$/m);
     expect(workflow).toMatch(/^ {2}quality-tauri:\s*$/m);
     expect(workflow).toMatch(/^ {2}quality-go:\s*$/m);
     expect(workflow).toMatch(/^ {2}build-and-release:\s*$/m);
@@ -89,6 +90,40 @@ describe('job quality-ts', () => {
 
   it('runs the Cypress E2E suite inside apps/mobile', () => {
     expect(job()).toMatch(/name: E2E tests[\s\S]*?working-directory: apps\/mobile[\s\S]*?run: pnpm run test:e2e/);
+  });
+});
+
+describe('job quality-web', () => {
+  const job = (): string => extractJob(readWorkflow(), 'quality-web');
+
+  it('caches pnpm via actions/setup-node', () => {
+    expect(job()).toMatch(/actions\/setup-node@v\d/);
+    expect(job()).toMatch(/cache:\s*pnpm/);
+  });
+
+  it('installs dependencies at the repo root (single workspace lockfile shared with apps/mobile)', () => {
+    expect(job()).toMatch(/pnpm install --frozen-lockfile/);
+  });
+
+  it('runs tsc --noEmit inside apps/web', () => {
+    expect(job()).toMatch(/name: Typecheck[\s\S]*?working-directory: apps\/web[\s\S]*?run: pnpm exec tsc --noEmit/);
+  });
+
+  it('runs ESLint with zero warnings allowed inside apps/web', () => {
+    expect(job()).toMatch(
+      /name: ESLint[\s\S]*?working-directory: apps\/web[\s\S]*?run: pnpm exec eslint src\/ --max-warnings 0/,
+    );
+  });
+
+  it('runs Vitest with coverage inside apps/web', () => {
+    expect(job()).toMatch(
+      /name: Unit tests[\s\S]*?working-directory: apps\/web[\s\S]*?run: pnpm exec vitest run --coverage/,
+    );
+  });
+
+  it('runs the Cypress E2E suite inside apps/web against the real apps/api backend', () => {
+    expect(job()).toMatch(/name: Start apps\/api[\s\S]*?docker compose up -d --build/);
+    expect(job()).toMatch(/name: E2E tests[\s\S]*?working-directory: apps\/web[\s\S]*?run: pnpm run test:e2e/);
   });
 });
 

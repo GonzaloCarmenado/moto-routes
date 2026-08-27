@@ -1,0 +1,45 @@
+@import './shared/styles/tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: var(--font-ui);
+  font-weight: 400;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  min-height: 100dvh;
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+  color: var(--ink);
+}
+
+app-root {
+  display: block;
+  min-height: 100dvh;
+}
+
+.app-shell-private {
+  padding: var(--space-5);
+}
+
+.logout-action {
+  min-height: var(--hitbox-min);
+  padding: 0 var(--space-4);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  cursor: pointer;
+}

@@ -1,0 +1,44 @@
+@import '../shared/styles/tokens.css';
+
+:host {
+  display: block;
+}
+
+.loaded-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.loading-state {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+  text-align: center;
+  padding: var(--space-6);
+}
+
+.error-state {
+  text-align: center;
+  padding: var(--space-6);
+}
+
+.error-state p {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--danger);
+  margin-bottom: var(--space-4);
+}
+
+.retry-action {
+  min-height: var(--hitbox-min);
+  padding: 0 var(--space-5);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--amber);
+  background: var(--amber);
+  color: var(--bg-bottom);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
