@@ -47,3 +47,7 @@ Get-Content memory/metrics/events.jsonl | ForEach-Object { $_ | ConvertFrom-Json
 ```
 
 O simplemente pedirle a un agente que lea el fichero y lo resuma — cada línea es JSON autocontenido, no hace falta parsear el fichero entero para entender una línea suelta.
+
+## Análisis realizados
+
+- [`analisis-2026-08-17-2026-08-27.md`](analisis-2026-08-17-2026-08-27.md) — primer análisis (15 eventos, ver `openspec/changes/analisis-metricas-sdlc/`): patrones recurrentes, casos donde documentar no bastó, recomendaciones de procedimiento sin aplicar.
