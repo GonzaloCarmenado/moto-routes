@@ -12,4 +12,22 @@ if [ -n "$STAGED_FILES" ] && ! echo "$STAGED_FILES" | grep -qvE '\.md$|^openspec
   exit 0
 fi
 
+# Lock atomico contra un segundo pre-commit corriendo en paralelo (mkdir es
+# atomico tanto en POSIX como en Git Bash sobre Windows; flock no es fiable
+# en ese entorno, que es el real de desarrollo de este proyecto). Nace de dos
+# incidentes reales: dos "git commit" a la vez, o un "cypress run" manual
+# mientras el pre-commit de otro commit seguia vivo, compitiendo los dos por
+# el puerto 1420 y produciendo fallos espurios sin relacion con el codigo
+# (ver memory/metrics/analisis-2026-08-17-2026-08-27.md, patron P2, y
+# openspec/changes/mejoras-proceso-sdlc/design.md, decision D4).
+LOCK_DIR=".git/precommit.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  echo "✗ Ya hay un pre-commit corriendo (lock: $LOCK_DIR)."
+  echo "  Espera a que termine antes de reintentar. Si estás seguro de que no"
+  echo "  hay ningún pre-commit vivo (p. ej. tras un kill -9), bórralo a mano:"
+  echo "  rmdir \"$LOCK_DIR\""
+  exit 1
+fi
+trap 'rmdir "$LOCK_DIR"' EXIT
+
 bash scripts/pre-commit.sh
