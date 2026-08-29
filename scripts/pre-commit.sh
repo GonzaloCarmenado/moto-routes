@@ -26,11 +26,14 @@ STEP_NAMES=(
   "Auditando vulnerabilidades (frontend)"
   "Auditando vulnerabilidades (Rust)"
   "Auditando vulnerabilidades (Go)"
+  "Quality gates Go (apps/api)"
   "ESLint (frontend)"
+  "Plugins nativos Tauri registrados (JS↔Rust)"
   "Tests frontend (Vitest)"
   "Formato Rust (cargo fmt --check)"
   "Clippy (backend)"
   "Tests backend (cargo test)"
+  "Comprobando Docker (API+Postgres arrancados)"
   "Tests E2E (Cypress)"
 )
 TOTAL=${#STEP_NAMES[@]}
@@ -53,12 +56,15 @@ step_2() {
   (cd apps/mobile/src-tauri && cargo audit --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0235)
 }
 step_3() { (cd apps/api && govulncheck ./...); }
-step_4() { (cd apps/mobile && npx eslint src/ --max-warnings 0); }
-step_5() { (cd apps/mobile && npx vitest run --coverage --silent); }
-step_6() { (cd apps/mobile/src-tauri && cargo fmt --check); }
-step_7() { (cd apps/mobile/src-tauri && cargo clippy -- -D warnings); }
-step_8() { (cd apps/mobile/src-tauri && cargo test); }
-step_9() { (cd apps/mobile && pnpm test:e2e); }
+step_4() { bash scripts/check-go-quality.sh; }
+step_5() { (cd apps/mobile && npx eslint src/ --max-warnings 0); }
+step_6() { bash scripts/check-native-plugins.sh; }
+step_7() { (cd apps/mobile && npx vitest run --coverage --silent); }
+step_8() { (cd apps/mobile/src-tauri && cargo fmt --check); }
+step_9() { (cd apps/mobile/src-tauri && cargo clippy -- -D warnings); }
+step_10() { (cd apps/mobile/src-tauri && cargo test); }
+step_11() { bash scripts/check-docker-running.sh; }
+step_12() { (cd apps/mobile && pnpm test:e2e); }
 
 # Duración registrada (segundos) para el nombre de paso $1, vacío si no hay historial.
 historical_duration() {
